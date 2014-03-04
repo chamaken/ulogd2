@@ -182,15 +182,15 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 			struct ipfix_ietf_field *field = 
 				(struct ipfix_ietf_field *) tmpl->tmpl_cur;
 
-			field->type = htons(key->ipfix.field_id | 0x8000000);
+			field->type = htons(key->ipfix.field_id);
 			field->length = htons(length);
 			tmpl->tmpl_cur += sizeof(*field);
 		} else {
 			struct ipfix_vendor_field *field =
 				(struct ipfix_vendor_field *) tmpl->tmpl_cur;
 
+			field->type = htons(key->ipfix.field_id | 0x8000);
 			field->enterprise_num = htonl(key->ipfix.vendor);
-			field->type = htons(key->ipfix.field_id);
 			field->length = htons(length);
 			tmpl->tmpl_cur += sizeof(*field);
 		}
