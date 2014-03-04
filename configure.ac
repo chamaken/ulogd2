@@ -56,6 +56,17 @@ AC_ARG_ENABLE(nfct,
 AS_IF([test "x$enable_nfct" = "xyes"], [
     PKG_CHECK_MODULES([LIBNETFILTER_CONNTRACK], [libnetfilter_conntrack >= 1.0.2])
     AC_DEFINE([BUILD_NFCT], [1], [Building nfct module])
+
+    AC_MSG_CHECKING([does nfct_bitmask have clear and equal])
+    AC_CACHE_VAL(ac_cv_nfct_bitmask_clear_equal,
+    AC_TRY_COMPILE(
+        [ #include <libnetfilter_conntrack/libnetfilter_conntrack.h>],
+        [ struct nfct_bitmask *b = nrct_bitmask_new(8);
+          nfct_bitmask_clear(b); nfct_bitmask_equal(b, b); ],
+        ac_cv_nfct_bitmask_clear_equal=yes,
+        ac_cv_nfct_bitmask_clear_equal=no))
+    AC_MSG_RESULT($ac_cv_nfct_bitmask_clear_equal)
+    AM_CONDITIONAL([BUILD_IPFIX], [test "x$ac_cv_nfct_bitmask_clear_equal" = "xyes"])
 ])
 AM_CONDITIONAL([BUILD_NFCT], [test "x$enable_nfct" = "xyes"])
 AC_ARG_ENABLE(nfacct,
@@ -164,5 +175,6 @@ Ulogd configuration:
     SQLITE3 plugin:			${enable_sqlite3}
     DBI plugin:				${enable_dbi}
     JSON plugin:			${enable_jansson}
+    IPFIX plugin:			${ac_cv_nfct_bitmask_clear_equal}
 "
 echo "You can now run 'make' and 'make install'"

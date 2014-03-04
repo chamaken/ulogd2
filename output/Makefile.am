@@ -13,6 +13,10 @@ if HAVE_JANSSON
 pkglib_LTLIBRARIES += ulogd_output_JSON.la
 endif
 
+if BUILD_IPFIX
+pkglib_LTLIBRARIES += ulogd_output_IPFIX.la
+endif
+
 ulogd_output_GPRINT_la_SOURCES = ulogd_output_GPRINT.c
 ulogd_output_GPRINT_la_LDFLAGS = -avoid-version -module
 
@@ -41,4 +45,10 @@ if HAVE_JANSSON
 ulogd_output_JSON_la_SOURCES = ulogd_output_JSON.c
 ulogd_output_JSON_la_LIBADD  = ${libjansson_LIBS}
 ulogd_output_JSON_la_LDFLAGS = -avoid-version -module
+endif
+
+if BUILD_IPFIX
+ulogd_output_IPFIX_la_SOURCES = ulogd_output_IPFIX.c
+ulogd_output_IPFIX_la_LDFLAGS = -avoid-version -module
+ulogd_output_IPFIX_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS}
 endif
