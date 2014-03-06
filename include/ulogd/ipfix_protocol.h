@@ -15,7 +15,13 @@ struct ipfix_msg_hdr {
 	u_int16_t	length;
 	u_int32_t	export_time;
 	u_int32_t	seq;
-	u_int32_t	source_id;
+	u_int32_t	domain_id;
+};
+
+/* Section 3.3.2 */
+struct ipfix_set_hdr {
+	u_int16_t       set_id;
+	u_int16_t       length;
 };
 
 /* Section 3.4.1 */
