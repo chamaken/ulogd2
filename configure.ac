@@ -14,6 +14,8 @@ dnl Checks for programs.
 AC_PROG_MAKE_SET
 AC_PROG_CC
 AC_PROG_INSTALL
+AC_PROG_YACC
+AC_PROG_LEX
 AC_DISABLE_STATIC
 AC_PROG_LIBTOOL
 
@@ -128,6 +130,16 @@ else
 	enable_jansson="no"
 fi
 
+AC_ARG_WITH([sprint], AS_HELP_STRING([--without-sprint], [Build without SPRINT output plugin [default=test]]))
+AS_IF([test "x$with_sprint" != "xno"], [
+if test "x$LEX" = "xflex" -a "x$YACC" = "xbison -y"; then
+	enable_sprint="yes"
+else
+	enable_sprint="no"
+fi
+])
+AM_CONDITIONAL([BUILD_SPRINT], [test "x$enable_sprint" = "xyes"])
+
 dnl AC_SUBST(DATABASE_DIR)
 dnl AC_SUBST(DATABASE_LIB)
 dnl AC_SUBST(DATABASE_LIB_DIR)
@@ -147,7 +159,7 @@ AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile include/libipulog/Makefi
 	  input/sum/Makefile \
 	  filter/Makefile filter/raw2packet/Makefile filter/packet2flow/Makefile \
 	  output/Makefile output/pcap/Makefile output/mysql/Makefile output/pgsql/Makefile output/sqlite3/Makefile \
-	  output/dbi/Makefile \
+	  output/dbi/Makefile output/sprint/Makefile \
 	  src/Makefile Makefile Rules.make)
 AC_OUTPUT
 
@@ -164,5 +176,6 @@ Ulogd configuration:
     SQLITE3 plugin:			${enable_sqlite3}
     DBI plugin:				${enable_dbi}
     JSON plugin:			${enable_jansson}
+    SPRINT plugin:			${enable_sprint}
 "
 echo "You can now run 'make' and 'make install'"
