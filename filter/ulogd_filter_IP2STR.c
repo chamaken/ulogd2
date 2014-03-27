@@ -137,10 +137,55 @@ static struct ulogd_key ip2str_keys[] = {
 	},
 };
 
+enum ip2str_conf {
+	IP2STR_CONF_V6SEP = 0,
+	IP2STR_CONF_V4SEP,
+	IP2STR_CONF_MAX
+};
+
+static struct config_keyset ip2str_config_kset = {
+	.num_ces = 2,
+	.ces = {
+		[IP2STR_CONF_V6SEP] = {
+			.key = "v6sep",
+			.type = CONFIG_TYPE_STRING,
+			.options = CONFIG_OPT_NONE,
+			.u = {.string = ":"},
+		},
+		[IP2STR_CONF_V4SEP] = {
+			.key = "v4sep",
+			.type = CONFIG_TYPE_STRING,
+			.options = CONFIG_OPT_NONE,
+			.u = {.string = "."},
+		},
+	},
+};
+
+#define v6sep_ce(x)	(x->ces[IP2STR_CONF_V6SEP])
+#define v4sep_ce(x)	(x->ces[IP2STR_CONF_V4SEP])
+
 static char ipstr_array[MAX_KEY-START_KEY][IPADDR_LENGTH];
 
-static int ip2str(struct ulogd_key *inp, int index, int oindex)
+void change_separator(char family, char *addr, char to)
 {
+	char from;
+	char *cur;
+
+	switch(family) {
+	case AF_INET6: from = ':'; break;
+	case AF_INET: from = '.'; break;
+	default:
+		ulogd_log(ULOGD_NOTICE, "Unknown protocol family\n");
+		return;
+	}
+
+	for (cur = strchr(addr, from); cur != NULL; cur = strchr(cur + 1, from))
+		*cur = to;
+}
+
+static int ip2str(struct ulogd_pluginstance *upi, int index, int oindex)
+{
+	struct ulogd_key *inp = upi->input.keys;
 	char family = ikey_get_u8(&inp[KEY_OOB_FAMILY]);
 	char convfamily = family;
 
@@ -173,11 +218,17 @@ static int ip2str(struct ulogd_key *inp, int index, int oindex)
 		inet_ntop(AF_INET6,
 			  ikey_get_u128(&inp[index]),
 			  ipstr_array[oindex], sizeof(ipstr_array[oindex]));
+		if (*v6sep_ce(upi->config_kset).u.string != ':')
+			change_separator(convfamily, ipstr_array[oindex],
+					 *v6sep_ce(upi->config_kset).u.string);
 		break;
 	case AF_INET:
 		ip = ikey_get_u32(&inp[index]);
 		inet_ntop(AF_INET, &ip,
 			  ipstr_array[oindex], sizeof(ipstr_array[oindex]));
+		if (*v4sep_ce(upi->config_kset).u.string != '.')
+			change_separator(convfamily, ipstr_array[oindex],
+					 *v4sep_ce(upi->config_kset).u.string);
 		break;
 	default:
 		/* TODO error handling */
@@ -197,7 +248,7 @@ static int interp_ip2str(struct ulogd_pluginstance *pi)
 	/* Iter on all addr fields */
 	for (i = START_KEY; i <= MAX_KEY; i++) {
 		if (pp_is_valid(inp, i)) {
-			fret = ip2str(inp, i, i-START_KEY);
+			fret = ip2str(pi, i, i-START_KEY);
 			if (fret != ULOGD_IRET_OK)
 				return fret;
 			okey_set_ptr(&ret[i-START_KEY],
@@ -206,6 +257,23 @@ static int interp_ip2str(struct ulogd_pluginstance *pi)
 	}
 
 	return ULOGD_IRET_OK;
+}
+
+static int configure_ip2str(struct ulogd_pluginstance *upi,
+			    struct ulogd_pluginstance_stack *stack)
+{
+	int ret = config_parse_file(upi->id, upi->config_kset);
+
+	if (ret < 0)
+		return ret;
+
+	if (strlen(v6sep_ce(upi->config_kset).u.string) > 1)
+		ulogd_log(ULOGD_NOTICE, "only one char v6 separator is allowed,"
+			  " using: %c\n", *v6sep_ce(upi->config_kset).u.string);
+	if (strlen(v4sep_ce(upi->config_kset).u.string) > 1)
+		ulogd_log(ULOGD_NOTICE, "only one char v4 separator is allowed,"
+			  " using: %c\n", *v4sep_ce(upi->config_kset).u.string);
+	return ret;
 }
 
 static struct ulogd_plugin ip2str_pluging = {
@@ -220,7 +288,9 @@ static struct ulogd_plugin ip2str_pluging = {
 		.num_keys = ARRAY_SIZE(ip2str_keys),
 		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW,
 		},
+	.config_kset = &ip2str_config_kset,
 	.interp = &interp_ip2str,
+	.configure = &configure_ip2str,
 	.version = VERSION,
 };
 
