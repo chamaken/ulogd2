@@ -46,7 +46,6 @@ struct sprint_priv {
 
 enum sprint_conf {
 	SPRINT_CONF_FORM = 0,
-	SPRINT_CONF_PROTO,
 	SPRINT_CONF_DEST,
 	SPRINT_CONF_MAX
 };
@@ -58,13 +57,6 @@ static struct config_keyset sprint_kset = {
 			.key = "form",
 			.type = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
-		},
-		[SPRINT_CONF_PROTO] = {
-			.key = "proto",
-			.type = CONFIG_TYPE_STRING,
-			.options = CONFIG_OPT_NONE,
-			.u = {.string = "file" },
-
 		},
 		[SPRINT_CONF_DEST] = {
 			.key = "dest",
@@ -81,25 +73,37 @@ static int open_connect_descriptor(struct ulogd_pluginstance *upi)
 	struct addrinfo hint, *result, *rp;
 	int ret, fd;
 
-	proto = upi->config_kset->ces[SPRINT_CONF_PROTO].u.string;
-	port = upi->config_kset->ces[SPRINT_CONF_DEST].u.string;
-
-	/* file */
-	if (!strcasecmp(proto, "file")) {
-		if (strlen(port) == 0)
-			return STDOUT_FILENO;
-		return open(port, O_CREAT|O_WRONLY|O_APPEND);
-	}
-
-	/* socket */
-	host = strchr(port, '@');
+	proto = upi->config_kset->ces[SPRINT_CONF_DEST].u.string;
+	host = strchr(proto, ':');
 	if (host == NULL) {
-		ulogd_log(ULOGD_ERROR, "unknown destination `%s'\n",
-			  port);
-		errno = EINVAL;
+		ulogd_log(ULOGD_ERROR, "invalid dest\n");
 		return -1;
 	}
 	*host++ = '\0';
+	if (*host++ != '/') {
+		ulogd_log(ULOGD_ERROR, "invalid dest\n");
+		return -1;
+	}
+	if (*host++ != '/') {
+		ulogd_log(ULOGD_ERROR, "invalid dest\n");
+		return -1;
+	}
+
+	/* file */
+	if (!strcasecmp(proto, "file")) {
+		if (strlen(host) == 0)
+			return STDOUT_FILENO;
+		return open(host, O_CREAT|O_WRONLY|O_APPEND);
+	}
+
+	/* socket */
+	port = strrchr(host, ':');
+	if (port == NULL) {
+		ulogd_log(ULOGD_ERROR, "no port in dest\n");
+		errno = EINVAL;
+		return -1;
+	}
+	*port++ = '\0';
 
 	memset(&hint, 0, sizeof(struct addrinfo));
 	hint.ai_family = AF_UNSPEC;
@@ -138,7 +142,6 @@ static int open_connect_descriptor(struct ulogd_pluginstance *upi)
 		if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0)
 			break;
 	}
-
 	freeaddrinfo(result);
 
 	if (rp == NULL) {
