@@ -29,6 +29,7 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
@@ -47,6 +48,7 @@ struct sprint_priv {
 enum sprint_conf {
 	SPRINT_CONF_FORM = 0,
 	SPRINT_CONF_DEST,
+	SPRINT_CONF_ADDRSEP,
 	SPRINT_CONF_MAX
 };
 
@@ -63,6 +65,12 @@ static struct config_keyset sprint_kset = {
 			.type = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 			.u = {.string = ULOGD_SPRINT_DEFAULT },
+		},
+		[SPRINT_CONF_ADDRSEP] = {
+			.key = "addrsep",
+			.type = CONFIG_TYPE_STRING,
+			.options = CONFIG_OPT_NONE,
+			.u = {.string = "" },
 		},
 	},
 };
@@ -220,9 +228,12 @@ static int sprint_keycalc_puts(char *buf, size_t size, bool in_group,
 }
 
 static int sprint_key_puts(char *buf, size_t size, bool in_group,
-			   struct ulogd_key *keys, struct node *node)
+			   struct ulogd_key *keys, struct node *node,
+			   int addrsep)
 {
 	struct ulogd_key *key = keys[node->kindex].u.source;
+	char family, *p;
+	int i;
 
 	if (!(key->flags & ULOGD_RETF_VALID)) {
 		if (!in_group) {
@@ -248,6 +259,28 @@ static int sprint_key_puts(char *buf, size_t size, bool in_group,
 	case ULOGD_RET_UINT64:
 		return snprintf(buf, size, "%" PRIu64, key->u.value.ui64);
 		break;
+	case ULOGD_RET_IPADDR:
+		family = ikey_get_u8(keys);
+		if (family == AF_INET6) {
+			inet_ntop(AF_INET6, ikey_get_u128(&keys[node->kindex]),
+				  buf, size);
+			i = ':';
+		} else if (family == AF_INET) {
+			u_int32_t ip = ikey_get_u32(&keys[node->kindex]);
+			inet_ntop(AF_INET, &ip, buf, size);
+			i = '.';
+		} else {
+			ulogd_log(ULOGD_ERROR,
+				  "unknown address family: %d\n", family);
+			return 0;
+		}
+		if (addrsep)
+			for (p = strchr(buf, i); p; p = strchr(p + 1, i))
+				*p = addrsep;
+		for (i = 0, p = buf; *p != '\0'; p++, i++)
+			;
+		return i;
+		break;
 	default:
 		ulogd_log(ULOGD_INFO, "could not interpret"
 			  " key: %s, type: %d\n", key->name, key->type);
@@ -257,7 +290,8 @@ static int sprint_key_puts(char *buf, size_t size, bool in_group,
 }
 
 static int sprint_term_puts(char *buf, size_t size, bool in_group,
-			    struct ulogd_key *keys, struct node *node)
+			    struct ulogd_key *keys, struct node *node,
+			    int addrsep)
 {
 	struct node *n;
 	int ret;
@@ -265,7 +299,8 @@ static int sprint_term_puts(char *buf, size_t size, bool in_group,
 
 	switch (node->type) {
 	case NODE_KEY:
-		return sprint_key_puts(buf, size, in_group, keys, node);
+		return sprint_key_puts(buf, size, in_group, keys, node,
+				       addrsep);
 		break;
 	case NODE_STRING:
 		return snprintf(buf, size, "%s", node->string);
@@ -276,7 +311,7 @@ static int sprint_term_puts(char *buf, size_t size, bool in_group,
 	case NODE_CONCAT:
 		llist_for_each_entry(n, &node->group, list) {
 			ret = sprint_term_puts(buf + len, size - len,
-					       in_group, keys, n);
+					       in_group, keys, n, addrsep);
 			if ((n->type == NODE_KEY || n->type == NODE_KEYCALC)
 			    && ret <= 0) {
 				/* no key value found in a group */
@@ -299,14 +334,14 @@ static int sprint_term_puts(char *buf, size_t size, bool in_group,
 	return 0; /* unknown node type */
 }
 
-static int sprint_group_puts(char *buf, size_t size,
-			     struct ulogd_key *keys, struct node *node)
+static int sprint_group_puts(char *buf, size_t size, struct ulogd_key *keys,
+			     struct node *node, int addrsep)
 {
 	int ret;
 	struct node *n;
 
 	llist_for_each_entry(n, &node->group, list) {
-		ret = sprint_term_puts(buf, size, true, keys, n);
+		ret = sprint_term_puts(buf, size, true, keys, n, addrsep);
 		if (ret > 0) /* put first valid value and return */
 			return ret;
 	}
@@ -321,6 +356,7 @@ static int sprint_interp(struct ulogd_pluginstance *upi)
 	struct node *cur;
 	char buf[4096];
 	int rem = sizeof(buf) - 1, len = 0, ret;
+	int addrsep = *upi->config_kset->ces[SPRINT_CONF_ADDRSEP].u.string;
 
 	llist_for_each_entry(cur, &sp->form_head, list) {
 		switch (cur->type) {
@@ -329,11 +365,11 @@ static int sprint_interp(struct ulogd_pluginstance *upi)
 		case NODE_CONCAT:
 		case NODE_KEYCALC:
 			len += sprint_term_puts(buf + len, rem, false,
-						upi->input.keys, cur);
+						upi->input.keys, cur, addrsep);
 			break;
 		case NODE_GROUP:
 			len += sprint_group_puts(buf + len, rem,
-						 upi->input.keys, cur);
+						 upi->input.keys, cur, addrsep);
 			break;
 		default:
 			ulogd_log(ULOGD_NOTICE, "unknown node type: %d\n",
@@ -395,6 +431,7 @@ static int sprint_set_inputkeys(struct ulogd_pluginstance *upi)
 	INIT_LLIST_HEAD(&priv->form_head);
 	INIT_LLIST_HEAD(&form.keysyms);
 	INIT_LLIST_HEAD(&form.head.list);
+	form.num_keys = 1; /* 0 is reserved for oob.family */
 	form.head.type = NODE_HEAD;
 	form.yy_fatal_errno = 0;
 
@@ -419,6 +456,12 @@ static int sprint_set_inputkeys(struct ulogd_pluginstance *upi)
 
 	if (!upi->input.keys)
 		return -ENOMEM;
+
+	/* reserve for putting ULOGD_RET_IPADDR */
+	ikey->type = ULOGD_RET_UINT8;
+	ikey->flags = ULOGD_RETF_NONE;
+	strcpy(ikey->name, "oob.family");
+	ikey++;
 
 	/* create input keys from key symbol list created by form parsing */
 	llist_for_each_entry_safe(sym, nsym, &form.keysyms, list) {
