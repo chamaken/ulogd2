@@ -145,7 +145,7 @@ static struct node *sprint_keycalc_node(int opcode, struct node *l, struct node 
 %token <string> KEY
 %token <string> ERR_TERM /* just notifying from scanner */
 
-%type <node> form part selector group term key
+%type <node> form part selector term key
 
 %%
 
@@ -161,11 +161,7 @@ form:
 
 part:
 	  term
-	| group
-	;
-
-group:
-	  '(' selector ')'	{
+	| '(' selector ')'	{
 		$$ = $2;
 	  }
 	;
@@ -260,19 +256,6 @@ int yyerror(YYLTYPE *loc, yyscan_t scanner, const char *msg, ...)
 	ulogd_log(ULOGD_ERROR, "form error - %s, at: %d\n", buf, yyget_column(scanner));
 
 	return 0;
-}
-
-char *sprint_key_name(struct llist_head *head, int kindex)
-{
-	struct keysym *sym;
-	int i = 0;
-
-	llist_for_each_entry(sym, head, list) {
-		if (i++ == kindex)
-			return sym->name;
-	}
-
-	return NULL;
 }
 
 void sprint_free_nodes(struct llist_head *nodes);
