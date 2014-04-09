@@ -435,7 +435,6 @@ static int sprint_set_inputkeys(struct ulogd_pluginstance *upi)
 	INIT_LLIST_HEAD(&form.head.list);
 	form.num_keys = 1; /* 0 is reserved for oob.family */
 	form.head.type = NODE_HEAD;
-	form.yy_fatal_errno = 0;
 
 	ret = parse_form(upi->config_kset->ces[SPRINT_CONF_FORM].u.string,
 			 &form);

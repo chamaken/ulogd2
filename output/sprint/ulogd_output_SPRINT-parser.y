@@ -23,12 +23,13 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <setjmp.h>
 #include <ulogd/ulogd.h>
 #include <ulogd/linuxlist.h>
 #include "ulogd_output_SPRINT.h"
 #include "ulogd_output_SPRINT-scanner.h"
 
-static int yyerror(YYLTYPE *loc, yyscan_t scanner, const char *msg, ...);
+static jmp_buf top_ctx;
 
 static struct node *sprint_string_node(char *string)
 {
@@ -249,7 +250,7 @@ key:
 	;
 %%
 
-int yyerror(YYLTYPE *loc, yyscan_t scanner, const char *msg, ...)
+void yyerror(YYLTYPE *loc, yyscan_t scanner, const char *msg, ...)
 {
 	va_list ap;
 	char buf[4096];
@@ -258,9 +259,13 @@ int yyerror(YYLTYPE *loc, yyscan_t scanner, const char *msg, ...)
 	snprintf(buf, sizeof(buf), msg, ap);
 	va_end(ap);
 
-	ulogd_log(ULOGD_ERROR, "form error - %s, at: %d\n", buf, yyget_column(scanner));
+	if (scanner)
+		ulogd_log(ULOGD_ERROR, "form error - %s, at: %d\n", buf, yyget_column(scanner));
+	else /* from YY_FATAL_ERROR */
+		ulogd_log(ULOGD_ERROR, "form fatal error - %s\n", buf);
 
-	return 0;
+	longjmp(top_ctx, 1);
+	/* NOTREACHED */
 }
 
 void sprint_free_nodes(struct llist_head *nodes);
@@ -311,36 +316,42 @@ void sprint_free_keysyms(struct llist_head *head)
 }
 
 /*
- * This function returns 0 on success
- * error on parsing: > 0
- * otherwise < 0 means negative errno
+ * This function returns 0 on success,
+ * -1 on error
  */
 int parse_form(char *str, struct outform *form)
 {
-	yyscan_t scanner;
-	YY_BUFFER_STATE buf;
+	yyscan_t scanner = NULL;
+	YY_BUFFER_STATE buf = NULL;
 	int ret = 0;
 
 	if (yylex_init_extra(form, &scanner))
-		return -errno;
+		return -1;
+
+	if (setjmp(top_ctx)) {
+		ret = -1;
+		goto error_parse;
+	}
+
 	buf = yy_scan_string(str, scanner);
 	if (buf == NULL) {
-		ret = -errno;
-		/* XXX: needs free? what's the status of extra data and buffer */
-		goto free_scanner;
+		ret = -1;
+		goto error_scan_string;
 	}
 
 	ret = yyparse(scanner);
 	if (ret == 0)
-		ret = form->yy_fatal_errno;
-	if (ret != 0) {
-		sprint_free_nodes(&form->head.list);
-		sprint_free_keysyms(&form->keysyms);
-	}
+		goto success;
 
-	yy_delete_buffer(buf, scanner);
-free_scanner:
-	yylex_destroy(scanner);
+error_parse:
+	sprint_free_nodes(&form->head.list);
+	sprint_free_keysyms(&form->keysyms);
+success:
+	if (buf)
+		yy_delete_buffer(buf, scanner);
+error_scan_string:
+	if (scanner)
+		yylex_destroy(scanner);
 
 	return ret;
 }

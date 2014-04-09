@@ -25,15 +25,13 @@
 #include "ulogd_output_SPRINT.h"
 #include "ulogd_output_SPRINT-parser.h"
 
+
 #define YY_USER_ACTION \
 	yyset_column(yyget_column(yyscanner) \
 	+ yyget_leng(yyscanner), yyscanner);
 
-#define YY_FATAL_ERROR(msg) { \
-	ulogd_log(ULOGD_FATAL, msg);\
-	yyget_extra(yyscanner)->yy_fatal_errno = \
-		errno != 0 ? -errno : 1;\
-}
+#define YY_FATAL_ERROR(msg) yyerror(NULL, NULL, msg);
+
 %}
 
 %option debug

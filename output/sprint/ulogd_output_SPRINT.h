@@ -55,11 +55,11 @@ struct keysym {
 };
 
 struct outform {
-  	int yy_fatal_errno;		/* ugly way of avoiding YY_FATAL_ERROR exit() call */
 	int num_keys;			/* number of keys */
 	struct node head;		/* list of sprint node */
 	struct llist_head keysyms;	/* key symbol list generating ulogd_key */
 };
 
+void yyerror(YYLTYPE *loc, yyscan_t scanner, const char *msg, ...);
 int parse_form(char *str, struct outform *form);
 #endif
