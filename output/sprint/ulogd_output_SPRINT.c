@@ -422,6 +422,26 @@ static void sighup_handler_print(struct ulogd_pluginstance *upi, int signal)
 	}
 }
 
+static int init_outform(struct outform *form)
+{
+	struct keysym *oob_family = calloc(sizeof(struct keysym), 1);
+
+	if (oob_family == NULL)
+		return -1;
+
+	INIT_LLIST_HEAD(&form->head.list);
+	form->head.type = NODE_HEAD;
+
+	INIT_LLIST_HEAD(&form->keysyms);
+	oob_family->name = strdup("oob.family");
+	if (oob_family->name == NULL)
+		return -1;
+	llist_add_tail(&oob_family->list, &form->keysyms);
+	form->num_keys = 1;
+
+	return 0;
+}
+
 static int sprint_set_inputkeys(struct ulogd_pluginstance *upi)
 {
 	struct sprint_priv *priv = (struct sprint_priv *)&upi->private;
@@ -431,20 +451,16 @@ static int sprint_set_inputkeys(struct ulogd_pluginstance *upi)
 	struct outform form;
 
 	INIT_LLIST_HEAD(&priv->form_head);
-	INIT_LLIST_HEAD(&form.keysyms);
-	INIT_LLIST_HEAD(&form.head.list);
-	form.num_keys = 1; /* 0 is reserved for oob.family */
-	form.head.type = NODE_HEAD;
+	if (init_outform(&form) != 0) {
+		ulogd_log(ULOGD_FATAL, "could not init form data\n");
+		return -1;
+	}
 
-	ret = parse_form(upi->config_kset->ces[SPRINT_CONF_FORM].u.string,
-			 &form);
-	if (ret > 0) {
-		/* parser error, already logged by yyerror */
-		return -ret;
-	} else if (ret < 0) { /* errno */
-		ulogd_log(ULOGD_ERROR, "could not parse form: %s\n",
-			  strerror(-ret));
-		return ret;
+	ret =
+	parse_form(upi->config_kset->ces[SPRINT_CONF_FORM].u.string, &form);
+	if (ret != 0) {
+		ulogd_log(ULOGD_FATAL, "could not parse form\n");
+		return -1;
 	}
 
 	llist_add(&priv->form_head, &form.head.list);
@@ -454,15 +470,8 @@ static int sprint_set_inputkeys(struct ulogd_pluginstance *upi)
 		  form.num_keys);
 	upi->input.keys = ikey = calloc(sizeof(struct ulogd_key),
 					form.num_keys);
-
 	if (!upi->input.keys)
 		return -ENOMEM;
-
-	/* reserve for putting ULOGD_RET_IPADDR */
-	ikey->type = ULOGD_RET_UINT8;
-	ikey->flags = ULOGD_RETF_NONE;
-	strcpy(ikey->name, "oob.family");
-	ikey++;
 
 	/* create input keys from key symbol list created by form parsing */
 	llist_for_each_entry_safe(sym, nsym, &form.keysyms, list) {
