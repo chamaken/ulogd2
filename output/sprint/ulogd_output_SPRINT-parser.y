@@ -207,11 +207,12 @@ term:
 	| term STRING		{
 		if ($1->type == NODE_STRING) { /* concat string by using realloc */
 			int len1 = strlen($1->string), len2 = strlen($2);
-			$1->string = realloc($1->string, len1 + len2);
+			$1->string = realloc($1->string, len1 + len2 + 1);
 			if ($1->string == NULL) {
 				yyerror(&yylloc, scanner, "could not reallocate string area");
 				YYABORT;
 			}
+			memset($1->string, 0, len1 + len2 + 1);
 			strncpy($1->string + len1, $2, len2);
 		} else {
 			struct node *n = sprint_string_node($2);
