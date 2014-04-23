@@ -69,6 +69,20 @@ AS_IF([test "x$enable_nfct" = "xyes"], [
     AM_CONDITIONAL([BUILD_IPFIX], [test "x$ac_cv_nfct_bitmask_clear_equal" = "xyes"])
 ])
 AM_CONDITIONAL([BUILD_NFCT], [test "x$enable_nfct" = "xyes"])
+AS_IF([test "x$enable_nfct" = "xyes"], [
+    AC_MSG_CHECKING([for enable mark filter for event])
+    AC_CACHE_VAL(ac_cv_nfct_filter_mark,
+    AC_TRY_COMPILE(
+        [ #include <libnetfilter_conntrack/libnetfilter_conntrack.h>],
+        [ int i = NFCT_FILTER_MARK; ],
+        ac_cv_nfct_filter_mark=yes,
+        ac_cv_nfct_filter_mark=no))
+    AC_MSG_RESULT($ac_cv_nfct_filter_mark)
+    AS_IF([test "x$ac_cv_nfct_filter_mark" = "xyes"], [
+        AC_DEFINE([HAVE_NFCT_FILTER_MARK], [1], [Building nfct mark event filter])
+    ])
+])
+
 AC_ARG_ENABLE(nfacct,
        AS_HELP_STRING([--enable-nfacct], [Enable nfacct module [default=yes]]),,[enable_nfacct=yes])
 AS_IF([test "x$enable_nfacct" = "xyes"], [
@@ -167,6 +181,7 @@ Ulogd configuration:
   Input plugins:
     NFLOG plugin:			${enable_nflog}
     NFCT plugin:			${enable_nfct}
+      with MARK event filter		${ac_cv_nfct_filter_mark}
     NFACCT plugin:			${enable_nfacct}
   Output plugins:
     PCAP plugin:			${enable_pcap}
