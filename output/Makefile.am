@@ -7,7 +7,7 @@ SUBDIRS= pcap mysql pgsql sqlite3 dbi
 pkglib_LTLIBRARIES = ulogd_output_LOGEMU.la ulogd_output_SYSLOG.la \
 			 ulogd_output_OPRINT.la ulogd_output_GPRINT.la \
 			 ulogd_output_NACCT.la ulogd_output_XML.la \
-			 ulogd_output_GRAPHITE.la
+			 ulogd_output_GRAPHITE.la ulogd_output_SPRINT.la
 
 if HAVE_JANSSON
 pkglib_LTLIBRARIES += ulogd_output_JSON.la
@@ -52,3 +52,6 @@ ulogd_output_IPFIX_la_SOURCES = ulogd_output_IPFIX.c
 ulogd_output_IPFIX_la_LDFLAGS = -avoid-version -module
 ulogd_output_IPFIX_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS}
 endif
+
+ulogd_output_SPRINT_la_SOURCES = ulogd_output_SPRINT.c
+ulogd_output_SPRINT_la_LDFLAGS = -avoid-version -module
