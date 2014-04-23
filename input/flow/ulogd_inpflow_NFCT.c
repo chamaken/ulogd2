@@ -1360,13 +1360,6 @@ static int constructor_nfct_events(struct ulogd_pluginstance *upi)
 			(struct nfct_pluginstance *)upi->private;
 
 
-	cpi->cth = nfct_open(NFNL_SUBSYS_CTNETLINK,
-			     eventmask_ce(upi->config_kset).u.value);
-	if (!cpi->cth) {
-		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
-		goto err_cth;
-	}
-
 	if ((strlen(src_filter_ce(upi->config_kset).u.string) != 0) ||
 		(strlen(dst_filter_ce(upi->config_kset).u.string) != 0) ||
 		(strlen(proto_filter_ce(upi->config_kset).u.string) != 0) ||
@@ -1374,7 +1367,7 @@ static int constructor_nfct_events(struct ulogd_pluginstance *upi)
 	   ) {
 		if (build_nfct_filter(upi) != 0) {
 			ulogd_log(ULOGD_FATAL, "error creating NFCT filter\n");
-			goto err_cth;
+			goto err;
 		}
 	}
 
@@ -1410,23 +1403,8 @@ static int constructor_nfct_events(struct ulogd_pluginstance *upi)
 
 	ulogd_register_fd(&cpi->nfct_fd);
 
-	cpi->ct = nfct_new();
-	if (cpi->ct == NULL)
-		goto err_nfctobj;
-
 	if (usehash_ce(upi->config_kset).u.value != 0) {
 		struct nfct_handle *h;
-
-		/* we use a hashtable to cache entries in userspace. */
-		cpi->ct_active =
-		     hashtable_create(buckets_ce(upi->config_kset).u.value,
-				      maxentries_ce(upi->config_kset).u.value,
-				      hash,
-				      compare);
-		if (!cpi->ct_active) {
-			ulogd_log(ULOGD_FATAL, "error allocating hash\n");
-			goto err_hashtable;
-		}
 
 		/* populate the hashtable: we use a disposable handler, we
 		 * may hit overrun if we use cpi->cth. This ensures that the
@@ -1461,28 +1439,14 @@ static int constructor_nfct_events(struct ulogd_pluginstance *upi)
 
 		ulogd_register_fd(&cpi->nfct_ov);
 
-		/* we use this to purge old entries during overruns.*/
-		cpi->pgh = nfct_open(NFNL_SUBSYS_CTNETLINK, 0);
-		if (!cpi->pgh) {
-			ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
-			goto err_pgh;
-		}
 	}
 
 	ulogd_log(ULOGD_NOTICE, "NFCT plugin working in event mode\n");
 	return 0;
 
-err_pgh:
-	ulogd_unregister_fd(&cpi->nfct_ov);
-	nfct_close(cpi->ovh);
 err_ovh:
-	hashtable_destroy(cpi->ct_active);
-err_hashtable:
-	nfct_destroy(cpi->ct);
-err_nfctobj:
 	ulogd_unregister_fd(&cpi->nfct_fd);
-	nfct_close(cpi->cth);
-err_cth:
+err:
 	return -1;
 }
 
@@ -1497,41 +1461,15 @@ static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
 		goto err;
 	}
 
-	cpi->cth = nfct_open(NFNL_SUBSYS_CTNETLINK, 0);
-	if (!cpi->cth) {
-		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
-		goto err;
-	}
 	if (strlen(mark_filter_ce(upi->config_kset).u.string) != 0) {
 		char *filter_string = mark_filter_ce(upi->config_kset).u.string;
 		if (build_nfct_filter_mark(NULL, filter_string,
 					   cpi->filter_dump) != 0) {
 			ulogd_log(ULOGD_FATAL, "error creating NFCT mark filter\n");
-			goto err_hashtable;
+			goto err;
 		}
 	}
 	nfct_callback_register(cpi->cth, NFCT_T_ALL, &polling_handler, upi);
-
-	cpi->ct_active =
-	     hashtable_create(buckets_ce(upi->config_kset).u.value,
-			      maxentries_ce(upi->config_kset).u.value,
-			      hash,
-			      compare);
-	if (!cpi->ct_active) {
-		ulogd_log(ULOGD_FATAL, "error allocating hash\n");
-		goto err_hashtable;
-	}
-
-	cpi->ct = nfct_new();
-	if (cpi->ct == NULL)
-		goto err_ct_cache;
-
-	/* we use this to purge old entries during overruns.*/
-	cpi->pgh = nfct_open(NFNL_SUBSYS_CTNETLINK, 0);
-	if (!cpi->pgh) {
-		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
-		goto err_pgh;
-	}
 
 	ulogd_init_timer(&cpi->timer, upi, polling_timer_cb);
 	if (pollint_ce(upi->config_kset).u.value != 0)
@@ -1541,12 +1479,6 @@ static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
 	ulogd_log(ULOGD_NOTICE, "NFCT working in polling mode\n");
 	return 0;
 
-err_pgh:
-	nfct_destroy(cpi->ct);
-err_ct_cache:
-	hashtable_destroy(cpi->ct_active);
-err_hashtable:
-	nfct_close(cpi->cth);
 err:
 	return -1;
 }
@@ -1555,22 +1487,70 @@ static int constructor_nfct(struct ulogd_pluginstance *upi)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *) upi->private;
+	int eventmask = 0;
+
+	/* no pollinterval means event mode */
+	if (pollint_ce(upi->config_kset).u.value == 0)
+		eventmask = eventmask_ce(upi->config_kset).u.value;
+	cpi->cth = nfct_open(NFNL_SUBSYS_CTNETLINK, eventmask);
+	if (!cpi->cth) {
+		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
+		goto err_cth;
+	}
+
+	if (usehash_ce(upi->config_kset).u.value != 0) {
+		/* we use a hashtable to cache entries in userspace. */
+		cpi->ct_active =
+			hashtable_create(buckets_ce(upi->config_kset).u.value,
+					 maxentries_ce(upi->config_kset).u.value,
+					 hash,
+					 compare);
+		if (!cpi->ct_active) {
+			ulogd_log(ULOGD_FATAL, "error allocating hash\n");
+			goto err_hashtable;
+		}
+
+		/* we use this to purge old entries during overruns.*/
+		cpi->pgh = nfct_open(NFNL_SUBSYS_CTNETLINK, 0);
+		if (!cpi->pgh) {
+			ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
+			goto err_pgh;
+		}
+	}
+
+	cpi->ct = nfct_new();
+	if (cpi->ct == NULL)
+		goto err_ct_cache;
 
 	cpi->filter_dump = nfct_filter_dump_create();
 	if (cpi->filter_dump == NULL) {
 		ulogd_log(ULOGD_FATAL, "could not create filter_dump\n");
-		return -1;
+		goto err_filter_dump;
 	}
 
 	if (pollint_ce(upi->config_kset).u.value == 0) {
 		/* listen to ctnetlink events. */
-		return constructor_nfct_events(upi);
-	} else {
+		if (constructor_nfct_events(upi) == 0)
+			return 0;
+	} else if (constructor_nfct_polling(upi) == 0) {
 		/* poll from ctnetlink periodically. */
-		return constructor_nfct_polling(upi);
+		return 0;
 	}
-	/* should not ever happen. */
+
 	ulogd_log(ULOGD_FATAL, "invalid NFCT configuration\n");
+
+	nfct_filter_dump_destroy(cpi->filter_dump);
+err_filter_dump:
+	nfct_destroy(cpi->ct);
+err_ct_cache:
+	if (cpi->pgh)
+		nfct_close(cpi->pgh);
+err_pgh:
+	if (cpi->ct_active)
+		hashtable_destroy(cpi->ct_active);
+err_hashtable:
+	nfct_close(cpi->cth);
+err_cth:
 	return -1;
 }
 
