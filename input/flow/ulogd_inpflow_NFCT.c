@@ -1026,7 +1026,7 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
 
-	nfct_query(cpi->pgh, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
+	nfct_query(cpi->cth, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
 	hashtable_iterate(cpi->ct_active, upi, do_purge);
 	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
 }
@@ -1497,8 +1497,8 @@ static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
 		goto err;
 	}
 
-	cpi->pgh = nfct_open(NFNL_SUBSYS_CTNETLINK, 0);
-	if (!cpi->pgh) {
+	cpi->cth = nfct_open(NFNL_SUBSYS_CTNETLINK, 0);
+	if (!cpi->cth) {
 		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
 		goto err;
 	}
@@ -1510,7 +1510,7 @@ static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
 			goto err_hashtable;
 		}
 	}
-	nfct_callback_register(cpi->pgh, NFCT_T_ALL, &polling_handler, upi);
+	nfct_callback_register(cpi->cth, NFCT_T_ALL, &polling_handler, upi);
 
 	cpi->ct_active =
 	     hashtable_create(buckets_ce(upi->config_kset).u.value,
@@ -1526,6 +1526,13 @@ static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
 	if (cpi->ct == NULL)
 		goto err_ct_cache;
 
+	/* we use this to purge old entries during overruns.*/
+	cpi->pgh = nfct_open(NFNL_SUBSYS_CTNETLINK, 0);
+	if (!cpi->pgh) {
+		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
+		goto err_pgh;
+	}
+
 	ulogd_init_timer(&cpi->timer, upi, polling_timer_cb);
 	if (pollint_ce(upi->config_kset).u.value != 0)
 		ulogd_add_timer(&cpi->timer,
@@ -1534,10 +1541,12 @@ static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
 	ulogd_log(ULOGD_NOTICE, "NFCT working in polling mode\n");
 	return 0;
 
+err_pgh:
+	nfct_destroy(cpi->ct);
 err_ct_cache:
 	hashtable_destroy(cpi->ct_active);
 err_hashtable:
-	nfct_close(cpi->pgh);
+	nfct_close(cpi->cth);
 err:
 	return -1;
 }
@@ -1602,6 +1611,10 @@ static int destructor_nfct_polling(struct ulogd_pluginstance *upi)
 {
 	int rc;
 	struct nfct_pluginstance *cpi = (void *)upi->private;
+
+	rc = nfct_close(cpi->cth);
+	if (rc < 0)
+		return rc;
 
 	rc = nfct_close(cpi->pgh);
 	if (rc < 0)
