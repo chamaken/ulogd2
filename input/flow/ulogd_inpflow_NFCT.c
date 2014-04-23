@@ -54,6 +54,8 @@
 #endif
 
 typedef enum TIMES_ { START, STOP, __TIME_MAX } TIMES;
+typedef int (*nfct_cb)(enum nf_conntrack_msg_type type,
+		       struct nf_conntrack *ct, void *data);
 
 struct ct_timestamp {
 	struct hashtable_node hashnode;
@@ -1354,11 +1356,11 @@ err_init:
 	return -1;
 }
 
-static int constructor_nfct_events(struct ulogd_pluginstance *upi)
+static int constructor_nfct_events(struct ulogd_pluginstance *upi,
+				   nfct_cb handler)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
-
 
 	if ((strlen(src_filter_ce(upi->config_kset).u.string) != 0) ||
 		(strlen(dst_filter_ce(upi->config_kset).u.string) != 0) ||
@@ -1371,14 +1373,7 @@ static int constructor_nfct_events(struct ulogd_pluginstance *upi)
 		}
 	}
 
-
-	if (usehash_ce(upi->config_kset).u.value != 0) {
-		nfct_callback_register(cpi->cth, NFCT_T_ALL,
-				&event_handler_hashtable, upi);
-	} else {
-		nfct_callback_register(cpi->cth, NFCT_T_ALL,
-				       &event_handler_no_hashtable, upi);
-	}
+	nfct_callback_register(cpi->cth, NFCT_T_ALL, handler, upi);
 
 	if (nlsockbufsize_ce(upi->config_kset).u.value) {
 		setnlbufsiz(upi, nlsockbufsize_ce(upi->config_kset).u.value);
@@ -1450,7 +1445,8 @@ err:
 	return -1;
 }
 
-static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
+static int constructor_nfct_polling(struct ulogd_pluginstance *upi,
+				    nfct_cb handler)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
@@ -1469,7 +1465,7 @@ static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
 			goto err;
 		}
 	}
-	nfct_callback_register(cpi->cth, NFCT_T_ALL, &polling_handler, upi);
+	nfct_callback_register(cpi->cth, NFCT_T_ALL, handler, upi);
 
 	ulogd_init_timer(&cpi->timer, upi, polling_timer_cb);
 	if (pollint_ce(upi->config_kset).u.value != 0)
@@ -1488,6 +1484,7 @@ static int constructor_nfct(struct ulogd_pluginstance *upi)
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *) upi->private;
 	int eventmask = 0;
+	int usehash = usehash_ce(upi->config_kset).u.value;
 
 	/* no pollinterval means event mode */
 	if (pollint_ce(upi->config_kset).u.value == 0)
@@ -1498,7 +1495,7 @@ static int constructor_nfct(struct ulogd_pluginstance *upi)
 		goto err_cth;
 	}
 
-	if (usehash_ce(upi->config_kset).u.value != 0) {
+	if (usehash != 0) {
 		/* we use a hashtable to cache entries in userspace. */
 		cpi->ct_active =
 			hashtable_create(buckets_ce(upi->config_kset).u.value,
@@ -1530,9 +1527,15 @@ static int constructor_nfct(struct ulogd_pluginstance *upi)
 
 	if (pollint_ce(upi->config_kset).u.value == 0) {
 		/* listen to ctnetlink events. */
-		if (constructor_nfct_events(upi) == 0)
-			return 0;
-	} else if (constructor_nfct_polling(upi) == 0) {
+		if (usehash != 0) {
+			if (constructor_nfct_events(upi,
+						event_handler_hashtable) == 0)
+				return 0;
+			else if (constructor_nfct_events(upi,
+						event_handler_no_hashtable) == 0)
+				return 0;
+		}
+	} else if (constructor_nfct_polling(upi, polling_handler) == 0) {
 		/* poll from ctnetlink periodically. */
 		return 0;
 	}
