@@ -38,6 +38,12 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#define DEBUG_YAFSCII_FILE "/tmp/ulogd.yaf"
+#ifdef DEBUG_YAFSCII_FILE
+#include <sys/stat.h>
+#include <sys/fcntl.h>
+#endif
+
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 
 #include <ulogd/linuxlist.h>
@@ -143,6 +149,10 @@ struct ipfix_instance {
 	struct llist_head template_list;
 	struct nfct_bitmask *valid_bitmask;	/* bitmask of valid keys */
 	u_int32_t seq;
+
+#ifdef DEBUG_YAFSCII_FILE
+	int yaf_fd;
+#endif
 };
 
 #define ULOGD_IPFIX_TEMPL_BASE 1024
@@ -469,6 +479,9 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 	ipfix_fprintf_header(stdout, ipfix_msg);
 	fprintf(stdout, "\n");
 
+#ifdef DEBUG_YAFSCII_FILE
+	write(ii->yaf_fd, ipfix_msg, ntohs(ipfix_msg->length));
+#endif
 	return ULOGD_IRET_OK;
 }
 
@@ -565,6 +578,10 @@ static int start_ipfix(struct ulogd_pluginstance *pi)
 	if (ret < 0)
 		goto out_bm_free;
 
+#ifdef DEBUG_YAFSCII_FILE
+	ii->yaf_fd = open(DEBUG_YAFSCII_FILE, O_CREAT|O_WRONLY|O_TRUNC, S_IWUSR);
+#endif
+
 	return 0;
 
 out_bm_free:
@@ -578,6 +595,9 @@ static int stop_ipfix(struct ulogd_pluginstance *pi)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &pi->private;
 
+#ifdef DEBUG_YAFSCII_FILE
+	close(ii->yaf_fd);
+#endif
 	close(ii->fd);
 
 	nfct_bitmask_destroy(ii->valid_bitmask);
