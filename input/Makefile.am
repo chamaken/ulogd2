@@ -1,2 +1,2 @@
 
-SUBDIRS = packet flow sum
+SUBDIRS = packet flow sum stats

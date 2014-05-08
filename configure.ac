@@ -153,6 +153,14 @@ else
 	enable_jansson="no"
 fi
 
+AC_ARG_ENABLE(nfctst,
+       AS_HELP_STRING([--enable-nfctst], [Enable nfctst module [default=yes]]),,[enable_nfctst=yes])
+AS_IF([test "x$enable_nfctst" = "xyes"], [
+    PKG_CHECK_MODULES([LIBMNL], [libmnl >= 1.0.3])
+    AC_DEFINE([BUILD_NFCTST], [1], [Building nfctst module])
+])
+AM_CONDITIONAL([BUILD_NFCTST], [test "x$enable_nfctst" = "xyes"])
+
 dnl AC_SUBST(DATABASE_DIR)
 dnl AC_SUBST(DATABASE_LIB)
 dnl AC_SUBST(DATABASE_LIB_DIR)
@@ -169,7 +177,7 @@ AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile include/libipulog/Makefi
 	  include/linux/Makefile include/linux/netfilter/Makefile \
 	  libipulog/Makefile \
 	  input/Makefile input/packet/Makefile input/flow/Makefile \
-	  input/sum/Makefile \
+	  input/sum/Makefile input/stats/Makefile \
 	  filter/Makefile filter/raw2packet/Makefile filter/packet2flow/Makefile \
 	  output/Makefile output/pcap/Makefile output/mysql/Makefile output/pgsql/Makefile output/sqlite3/Makefile \
 	  output/dbi/Makefile \
@@ -183,6 +191,7 @@ Ulogd configuration:
     NFCT plugin:			${enable_nfct}
       with MARK event filter		${ac_cv_nfct_filter_mark}
     NFACCT plugin:			${enable_nfacct}
+    NFCTST plugin:			${enable_nfctst}
   Output plugins:
     PCAP plugin:			${enable_pcap}
     PGSQL plugin:			${enable_pgsql}
