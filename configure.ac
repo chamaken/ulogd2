@@ -200,5 +200,6 @@ Ulogd configuration:
     DBI plugin:				${enable_dbi}
     JSON plugin:			${enable_jansson}
     IPFIX plugin:			${ac_cv_nfct_bitmask_clear_equal}
+    NetFlow v9 plugin:			${ac_cv_nfct_bitmask_clear_equal}
 "
 echo "You can now run 'make' and 'make install'"

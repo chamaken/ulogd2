@@ -14,7 +14,7 @@ pkglib_LTLIBRARIES += ulogd_output_JSON.la
 endif
 
 if BUILD_IPFIX
-pkglib_LTLIBRARIES += ulogd_output_IPFIX.la
+pkglib_LTLIBRARIES += ulogd_output_IPFIX.la ulogd_output_NFLOW9.la
 endif
 
 ulogd_output_GPRINT_la_SOURCES = ulogd_output_GPRINT.c
@@ -51,7 +51,12 @@ if BUILD_IPFIX
 ulogd_output_IPFIX_la_SOURCES = ulogd_output_IPFIX.c
 ulogd_output_IPFIX_la_LDFLAGS = -avoid-version -module
 ulogd_output_IPFIX_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS}
+
+ulogd_output_NFLOW9_la_SOURCES = ulogd_output_NFLOW9.c
+ulogd_output_NFLOW9_la_LDFLAGS = -avoid-version -module
+ulogd_output_NFLOW9_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS}
 endif
 
 ulogd_output_SPRINT_la_SOURCES = ulogd_output_SPRINT.c
 ulogd_output_SPRINT_la_LDFLAGS = -avoid-version -module
+
