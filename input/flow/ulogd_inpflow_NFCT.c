@@ -23,12 +23,13 @@
  *	  flowStart / flowEnd NanoSeconds.
  *	- SIGHUP for reconfiguration without loosing hash table contents, but
  *	  re-read of config and reallocation / rehashing of table, if required
- *	- Split hashtable code into separate [filter] plugin, so we can run 
+ *	- Split hashtable code into separate [filter] plugin, so we can run
  * 	  small non-hashtable ulogd installations on the firewall boxes, send
- * 	  the messages via IPFX to one aggregator who then runs ulogd with a 
+ * 	  the messages via IPFX to one aggregator who then runs ulogd with a
  * 	  network wide connection hash table.
  */
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -63,6 +64,8 @@ struct ct_timestamp {
 	struct nf_conntrack *ct;
 };
 
+enum nfct_keys;
+
 struct nfct_pluginstance {
 	struct nfct_handle *cth;
 	struct nfct_handle *ovh;	/* overrun handler */
@@ -74,6 +77,13 @@ struct nfct_pluginstance {
 	struct hashtable *ct_active;
 	int nlbufsiz;			/* current netlink buffer size */
 	struct nfct_filter_dump *filter_dump;
+	struct timeval dump_tv;
+	enum nf_conntrack_query dump_query;
+	enum nfct_keys *count_keys;	/* see count_key_type below */
+	void (*propagate_count)(struct ulogd_pluginstance *upi,
+				struct nf_conntrack *ct,
+				int type,
+				struct ct_timestamp *ts);
 	struct nf_conntrack *ct;
 };
 
@@ -82,7 +92,7 @@ struct nfct_pluginstance {
 #define EVENT_MASK	NF_NETLINK_CONNTRACK_NEW | NF_NETLINK_CONNTRACK_DESTROY
 
 static struct config_keyset nfct_kset = {
-	.num_ces = 13,
+	.num_ces = 14,
 	.ces = {
 		{
 			.key	 = "pollinterval",
@@ -158,6 +168,12 @@ static struct config_keyset nfct_kset = {
 			.type	 = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 		},
+		{
+			.key	 = "zerocounter",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
 	},
 };
 #define pollint_ce(x)	(x->ces[0])
@@ -173,6 +189,7 @@ static struct config_keyset nfct_kset = {
 #define dst_filter_ce(x)	((x)->ces[10])
 #define proto_filter_ce(x)	((x)->ces[11])
 #define mark_filter_ce(x)	((x)->ces[12])
+#define zerocounter_ce(x)	((x)->ces[13])
 
 enum nfct_keys {
 	NFCT_ORIG_IP_SADDR = 0,
@@ -182,6 +199,8 @@ enum nfct_keys {
 	NFCT_ORIG_L4_DPORT,
 	NFCT_ORIG_RAW_PKTLEN,
 	NFCT_ORIG_RAW_PKTCOUNT,
+	NFCT_ORIG_RAW_PKTLEN_DELTA,
+	NFCT_ORIG_RAW_PKTCOUNT_DELTA,
 	NFCT_REPLY_IP_SADDR,
 	NFCT_REPLY_IP_DADDR,
 	NFCT_REPLY_IP_PROTOCOL,
@@ -189,6 +208,8 @@ enum nfct_keys {
 	NFCT_REPLY_L4_DPORT,
 	NFCT_REPLY_RAW_PKTLEN,
 	NFCT_REPLY_RAW_PKTCOUNT,
+	NFCT_REPLY_RAW_PKTLEN_DELTA,
+	NFCT_REPLY_RAW_PKTCOUNT_DELTA,
 	NFCT_ICMP_CODE,
 	NFCT_ICMP_TYPE,
 	NFCT_CT_MARK,
@@ -256,7 +277,6 @@ static struct ulogd_key nfct_okeys[] = {
 		.ipfix	= {
 			.vendor 	= IPFIX_VENDOR_IETF,
 			.field_id 	= IPFIX_octetTotalCount,
-			/* FIXME: this could also be octetDeltaCount */
 		},
 	},
 	{
@@ -266,7 +286,24 @@ static struct ulogd_key nfct_okeys[] = {
 		.ipfix	= {
 			.vendor 	= IPFIX_VENDOR_IETF,
 			.field_id 	= IPFIX_packetTotalCount,
-			/* FIXME: this could also be packetDeltaCount */
+		},
+	},
+	{
+		.type	= ULOGD_RET_UINT64,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "orig.raw.pktlen.delta",
+		.ipfix	= {
+			.vendor 	= IPFIX_VENDOR_IETF,
+			.field_id 	= IPFIX_octetDeltaCount,
+		},
+	},
+	{
+		.type	= ULOGD_RET_UINT64,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "orig.raw.pktcount.delta",
+		.ipfix	= {
+			.vendor 	= IPFIX_VENDOR_IETF,
+			.field_id 	= IPFIX_packetDeltaCount,
 		},
 	},
 	{
@@ -321,7 +358,6 @@ static struct ulogd_key nfct_okeys[] = {
 		.ipfix	= {
 			.vendor 	= IPFIX_VENDOR_REVERSE,
 			.field_id 	= IPFIX_octetTotalCount,
-			/* FIXME: this could also be octetDeltaCount */
 		},
 	},
 	{
@@ -331,7 +367,24 @@ static struct ulogd_key nfct_okeys[] = {
 		.ipfix	= {
 			.vendor 	= IPFIX_VENDOR_REVERSE,
 			.field_id 	= IPFIX_packetTotalCount,
-			/* FIXME: this could also be packetDeltaCount */
+		},
+	},
+	{
+		.type	= ULOGD_RET_UINT64,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "reply.raw.pktlen.delta",
+		.ipfix	= {
+			.vendor 	= IPFIX_VENDOR_REVERSE,
+			.field_id 	= IPFIX_octetDeltaCount,
+		},
+	},
+	{
+		.type	= ULOGD_RET_UINT64,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "reply.raw.pktcount.delta",
+		.ipfix	= {
+			.vendor 	= IPFIX_VENDOR_REVERSE,
+			.field_id 	= IPFIX_packetDeltaCount,
 		},
 	},
 	{
@@ -427,6 +480,27 @@ static struct ulogd_key nfct_okeys[] = {
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "ct",
 	},
+};
+
+enum {
+	COUNT_TYPE_COUNTER,
+	COUNT_TYPE_DELTA,
+	COUNT_TYPE_MAX = COUNT_TYPE_DELTA,
+};
+
+enum {
+	COUNT_KEY_ORIG_PKTLEN,
+	COUNT_KEY_ORIG_PKTCOUNT,
+	COUNT_KEY_REPLY_PKTLEN,
+	COUNT_KEY_REPLY_PKTCOUNT,
+	COUNT_KEY_MAX = COUNT_KEY_REPLY_PKTCOUNT,
+};
+
+enum nfct_keys count_key_type[COUNT_TYPE_MAX + 1][COUNT_KEY_MAX + 1] = {
+	{NFCT_ORIG_RAW_PKTLEN, NFCT_ORIG_RAW_PKTCOUNT,
+	 NFCT_REPLY_RAW_PKTLEN, NFCT_REPLY_RAW_PKTCOUNT},
+	{NFCT_ORIG_RAW_PKTLEN_DELTA, NFCT_ORIG_RAW_PKTCOUNT_DELTA,
+	 NFCT_REPLY_RAW_PKTLEN_DELTA, NFCT_REPLY_RAW_PKTCOUNT_DELTA}
 };
 
 static uint32_t
@@ -571,13 +645,13 @@ static int propagate_ct(struct ulogd_pluginstance *main_upi,
 			     htons(nfct_get_attr_u16(ct, ATTR_REPL_PORT_DST)));
 	}
 
-	okey_set_u64(&ret[NFCT_ORIG_RAW_PKTLEN],
+	okey_set_u64(&ret[cpi->count_keys[COUNT_KEY_ORIG_PKTLEN]],
 		     nfct_get_attr_u64(ct, ATTR_ORIG_COUNTER_BYTES));
-	okey_set_u64(&ret[NFCT_ORIG_RAW_PKTCOUNT],
+	okey_set_u64(&ret[cpi->count_keys[COUNT_KEY_ORIG_PKTCOUNT]],
 		     nfct_get_attr_u64(ct, ATTR_ORIG_COUNTER_PACKETS));
-	okey_set_u64(&ret[NFCT_REPLY_RAW_PKTLEN],
+	okey_set_u64(&ret[cpi->count_keys[COUNT_KEY_REPLY_PKTLEN]],
 		     nfct_get_attr_u64(ct, ATTR_REPL_COUNTER_BYTES));
-	okey_set_u64(&ret[NFCT_REPLY_RAW_PKTCOUNT],
+	okey_set_u64(&ret[cpi->count_keys[COUNT_KEY_REPLY_PKTCOUNT]],
 		     nfct_get_attr_u64(ct, ATTR_REPL_COUNTER_PACKETS));
 
 	okey_set_u32(&ret[NFCT_CT_MARK], nfct_get_attr_u32(ct, ATTR_MARK));
@@ -615,8 +689,8 @@ do_propagate_ct(struct ulogd_pluginstance *upi,
 			(struct nfct_pluginstance *) upi->private;
 
 	/* we copy the conntrack object to the plugin cache.
-	 * Thus, we only copy the object once, then it is used 
-	 * by the several output plugin instance that reference 
+	 * Thus, we only copy the object once, then it is used
+	 * by the several output plugin instance that reference
 	 * it by means of a pointer. */
 	nfct_copy(cpi->ct, ct, NFCT_CP_OVERRIDE);
 
@@ -795,6 +869,136 @@ polling_handler(enum nf_conntrack_msg_type type,
 			}
 			return NFCT_CB_STOLEN;
 		}
+		break;
+	default:
+		ulogd_log(ULOGD_NOTICE, "unknown netlink message type\n");
+		break;
+	}
+
+	return NFCT_CB_CONTINUE;
+}
+
+static void
+propagate_delta(struct ulogd_pluginstance *upi,
+		struct nf_conntrack *ct,
+		int type,
+		struct ct_timestamp *ts)
+{
+	if (nfct_get_attr_u64(ct, ATTR_ORIG_COUNTER_PACKETS) == 0
+	    && nfct_get_attr_u64(ct, ATTR_REPL_COUNTER_PACKETS) == 0)
+		return;
+
+	do_propagate_ct(upi, ct, type, ts);
+}
+
+static int
+count_handler(enum nf_conntrack_msg_type type,
+		struct nf_conntrack *ct, void *data)
+{
+	struct ulogd_pluginstance *upi = data;
+	struct nfct_pluginstance *cpi =
+				(struct nfct_pluginstance *) upi->private;
+	struct ct_timestamp *ts;
+	int ret, id;
+
+	switch(type) {
+	case NFCT_T_UPDATE:
+		/* flowEndReason may be 0x02: active timeout */
+		id = hashtable_hash(cpi->ct_active, ct);
+		ts = (struct ct_timestamp *)
+			hashtable_find(cpi->ct_active, ct, id);
+		if (ts) {
+			ts->time[STOP].tv_sec = cpi->dump_tv.tv_sec;
+			ts->time[STOP].tv_usec = cpi->dump_tv.tv_usec;
+			cpi->propagate_count(upi, ct, type, ts);
+			nfct_copy(ts->ct, ct, NFCT_CP_META);
+		} else {
+			ts = calloc(sizeof(struct ct_timestamp), 1);
+			if (ts == NULL)
+				return NFCT_CB_CONTINUE;
+
+			ts->ct = ct;
+			set_timestamp_from_ct(ts, ct, START);
+			ts->time[STOP].tv_sec = cpi->dump_tv.tv_sec;
+			ts->time[STOP].tv_usec = cpi->dump_tv.tv_usec;
+
+			ret = hashtable_add(cpi->ct_active, &ts->hashnode, id);
+			if (ret < 0) {
+				free(ts);
+				return NFCT_CB_CONTINUE;
+			}
+			cpi->propagate_count(upi, ct, type, ts);
+
+			return NFCT_CB_STOLEN;
+		}
+		ts->time[START].tv_sec = cpi->dump_tv.tv_sec;
+		ts->time[START].tv_usec = cpi->dump_tv.tv_usec;
+
+		break;
+
+	case NFCT_T_DESTROY:
+		/* flowEndReason may be 0x03: end of Flow detected */
+		id = hashtable_hash(cpi->ct_active, ct);
+		ts = (struct ct_timestamp *)
+			hashtable_find(cpi->ct_active, ct, id);
+		if (ts) {
+			set_timestamp_from_ct(ts, ct, STOP);
+			cpi->propagate_count(upi, ct, type, ts);
+			hashtable_del(cpi->ct_active, &ts->hashnode);
+			nfct_destroy(ts->ct);
+			free(ts);
+		} else {
+			struct ct_timestamp tmp = {
+				.ct = ct,
+			};
+
+			set_timestamp_from_ct(&tmp, ct, STOP);
+			if (!set_timestamp_from_ct_try(&tmp, ct, START)) {
+				tmp.time[START].tv_sec = 0;
+				tmp.time[START].tv_usec = 0;
+			}
+			cpi->propagate_count(upi, ct, type, &tmp);
+		}
+		break;
+	default:
+		ulogd_log(ULOGD_NOTICE, "unknown netlink message type\n");
+		break;
+	}
+
+	return NFCT_CB_CONTINUE;
+}
+
+static int
+count_init_handler(enum nf_conntrack_msg_type type,
+		     struct nf_conntrack *ct, void *data)
+{
+	struct ulogd_pluginstance *upi = data;
+	struct nfct_pluginstance *cpi =
+				(struct nfct_pluginstance *) upi->private;
+	struct ct_timestamp *ts;
+	int ret, id;
+
+	switch(type) {
+	case NFCT_T_UPDATE:
+		id = hashtable_hash(cpi->ct_active, ct);
+		ts = calloc(sizeof(struct ct_timestamp), 1);
+		if (ts == NULL)
+			return NFCT_CB_CONTINUE;
+
+		ts->ct = ct;
+		ret = hashtable_add(cpi->ct_active, &ts->hashnode, id);
+		if (ret < 0) {
+			free(ts);
+			return NFCT_CB_CONTINUE;
+		}
+		if (cpi->dump_query == NFCT_Q_DUMP_FILTER_RESET) {
+			ts->time[START].tv_sec = cpi->dump_tv.tv_sec;
+			ts->time[START].tv_usec = cpi->dump_tv.tv_usec;
+		} else {
+			set_timestamp_from_ct(ts, ct, START);
+		}
+
+		return NFCT_CB_STOLEN;
 		break;
 	default:
 		ulogd_log(ULOGD_NOTICE, "unknown netlink message type\n");
@@ -1030,6 +1234,17 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 
 	nfct_query(cpi->cth, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
 	hashtable_iterate(cpi->ct_active, upi, do_purge);
+	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
+}
+
+static void count_timer_cb(struct ulogd_timer *t, void *data)
+{
+	struct ulogd_pluginstance *upi = data;
+	struct nfct_pluginstance *cpi =
+			(struct nfct_pluginstance *)upi->private;
+
+	gettimeofday(&cpi->dump_tv, NULL);
+	nfct_query(cpi->cth, cpi->dump_query, cpi->filter_dump);
 	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
 }
 
@@ -1357,7 +1572,7 @@ err_init:
 }
 
 static int constructor_nfct_events(struct ulogd_pluginstance *upi,
-				   nfct_cb handler)
+				   nfct_cb handler, bool cb_registered)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
@@ -1373,7 +1588,8 @@ static int constructor_nfct_events(struct ulogd_pluginstance *upi,
 		}
 	}
 
-	nfct_callback_register(cpi->cth, NFCT_T_ALL, handler, upi);
+	if (!cb_registered)
+		nfct_callback_register(cpi->cth, NFCT_T_ALL, handler, upi);
 
 	if (nlsockbufsize_ce(upi->config_kset).u.value) {
 		setnlbufsiz(upi, nlsockbufsize_ce(upi->config_kset).u.value);
@@ -1409,9 +1625,16 @@ static int constructor_nfct_events(struct ulogd_pluginstance *upi,
 			ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
 			goto err_ovh;
 		}
-		nfct_callback_register(h, NFCT_T_ALL,
-				       &event_handler_hashtable, upi);
-		nfct_query(h, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
+		if (pollint_ce(upi->config_kset).u.value != 0) {
+			/* count mode */
+			nfct_callback_register(h, NFCT_T_ALL,
+					       &count_init_handler, upi);
+			gettimeofday(&cpi->dump_tv, NULL);
+		} else {
+			nfct_callback_register(h, NFCT_T_ALL,
+					       &event_handler_hashtable, upi);
+		}
+		nfct_query(h, cpi->dump_query, cpi->filter_dump);
 		nfct_close(h);
 
 		/* the overrun handler only make sense with the hashtable,
@@ -1433,10 +1656,8 @@ static int constructor_nfct_events(struct ulogd_pluginstance *upi,
 		cpi->nfct_ov.when = ULOGD_FD_READ;
 
 		ulogd_register_fd(&cpi->nfct_ov);
-
 	}
 
-	ulogd_log(ULOGD_NOTICE, "NFCT plugin working in event mode\n");
 	return 0;
 
 err_ovh:
@@ -1446,16 +1667,11 @@ err:
 }
 
 static int constructor_nfct_polling(struct ulogd_pluginstance *upi,
-				    nfct_cb handler)
+				    nfct_cb handler, bool cb_registered,
+				    void (*timer_cb)(struct ulogd_timer *a, void *data))
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
-
-	if (usehash_ce(upi->config_kset).u.value == 0) {
-		ulogd_log(ULOGD_FATAL, "NFCT polling mode requires "
-				       "the hashtable\n");
-		goto err;
-	}
 
 	if (strlen(mark_filter_ce(upi->config_kset).u.string) != 0) {
 		char *filter_string = mark_filter_ce(upi->config_kset).u.string;
@@ -1465,14 +1681,14 @@ static int constructor_nfct_polling(struct ulogd_pluginstance *upi,
 			goto err;
 		}
 	}
-	nfct_callback_register(cpi->cth, NFCT_T_ALL, handler, upi);
 
-	ulogd_init_timer(&cpi->timer, upi, polling_timer_cb);
-	if (pollint_ce(upi->config_kset).u.value != 0)
-		ulogd_add_timer(&cpi->timer,
-				pollint_ce(upi->config_kset).u.value);
+	if (!cb_registered)
+		nfct_callback_register(cpi->cth, NFCT_T_ALL, handler, upi);
 
-	ulogd_log(ULOGD_NOTICE, "NFCT working in polling mode\n");
+	ulogd_init_timer(&cpi->timer, upi, timer_cb);
+	ulogd_add_timer(&cpi->timer,
+			pollint_ce(upi->config_kset).u.value);
+
 	return 0;
 
 err:
@@ -1483,12 +1699,30 @@ static int constructor_nfct(struct ulogd_pluginstance *upi)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *) upi->private;
-	int eventmask = 0;
+	int eventmask = eventmask_ce(upi->config_kset).u.value;
 	int usehash = usehash_ce(upi->config_kset).u.value;
+	int pollint = pollint_ce(upi->config_kset).u.value;
+	enum { EVENT, EVENT_NO_HASH, POLLING, COUNT } opmode = -1;
 
-	/* no pollinterval means event mode */
-	if (pollint_ce(upi->config_kset).u.value == 0)
-		eventmask = eventmask_ce(upi->config_kset).u.value;
+	/* We have four mode / param(s)
+	 *             pollint    hash_enable	event_mask
+	 *   (default)    0            1        NEW | DESTROY
+	 *   event        0            1        optional
+	 *   no hash      0            0        optional
+	 *   polling	 != 0          1        0 (ignores default)
+	 *   count       != 0          1        DESTROY
+	 */
+	if (pollint != 0 && usehash != 0) {
+		if (eventmask == NF_NETLINK_CONNTRACK_DESTROY) opmode = COUNT;
+		else { eventmask = 0; opmode = POLLING; }
+	} else if (eventmask != 0) {
+		if (usehash != 0) opmode = EVENT;
+		else opmode = EVENT_NO_HASH;
+	} else {
+		ulogd_log(ULOGD_FATAL, "invalid NFCT configuration\n");
+		return -1;
+	}
+
 	cpi->cth = nfct_open(NFNL_SUBSYS_CTNETLINK, eventmask);
 	if (!cpi->cth) {
 		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
@@ -1507,7 +1741,8 @@ static int constructor_nfct(struct ulogd_pluginstance *upi)
 			goto err_hashtable;
 		}
 
-		/* we use this to purge old entries during overruns.*/
+		/* we use this to purge old entries during overruns
+		 * and polling deletion */
 		cpi->pgh = nfct_open(NFNL_SUBSYS_CTNETLINK, 0);
 		if (!cpi->pgh) {
 			ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
@@ -1525,22 +1760,55 @@ static int constructor_nfct(struct ulogd_pluginstance *upi)
 		goto err_filter_dump;
 	}
 
-	if (pollint_ce(upi->config_kset).u.value == 0) {
-		/* listen to ctnetlink events. */
-		if (usehash != 0) {
-			if (constructor_nfct_events(upi,
-						event_handler_hashtable) == 0)
-				return 0;
-			else if (constructor_nfct_events(upi,
-						event_handler_no_hashtable) == 0)
-				return 0;
-		}
-	} else if (constructor_nfct_polling(upi, polling_handler) == 0) {
-		/* poll from ctnetlink periodically. */
-		return 0;
+	if (zerocounter_ce(upi->config_kset).u.value) {
+		cpi->dump_query = NFCT_Q_DUMP_FILTER_RESET;
+		cpi->count_keys = count_key_type[COUNT_TYPE_DELTA];
+		cpi->propagate_count = &propagate_delta;
+	} else {
+		cpi->dump_query = NFCT_Q_DUMP_FILTER;
+		cpi->count_keys = count_key_type[COUNT_TYPE_COUNTER];
+		cpi->propagate_count = &do_propagate_ct;
 	}
 
-	ulogd_log(ULOGD_FATAL, "invalid NFCT configuration\n");
+	switch (opmode) {
+	case EVENT:
+		if (constructor_nfct_events(upi, event_handler_hashtable,
+					    false) == 0) {
+			ulogd_log(ULOGD_NOTICE, "NFCT plugin working"
+						" in event mode\n");
+			return 0;
+		}
+		break;
+	case EVENT_NO_HASH:
+		if (constructor_nfct_events(upi, event_handler_no_hashtable,
+					    false) == 0) {
+			ulogd_log(ULOGD_NOTICE, "NFCT plugin working"
+						" in event no hash mode\n");
+			return 0;
+		}
+		break;
+	case POLLING:
+		if (constructor_nfct_polling(upi, polling_handler, false,
+					     polling_timer_cb) == 0) {
+			ulogd_log(ULOGD_NOTICE, "NFCT plugin working"
+						" in polling mode\n");
+			return 0;
+		}
+		break;
+	case COUNT:
+		if (constructor_nfct_events(upi, count_handler,
+					    false) == 0
+		    && constructor_nfct_polling(upi, count_handler,
+						true, count_timer_cb) == 0) {
+			ulogd_log(ULOGD_NOTICE, "NFCT plugin working"
+						" in count mode\n");
+			return 0;
+		}
+		break;
+	default:
+		ulogd_log(ULOGD_FATAL, "unknown operation mode\n");
+		break;
+	}
 
 	nfct_filter_dump_destroy(cpi->filter_dump);
 err_filter_dump:
@@ -1608,7 +1876,9 @@ static int destructor_nfct_polling(struct ulogd_pluginstance *upi)
 
 static int destructor_nfct(struct ulogd_pluginstance *upi)
 {
-	if (pollint_ce(upi->config_kset).u.value == 0) {
+	if (pollint_ce(upi->config_kset).u.value == 0
+	    || eventmask_ce(upi->config_kset).u.value
+	       == NF_NETLINK_CONNTRACK_DESTROY) {
 		return destructor_nfct_events(upi);
 	} else {
 		return destructor_nfct_polling(upi);
@@ -1653,4 +1923,3 @@ void init(void)
 {
 	ulogd_register_plugin(&nfct_plugin);
 }
-
