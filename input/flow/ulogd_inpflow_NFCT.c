@@ -442,10 +442,6 @@ static struct ulogd_key nfct_okeys[] = {
 		.type 	= ULOGD_RET_UINT32,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "flow.start.usec",
-		.ipfix	= {
-			.vendor		= IPFIX_VENDOR_IETF,
-			.field_id	= IPFIX_flowStartMicroSeconds,
-		},
 	},
 	{
 		.type	= ULOGD_RET_UINT32,
@@ -460,10 +456,6 @@ static struct ulogd_key nfct_okeys[] = {
 		.type	= ULOGD_RET_UINT32,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "flow.end.usec",
-		.ipfix	= {
-			.vendor		= IPFIX_VENDOR_IETF,
-			.field_id	= IPFIX_flowEndMicroSeconds,
-		},
 	},
 	{
 		.type	= ULOGD_RET_UINT8,
