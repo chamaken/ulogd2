@@ -381,6 +381,15 @@ struct ulogd_netflow9_template {
 	struct netflow9_msg_hdr *data_only_msg;	/* include records, set header of data */
 };
 
+enum {
+	IKEY_IDX_ORIG_PKTCOUNT,
+	IKEY_IDX_REPLY_PKTCOUNT,
+	IKEY_IDX_IF_INPUT,
+	IKEY_IDX_IF_OUTPUT,
+	IKEY_IDX_FLOW_DIR,
+	IKEY_IDX_MAX = IKEY_IDX_FLOW_DIR,
+};
+
 struct netflow9_instance {
 	int fd;		/* socket that we use for sending NetFlow v9 data */
 	int sock_type;	/* type (SOCK_*) */
@@ -393,8 +402,14 @@ struct netflow9_instance {
 	uint32_t seq;
 	/* 5.2 Template FlowSet Format */
 #define ULOGD_NETFLOW9_TEMPL_BASE 256
-	int orig_pktcount_idx, reply_pktcount_idx;
+	int ikey_idx[IKEY_IDX_MAX + 1];
 };
+
+#define orig_pktcount_ii(x)	(x)->ikey_idx[IKEY_IDX_ORIG_PKTCOUNT]
+#define reply_pktcount_ii(x)	(x)->ikey_idx[IKEY_IDX_REPLY_PKTCOUNT]
+#define if_input_ii(x)		(x)->ikey_idx[IKEY_IDX_IF_INPUT]
+#define if_output_ii(x)		(x)->ikey_idx[IKEY_IDX_IF_OUTPUT]
+#define flow_dir_ii(x)		(x)->ikey_idx[IKEY_IDX_FLOW_DIR]
 
 static int nflow9_fprintf_header(FILE *fd, const struct netflow9_msg_hdr *hdr,
 				 int msglen);
@@ -637,13 +652,30 @@ static enum nflow9_field_dir data_direction(struct ulogd_pluginstance *upi)
 	struct ulogd_key *keys = upi->input.keys;
 	int ret = 0;
 
-	ret |= pp_is_valid(keys, ii->orig_pktcount_idx)
-		&& ikey_get_u64(&keys[ii->orig_pktcount_idx]) != 0
+	ret |= pp_is_valid(keys, orig_pktcount_ii(ii))
+		&& ikey_get_u64(&keys[orig_pktcount_ii(ii)]) != 0
 		? NFLOW9_DIR_ORIG : 0;
-	ret |= pp_is_valid(keys, ii->reply_pktcount_idx)
-		&& ikey_get_u64(&keys[ii->reply_pktcount_idx]) != 0
+	ret |= pp_is_valid(keys, reply_pktcount_ii(ii))
+		&& ikey_get_u64(&keys[reply_pktcount_ii(ii)]) != 0
 		? NFLOW9_DIR_REPLY : 0;
 	return ret;
+}
+
+/*
+ * XXX: overwrite ikeys
+ */
+int reverse_direction(struct netflow9_instance *ii, struct ulogd_key *keys)
+{
+	if (if_input_ii(ii) >= 0 && if_output_ii(ii) >= 0) {
+		int ifin = ikey_get_u32(&keys[if_input_ii(ii)]);
+		keys[if_input_ii(ii)].u.source->u.value.ui32
+			= ikey_get_u32(&keys[if_output_ii(ii)]);
+		keys[if_output_ii(ii)].u.source->u.value.ui32 = ifin;
+	}
+	if (flow_dir_ii(ii) >= 0)
+		keys[flow_dir_ii(ii)].u.source->u.value.ui8
+			= !keys[flow_dir_ii(ii)].u.source->u.value.ui8;
+	return 0;
 }
 
 static struct netflow9_msg_hdr
@@ -651,6 +683,7 @@ static struct netflow9_msg_hdr
 		    struct ulogd_netflow9_template *template,
 		    enum nflow9_field_dir dir, bool need_template)
 {
+	struct netflow9_instance *ii = (struct netflow9_instance *)&upi->private;
 	struct netflow9_msg_hdr *msg_hdr;
 	void *data_records;
 	int ret, maxlen;
@@ -680,6 +713,7 @@ static struct netflow9_msg_hdr
 				       REPLY_PRE, REPLY_PRELEN, data_records);
 		break;
 	case NFLOW9_DIR_REPLY:
+		reverse_direction(ii, upi->input.keys);
 		ret = put_data_records(upi, template,
 				       ORIG_PRE, ORIG_PRELEN, data_records);
 		break;
@@ -697,6 +731,7 @@ static struct netflow9_msg_hdr
 		}
 		data_records += template->dataset_len;
 		memset(data_records, 0, maxlen);
+		reverse_direction(ii, upi->input.keys);
 		ret = put_data_records(upi, template,
 				       ORIG_PRE, ORIG_PRELEN, data_records);
 		break;
@@ -977,13 +1012,29 @@ static int configure_netflow9(struct ulogd_pluginstance *pi,
 	if (ret < 0)
 		return ret;
 
+	for (i = 0; i < sizeof(ii->ikey_idx); i++)
+		ii->ikey_idx[i] = -1;
 	for (i = 0; i < pi->input.num_keys; i++) {
 		if (!strcmp(pi->input.keys[i].name, ORIGCOUNT_KEYNAME))
-			ii->orig_pktcount_idx = i;
+			orig_pktcount_ii(ii) = i;
 		else if (!strcmp(pi->input.keys[i].name, REPLYCOUNT_KEYNAME))
-			ii->reply_pktcount_idx = i;
+			reply_pktcount_ii(ii) = i;
+		else
+			switch (pi->input.keys[i].ipfix.field_id) {
+			case IPFIX_ingressInterface:
+				if_input_ii(ii) = i;
+				break;
+			case IPFIX_egressInterface:
+				if_output_ii(ii) = i;
+				break;
+			case IPFIX_flowDirection:
+				flow_dir_ii(ii) = i;
+				break;
+			default:
+				break;
+			}
 	}
-	if (ii->orig_pktcount_idx == 0 || ii->reply_pktcount_idx == 0) {
+	if (orig_pktcount_ii(ii) == 0 || reply_pktcount_ii(ii) == 0) {
 		ulogd_log(ULOGD_ERROR, "requires both input keys - %s and %s\n",
 			  ORIGCOUNT_KEYNAME, REPLYCOUNT_KEYNAME);
 		return -1;
