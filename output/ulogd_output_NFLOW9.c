@@ -213,7 +213,7 @@ enum {
 	NETFLOW9_SRC_VLAN		= 58,	/* 2	vlanId				*/
 	NETFLOW9_DST_VLAN		= 59,	/* 2	postVlanId			*/
 	NETFLOW9_IP_PROTOCOL_VERSION	= 60,	/* 1	ipVersion			*/
-	NETFLOW9_DIRECTION		= 61,	/* 1					*/
+	NETFLOW9_DIRECTION		= 61,	/* 1	flowDirection			*/
 	NETFLOW9_IPV6_NEXT_HOP		= 62,	/* 16	ipNextHopIPv6Address		*/
 	NETFLOW9_BGP_IPV6_NEXT_HOP	= 63,	/* 16	bgpNexthopIPv6Address		*/
 	NETFLOW9_IPV6_OPTION_HEADERS	= 64,	/* 4	ipv6ExtensionHeaders		*/
@@ -288,7 +288,7 @@ static int ipfix_map[] = {
 	[NETFLOW9_SRC_VLAN]		= IPFIX_vlanId,
 	[NETFLOW9_DST_VLAN]		= IPFIX_postVlanId,
 	[NETFLOW9_IP_PROTOCOL_VERSION]	= IPFIX_ipVersion,
-	[NETFLOW9_DIRECTION]		= 0,
+	[NETFLOW9_DIRECTION]		= IPFIX_flowDirection,
 	[NETFLOW9_IPV6_NEXT_HOP]	= IPFIX_ipNextHopIPv6Address,
 	[NETFLOW9_BGP_IPV6_NEXT_HOP]	= IPFIX_bgpNexthopIPv6Address,
 	[NETFLOW9_IPV6_OPTION_HEADERS]	= IPFIX_ipv6ExtensionHeaders,
