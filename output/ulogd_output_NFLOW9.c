@@ -21,6 +21,8 @@
  *
  */
 
+#define DEBUG_OUTBK_DIR "/tmp/bk"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -82,7 +84,7 @@ enum nflow9_field_dir {
 };
 
 static struct config_keyset netflow9_kset = {
-	.num_ces = 5,
+	.num_ces = 6,
 	.ces = {
 		{
 			.key 	 = "host",
@@ -113,6 +115,12 @@ static struct config_keyset netflow9_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.value = 16,
 		},
+		{
+			.key	 = "prime9",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
 	},
 };
 
@@ -121,6 +129,7 @@ static struct config_keyset netflow9_kset = {
 #define proto_ce(x)	(x->ces[2])
 #define domain_ce(x)	(x->ces[3])
 #define template_per_ce(x)	(x->ces[4])
+#define prime9_ce(x)	(x->ces[5])
 
 /* Section 5.1 */
 struct netflow9_msg_hdr {
@@ -857,6 +866,20 @@ static int output_netflow9(struct ulogd_pluginstance *upi)
 		return ULOGD_IRET_ERR;
 	}
 
+#ifdef DEBUG_OUTBK_DIR
+	{
+		int bkfd;
+		char bkname[4096];
+
+		snprintf(bkname, sizeof(bkname),
+			 DEBUG_OUTBK_DIR "/%03d.bk", ii->seq);
+		bkfd = open(bkname, O_CREAT|O_WRONLY|O_TRUNC, S_IWUSR);
+		if (bkfd >= 0) {
+			write(bkfd, netflow9_msg, msglen);
+			close(bkfd);
+		}
+	}
+#endif
 	return ULOGD_IRET_OK;
 }
 
@@ -1033,6 +1056,21 @@ static int configure_netflow9(struct ulogd_pluginstance *pi,
 			default:
 				break;
 			}
+		if (!prime9_ce(pi->config_kset).u.value)
+			continue;
+		if (!strcmp(pi->input.keys[i].name,
+			    "orig.raw.pktlen.delta")
+		    || !strcmp(pi->input.keys[i].name,
+			       "orig.raw.pktcount.delta")
+		    || !strcmp(pi->input.keys[i].name,
+			       "reply.raw.pktlen.delta")
+		    || !strcmp(pi->input.keys[i].name,
+			       "reply.raw.pktcount.delta")
+		    || !strcmp(pi->input.keys[i].name,
+			       "oob.ifindex_in")
+		    || !strcmp(pi->input.keys[i].name,
+			       "oob.ifindex_out"))
+			pi->input.keys[i].ipfix.field_id = 0;
 	}
 	if (orig_pktcount_ii(ii) == 0 || reply_pktcount_ii(ii) == 0) {
 		ulogd_log(ULOGD_ERROR, "requires both input keys - %s and %s\n",
