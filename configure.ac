@@ -128,6 +128,24 @@ else
 	enable_jansson="no"
 fi
 
+dnl Checks for PR-SCTP
+AC_ARG_WITH([sctp], AC_HELP_STRING([--with-sctp], [Build with SCTP support [default=test]]))
+AS_IF([test "x$with_sctp" != "xno"], [
+    AC_CHECK_HEADERS(netinet/sctp.h)
+    AC_MSG_CHECKING([for SCTP_PR_SCTP_TTL])
+    AC_CACHE_VAL(ac_cv_pr_strp,
+        AC_TRY_COMPILE(
+            [ #include <netinet/sctp.h> ],
+            [ struct sctp_prinfo p = { .policy = SCTP_PR_SCTP_TTL }; ],
+            ac_cv_pr_sctp=yes,
+            ac_cv_pr_sctp=no))
+    AC_MSG_RESULT($ac_cv_pr_sctp)
+])
+AS_IF([test "x$ac_cv_pr_sctp" = "xyes"],
+      [AC_DEFINE([HAVE_PR_SCTP], [1], [may handle PR-SCTP but not implemented yet])
+])
+AM_CONDITIONAL([HAVE_PR_SCTP], [test "x$ac_cv_pr_sctp" = "xyes"])
+
 dnl AC_SUBST(DATABASE_DIR)
 dnl AC_SUBST(DATABASE_LIB)
 dnl AC_SUBST(DATABASE_LIB_DIR)
