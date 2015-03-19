@@ -399,7 +399,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "flow.end.usec",
 		.ipfix	= {
 			.vendor		= IPFIX_VENDOR_IETF,
-			.field_id	= IPFIX_flowEndSeconds,
+			.field_id	= IPFIX_flowEndMicroSeconds,
 		},
 	},
 	{
