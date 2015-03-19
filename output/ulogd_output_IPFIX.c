@@ -70,17 +70,27 @@ struct sctp_sndrcvinfo {
 #include <ulogd/ipfix_protocol.h>
 #include <ulogd/ipfix_util.h>
 
+#define DEBUG_TMMAP
+#ifdef DEBUG_TMMAP
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+int mmfd;
+void *mmaddr;
+#endif
+
 #define IPFIX_DEFAULT_TCPUDP_PORT	4739
 
 enum {
 	IPFIX_CONF_DEST	= 0,
 	IPFIX_CONF_DOMAIN_ID,
 	IPFIX_CONF_NTH_TEMPLATE,
-	IPFIX_CONF_MAX = IPFIX_CONF_NTH_TEMPLATE,
+	IPFIX_CONF_CORKSETS_MAX,
+	IPFIX_CONF_MAX = IPFIX_CONF_CORKSETS_MAX,
 };
 
 static struct config_keyset ipfix_kset = {
-	.num_ces = 3,
+	.num_ces = 4,
 	.ces = {
 		[IPFIX_CONF_DEST] = {
 			.key 	 = "dest",
@@ -99,20 +109,28 @@ static struct config_keyset ipfix_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.value = 16,
 		},
+		[IPFIX_CONF_CORKSETS_MAX] = {
+			.key	 = "corksets_max",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 16,
+		},
 	},
 };
 
-#define dest_ce(x)	(x->ces[IPFIX_CONF_DEST])
-#define domain_ce(x)	(x->ces[IPFIX_CONF_DOMAIN_ID])
-#define nth_template_ce(x)	(x->ces[IPFIX_CONF_NTH_TEMPLATE])
+#define dest_ce(x)	((x)->ces[IPFIX_CONF_DEST])
+#define domain_ce(x)	((x)->ces[IPFIX_CONF_DOMAIN_ID])
+#define nth_template_ce(x)	((x)->ces[IPFIX_CONF_NTH_TEMPLATE])
+#define corksets_max_ce(x)	((x)->ces[IPFIX_CONF_CORKSETS_MAX])
 
 struct ulogd_ipfix_template {
 	struct llist_head list;
 	struct nfct_bitmask *bitmask;
 	int until_template;		/* decide if it's time to retransmit our template */
-	int tmpl_data_msg_len, data_only_msg_len;
-	struct ipfix_msg_hdr *tmpl_data_msg;	/* include records, set header of template, data */
-	struct ipfix_msg_hdr *data_only_msg;	/* include records, set header of data */
+	int tmplset_len, dataset_len;
+	struct ipfix_set_hdr *template;
+	struct ipfix_set_hdr *databuf;
+	int datapos;
 };
 
 struct ipfix_instance {
@@ -121,17 +139,24 @@ struct ipfix_instance {
 
 	struct llist_head template_list;
 	struct nfct_bitmask *valid_bitmask;	/* bitmask of valid keys */
+	u_int32_t hdr_seq;
 	u_int32_t seq;
 #define ULOGD_IPFIX_TEMPL_BASE 1024
 	u_int16_t next_template_id;
+	struct ipfix_msg_hdr ipfix_msghdr;
+	struct iovec *iovecs;	/* index 0 is reserved for ipfix_msg_hdr */
+	unsigned int iovcnt;
+	unsigned int corksets_max;	/* cork limit include template */
+	unsigned int msglen;
 };
 
-static int ipfix_fprintf_header(FILE *fd, const struct ipfix_msg_hdr *hdr);
+static int ipfix_fprintf_header(FILE *fd, const struct ipfix_instance *ii);
 
 struct ulogd_ipfix_template *
 alloc_ulogd_ipfix_template(struct ulogd_pluginstance *upi,
 			   struct nfct_bitmask *bm)
 {
+	struct ipfix_instance *ii = (struct ipfix_instance *)&upi->private;
 	struct ulogd_ipfix_template *tmpl;
 	unsigned int i;
 	int tmpl_len = 0, data_len = 0;
@@ -159,32 +184,41 @@ alloc_ulogd_ipfix_template(struct ulogd_pluginstance *upi,
 	if (!tmpl->bitmask)
 		goto free_tmpl;
 
-	tmpl->data_only_msg_len = sizeof(struct ipfix_msg_hdr)
-		+ sizeof(struct ipfix_set_hdr) + data_len;
-	tmpl->tmpl_data_msg_len = tmpl->data_only_msg_len
-		+ sizeof(struct ipfix_templ_rec_hdr)
-		+ sizeof(struct ipfix_set_hdr) + tmpl_len;
+	tmpl->dataset_len = sizeof(struct ipfix_set_hdr) + data_len;
+	tmpl->tmplset_len = sizeof(struct ipfix_set_hdr)
+		+ sizeof(struct ipfix_templ_rec_hdr) + tmpl_len;
+	/* XXX: no alignment? confirm 3.3.1. Set Format */
 
-	tmpl->tmpl_data_msg = malloc(tmpl->tmpl_data_msg_len);
-	if (tmpl->tmpl_data_msg == NULL)
+	tmpl->template = calloc(tmpl->tmplset_len, 1);
+	if (tmpl->template == NULL)
 		goto free_bitmask;
-	memset(tmpl->tmpl_data_msg, 0, tmpl->tmpl_data_msg_len);
-
-	tmpl->data_only_msg = malloc(tmpl->data_only_msg_len);
-	if (tmpl->data_only_msg == NULL)
-		goto free_tmpl_data_msg;
-	memset(tmpl->data_only_msg, 0, tmpl->data_only_msg_len);
+	/* for worst case: all sets are this template's data */
+	tmpl->databuf = calloc(tmpl->dataset_len, ii->corksets_max);
+	if (tmpl->databuf == NULL)
+		goto free_template;
 
 	return tmpl;
 
-free_tmpl_data_msg:
-	free(tmpl->tmpl_data_msg);
+free_template:
+	free(tmpl->template);
 free_bitmask:
 	free(tmpl->bitmask);
 free_tmpl:
 	free(tmpl);
 
 	return NULL;
+}
+
+static void reset_counters(struct ipfix_instance *ii)
+{
+	struct ulogd_ipfix_template *tmpl;
+
+	llist_for_each_entry(tmpl, &ii->template_list, list) {
+		tmpl->datapos = 0;
+	}
+	ii->msglen = 0;
+	/* pos 0 is reserved for ipfix_msg_hdr */
+	ii->iovcnt = 1;
 }
 
 /* Build the IPFIX template from the input keys */
@@ -194,7 +228,6 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
 	struct ulogd_ipfix_template *tmpl;
-	struct ipfix_msg_hdr *msg_hdr;
 	struct ipfix_templ_rec_hdr *tmpl_hdr;
 	struct ipfix_set_hdr *set_hdr;
 	unsigned int i, field_count;
@@ -204,11 +237,10 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 	if (tmpl == NULL)
 		return NULL;
 
-	tmpl->until_template = nth_template_ce(upi->config_kset).u.value;
-
 	/* build template records */
-	ptr = (void *)tmpl->tmpl_data_msg + sizeof(struct ipfix_msg_hdr)
-		+ sizeof(struct ipfix_set_hdr) + sizeof(struct ipfix_templ_rec_hdr);
+	ptr = (void *)tmpl->template
+		+ sizeof(struct ipfix_set_hdr)
+		+ sizeof(struct ipfix_templ_rec_hdr);
 	for (i = 0, field_count = 0; i < upi->input.num_keys; i++) {
 		struct ulogd_key *key = &upi->input.keys[i];
 		int length = ulogd_key_size(key);
@@ -233,37 +265,21 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 		field_count++;
 	}
 
-	/** initialize ipfix message header with template and data */
-	msg_hdr = tmpl->tmpl_data_msg;
-	msg_hdr->version = htons(10);
-	msg_hdr->length = htons(tmpl->tmpl_data_msg_len);
-	msg_hdr->domain_id = htonl(domain_ce(upi->config_kset).u.value);
-
 	/* initialize template set header */
-	set_hdr = (void *)msg_hdr + sizeof(*msg_hdr);
-	set_hdr->set_id = htons(2);
-	set_hdr->length = htons(tmpl->tmpl_data_msg_len - tmpl->data_only_msg_len);
+	tmpl->template->set_id = htons(2);
+	tmpl->template->length = htons(tmpl->tmplset_len);
 
 	/* initialize template record header */
-	tmpl_hdr = (void *)set_hdr + sizeof(*set_hdr);
+	tmpl_hdr = (void *)tmpl->template + sizeof(struct ipfix_set_hdr);
 	tmpl_hdr->templ_id = htons(ii->next_template_id++);
 	tmpl_hdr->field_count = htons(field_count);
 
-	/* initialize data set header */
-	set_hdr = ptr;
-	set_hdr->set_id = tmpl_hdr->templ_id;
-	set_hdr->length = htons(tmpl->data_only_msg_len - sizeof(struct ipfix_msg_hdr));
-
-	/** initialize ipfix message header with data only */
-	msg_hdr = tmpl->data_only_msg;
-	msg_hdr->version = htons(10);
-	msg_hdr->length = htons(tmpl->data_only_msg_len);
-	msg_hdr->domain_id = htonl(domain_ce(upi->config_kset).u.value);
-
-	/* initialize data set header */
-	set_hdr = (void *)msg_hdr + sizeof(*msg_hdr);
-	set_hdr->set_id = tmpl_hdr->templ_id;
-	set_hdr->length = htons(tmpl->data_only_msg_len - sizeof(struct ipfix_msg_hdr));
+	/* initialize data buffer */
+	for (i = 0; i < ii->corksets_max; i++) {
+		set_hdr = (void *)tmpl->databuf + i * tmpl->dataset_len;
+		set_hdr->set_id = tmpl_hdr->templ_id;
+		set_hdr->length = htons(tmpl->dataset_len);
+	}
 
 	return tmpl;
 }
@@ -287,6 +303,7 @@ static int put_data_records(struct ulogd_pluginstance *upi,
 			    struct ulogd_ipfix_template *tmpl,
 			    void *buf, int buflen)
 {
+	struct ipfix_instance *ii = (struct ipfix_instance *)&upi->private;
 	int ret;
 	unsigned int i, len = 0;
 
@@ -299,54 +316,94 @@ static int put_data_records(struct ulogd_pluginstance *upi,
 		len += ret;
 		buflen -= ret;
 	}
-
+	ii->seq++;
 	return len;
 }
 
-static struct ipfix_msg_hdr *build_ipfix_msg(struct ulogd_pluginstance *upi,
-					     struct ulogd_ipfix_template *template,
-					     bool need_template)
+static void *data_record(struct ipfix_instance *ii,
+			 struct ulogd_ipfix_template *tmpl)
+{
+	void *p;
+
+	ii->iovecs[ii->iovcnt].iov_base = (void *)tmpl->databuf
+		+ tmpl->datapos * tmpl->dataset_len;
+	ii->iovecs[ii->iovcnt].iov_len = tmpl->dataset_len;
+	p = ii->iovecs[ii->iovcnt].iov_base + sizeof(struct ipfix_set_hdr);
+	memset(p, 0, tmpl->dataset_len - sizeof(struct ipfix_set_hdr));
+	ii->iovcnt++;
+	tmpl->datapos++;
+
+	return p;
+}
+
+static int put_template(struct ulogd_pluginstance *upi,
+			struct ulogd_ipfix_template *tmpl)
+{
+	struct ipfix_instance *ii = (struct ipfix_instance *)&upi->private;
+
+	if (tmpl->until_template != 0) {
+		tmpl->until_template--;
+		return 0;
+	}
+	tmpl->until_template = nth_template_ce(upi->config_kset).u.value;
+
+	ii->iovecs[ii->iovcnt].iov_base = tmpl->template;
+	ii->iovecs[ii->iovcnt].iov_len = tmpl->tmplset_len;
+
+	ii->iovcnt++;
+	ii->msglen += tmpl->tmplset_len;
+
+	return 1;
+}
+
+static int build_ipfix_msg(struct ulogd_pluginstance *upi,
+			   struct ulogd_ipfix_template *tmpl)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
-	struct ipfix_msg_hdr *msg_hdr;
-	void *data_records;
-	int ret, data_len;
+	int ret;
 
-	if (need_template) {
-		int tmpl_len = template->tmpl_data_msg_len - template->data_only_msg_len;
-		msg_hdr = template->tmpl_data_msg;
-		data_records = (void *)msg_hdr + sizeof(struct ipfix_msg_hdr)
-			+ tmpl_len + sizeof(struct ipfix_set_hdr);
-	} else {
-		msg_hdr = template->data_only_msg;
-		data_records = (void *)msg_hdr + sizeof(struct ipfix_msg_hdr)
-			+ sizeof(struct ipfix_set_hdr);
-	}
-	msg_hdr->seq = htonl(ii->seq++);
-
-	data_len = template->data_only_msg_len - sizeof(struct ipfix_msg_hdr)
-		- sizeof(struct ipfix_set_hdr);
-	memset(data_records, 0, data_len);
-
-	ret = put_data_records(upi, template, data_records, data_len);
+	put_template(upi, tmpl);
+	ret = put_data_records(upi, tmpl, data_record(ii, tmpl),
+			       tmpl->dataset_len);
 	if (ret < 0) {
 		ulogd_log(ULOGD_ERROR, "could not build ipfix dataset");
-		return NULL;
-	} else if (ret > data_len) {
-		ulogd_log(ULOGD_ERROR, "overflowed on building ipfix dataset");
-		return NULL;
+		return -1;
 	}
 
-	return msg_hdr;
+	ii->msglen += tmpl->dataset_len;
+	return 1;
+}
+
+static ssize_t send_ipfix(struct ipfix_instance *ii)
+{
+	ssize_t nsent;
+
+	ii->msglen += sizeof(struct ipfix_msg_hdr);
+	ii->ipfix_msghdr.export_time = htonl((u_int32_t)(time(NULL)));
+	ii->ipfix_msghdr.length = htons(ii->msglen);
+	ii->ipfix_msghdr.seq = htonl(ii->hdr_seq);
+	ii->hdr_seq = ii->seq;
+
+#ifdef DEBUG_TMMAP
+	ipfix_fprintf_header(stdout, ii);
+#endif
+	nsent = writev(ii->fd, ii->iovecs, ii->iovcnt);
+	if (nsent != ii->msglen) {
+		if (nsent == -1)
+			ulogd_log(ULOGD_ERROR, "send: %s\n", strerror(errno));
+		ulogd_log(ULOGD_ERROR, "send - arg: %d, ret: %d\n",
+			  ii->msglen, nsent);
+	}
+
+	return nsent;
 }
 
 static int output_ipfix(struct ulogd_pluginstance *upi)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
 	struct ulogd_ipfix_template *template;
-	struct ipfix_msg_hdr *ipfix_msg;
 	unsigned int i;
-	bool need_template = false;
+	int ret;
 
 	/* FIXME: it would be more cache efficient if the IS_VALID
 	 * flags would be a separate bitmask outside of the array.
@@ -379,22 +436,31 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 			return ULOGD_IRET_ERR;
 		}
 		llist_add(&template->list, &ii->template_list);
-		need_template = true;
 	}
 
-	if (template->until_template == 0) {
-		need_template = true;
-		template->until_template = nth_template_ce(upi->config_kset).u.value;
-	}
-	template->until_template--;
-
-	ipfix_msg = build_ipfix_msg(upi, template, need_template);
-	if (ipfix_msg == NULL)
+	ret = build_ipfix_msg(upi, template);
+	if (ret == -1) {
+		ulogd_log(ULOGD_ERROR, "can't build message\n");
+		reset_counters(ii);
 		return ULOGD_IRET_ERR;
+	}
 
-	ipfix_msg->export_time = htonl((u_int32_t)(time(NULL)));
-	ipfix_fprintf_header(stdout, ipfix_msg);
-	fprintf(stdout, "\n");
+	/* XXX: magic number. practical UDP max */
+	if (ii->msglen > 65507 - sizeof(struct ipfix_msg_hdr)) {
+		ulogd_log(ULOGD_NOTICE, "We may have lost data since message "
+			  "length exceeds practical UDP max size, then "
+			  "reducing corksets_max to: %d\n", ii->iovcnt);
+		ii->corksets_max = ii->iovcnt;
+	} else if (ii->iovcnt - 1 + 2 < ii->corksets_max) {
+		/* - 1 reserved for header
+		 * + 2 for sending template and data on next time */
+		return ULOGD_IRET_OK;
+	}
+
+	ret = send_ipfix(ii);
+	reset_counters(ii);
+	if (ret < 0)
+		return ULOGD_IRET_ERR;
 
 	return ULOGD_IRET_OK;
 }
@@ -402,13 +468,18 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 static int start_ipfix(struct ulogd_pluginstance *pi)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &pi->private;
-	int ret;
+	int ret = -ENOMEM;
 
 	ulogd_log(ULOGD_DEBUG, "starting ipfix\n");
 
+	/* + 1 for ipfix_msg_hdr */
+	ii->iovecs = calloc(sizeof(struct iovec), ii->corksets_max + 1);
+	if (ii->iovecs == NULL)
+		return ret;
+
 	ii->valid_bitmask = nfct_bitmask_new(pi->input.num_keys);
 	if (!ii->valid_bitmask)
-		return -ENOMEM;
+		goto out_iovecs_free;
 
 	INIT_LLIST_HEAD(&ii->template_list);
 
@@ -418,13 +489,34 @@ static int start_ipfix(struct ulogd_pluginstance *pi)
 		goto out_bm_free;
 	}
 
-	ii->next_template_id = ULOGD_IPFIX_TEMPL_BASE;
+	ii->ipfix_msghdr.version = htons(10);
+	ii->ipfix_msghdr.domain_id = htonl(domain_ce(pi->config_kset).u.value);
+	ii->iovecs[0].iov_base = &ii->ipfix_msghdr;
+	ii->iovecs[0].iov_len = sizeof(ii->ipfix_msghdr);
 
+	ii->next_template_id = ULOGD_IPFIX_TEMPL_BASE;
+	reset_counters(ii);
+
+#ifdef DEBUG_TMMAP
+	mmfd = fileno(tmpfile());
+	if (mmfd == -1) {
+		perror("could not open tmp mmap file");
+		exit(EXIT_FAILURE);
+	}
+	mmaddr = mmap(NULL, 65507, PROT_READ | PROT_WRITE, MAP_PRIVATE, mmfd, 0);
+	if (mmaddr == MAP_FAILED) {
+		perror("could not mmap");
+		exit(EXIT_FAILURE);
+	}
+#endif
 	return 0;
 
 out_bm_free:
 	nfct_bitmask_destroy(ii->valid_bitmask);
 	ii->valid_bitmask = NULL;
+
+out_iovecs_free:
+	free(ii->iovecs);
 
 	return ret;
 }
@@ -432,10 +524,22 @@ out_bm_free:
 static int stop_ipfix(struct ulogd_pluginstance *pi)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &pi->private;
+	struct ulogd_ipfix_template *tmpl, *n;
 
+	if (ii->iovcnt > 1) /* exclude header */
+		send_ipfix(ii); /* ignore retval, log error only */
+	reset_counters(ii);
+
+	llist_for_each_entry_safe(tmpl, n, &ii->template_list, list) {
+		nfct_bitmask_destroy(tmpl->bitmask);
+		free(tmpl->template);
+		free(tmpl->databuf);
+		free(tmpl);
+	}
 	close(ii->fd);
 	nfct_bitmask_destroy(ii->valid_bitmask);
 	ii->valid_bitmask = NULL;
+	free(ii->iovecs);
 
 	return 0;
 }
@@ -456,6 +560,7 @@ static void signal_handler_ipfix(struct ulogd_pluginstance *pi, int signal)
 static int configure_ipfix(struct ulogd_pluginstance *pi,
 			    struct ulogd_pluginstance_stack *stack)
 {
+	struct ipfix_instance *ii = (struct ipfix_instance *)&pi->private;
 	int ret;
 
 	/* FIXME: error handling */
@@ -463,6 +568,13 @@ static int configure_ipfix(struct ulogd_pluginstance *pi,
 	ret = config_parse_file(pi->id, pi->config_kset);
 	if (ret < 0)
 		return ret;
+
+	if (corksets_max_ce(pi->config_kset).u.value < 2) {
+		ulogd_log(ULOGD_ERROR, "corksets_max is required "
+			  "more than 2 from implementation perspective\n");
+		return -EINVAL;
+	}
+	ii->corksets_max = (unsigned int)corksets_max_ce(pi->config_kset).u.value;
 
 	/* postpone address lookup to ->start() time, since we want to
 	 * re-lookup an address on SIGHUP */
@@ -671,7 +783,7 @@ static int ipfix_fprintf_set_header(FILE *fd, const struct ipfix_set_hdr *hdr, i
 	return total_len + ret;
 }
 
-static int ipfix_fprintf_header(FILE *fd, const struct ipfix_msg_hdr *hdr)
+static int _ipfix_fprintf_header(FILE *fd, const struct ipfix_msg_hdr *hdr)
 {
 	int ret, len;
 	char outstr[20];
@@ -708,4 +820,11 @@ static int ipfix_fprintf_header(FILE *fd, const struct ipfix_msg_hdr *hdr)
 	}
 
 	return ntohs(hdr->length) - len;
+}
+
+static int ipfix_fprintf_header(FILE *fd, const struct ipfix_instance *ii)
+{
+	lseek(mmfd, 0, SEEK_SET);
+	writev(mmfd, ii->iovecs, ii->iovcnt);
+	return _ipfix_fprintf_header(fd, (struct ipfix_msg_hdr *)mmaddr);
 }
