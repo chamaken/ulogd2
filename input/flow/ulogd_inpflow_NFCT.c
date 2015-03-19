@@ -542,10 +542,10 @@ static int propagate_ct(struct ulogd_pluginstance *main_upi,
 			     htons(nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST)));
 		break;
 	case IPPROTO_ICMP:
-		okey_set_u16(&ret[NFCT_ICMP_CODE],
-			     nfct_get_attr_u8(ct, ATTR_ICMP_CODE));
-		okey_set_u16(&ret[NFCT_ICMP_TYPE],
-			     nfct_get_attr_u8(ct, ATTR_ICMP_TYPE));
+		okey_set_u8(&ret[NFCT_ICMP_CODE],
+			    nfct_get_attr_u8(ct, ATTR_ICMP_CODE));
+		okey_set_u8(&ret[NFCT_ICMP_TYPE],
+			    nfct_get_attr_u8(ct, ATTR_ICMP_TYPE));
 		break;
 	}
 
