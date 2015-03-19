@@ -89,11 +89,12 @@ enum {
 	IPFIX_CONF_PORT,
 	IPFIX_CONF_PROTO,
 	IPFIX_CONF_DOMAIN_ID,
-	IPFIX_CONF_MAX = IPFIX_CONF_DOMAIN_ID,
+	IPFIX_CONF_NTH_TEMPLATE,
+	IPFIX_CONF_MAX = IPFIX_CONF_NTH_TEMPLATE,
 };
 
 static struct config_keyset ipfix_kset = {
-	.num_ces = 4,
+	.num_ces = 5,
 	.ces = {
 		[IPFIX_CONF_HOST] = {
 			.key 	 = "host",
@@ -118,6 +119,12 @@ static struct config_keyset ipfix_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
+		[IPFIX_CONF_NTH_TEMPLATE] = {
+			.key	 = "nth_template",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 16,
+		},
 	},
 };
 
@@ -125,6 +132,7 @@ static struct config_keyset ipfix_kset = {
 #define port_ce(x)	(x->ces[IPFIX_CONF_PORT])
 #define proto_ce(x)	(x->ces[IPFIX_CONF_PROTO])
 #define domain_ce(x)	(x->ces[IPFIX_CONF_DOMAIN_ID])
+#define nth_template_ce(x)	(x->ces[IPFIX_CONF_NTH_TEMPLATE])
 
 struct ipfix_template {
 	struct ipfix_templ_rec_hdr hdr;
@@ -137,6 +145,7 @@ struct ulogd_ipfix_template {
 	unsigned int data_length;	/* length of the DATA */
 	void *tmpl_cur;			/* cursor into current template position */
 	struct ipfix_template tmpl;
+	int until_template;			/* decide if it's time to retransmit our template */
 };
 
 struct ipfix_instance {
@@ -179,6 +188,7 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 	tmpl->tmpl_cur = tmpl->tmpl.buf;
 
 	tmpl->data_length = 0;
+	tmpl->until_template = nth_template_ce(upi->config_kset).u.value;
 
 	for (i = 0, j = 0; i < upi->input.num_keys; i++) {
 		struct ulogd_key *key = &upi->input.keys[i];
@@ -363,7 +373,8 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
 	struct ulogd_ipfix_template *template;
-	unsigned int total_size, i;
+	unsigned int i;
+	bool need_template = false;
 
 	/* FIXME: it would be more cache efficient if the IS_VALID
 	 * flags would be a separate bitmask outside of the array.
@@ -396,16 +407,12 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 			return ULOGD_IRET_ERR;
 		}
 		llist_add(&template->list, &ii->template_list);
+		need_template = true;
 	}
 	
-	total_size = template->data_length;
-
-	/* decide if it's time to retransmit our template and (optionally)
-	 * prepend it into the to-be-sent IPFIX message */
-	if (0 /* FIXME */) {
-		/* add size of template */
-		//total_size += (template->tmpl_cur - (void *)&template->tmpl);
-		total_size += sizeof(template->tmpl);
+	if (template->until_template-- == 0) {
+		need_template = true;
+		template->until_template = nth_template_ce(upi->config_kset).u.value;
 	}
 
 	return ULOGD_IRET_OK;
