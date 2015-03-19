@@ -100,7 +100,7 @@ enum {
 	IPFIX_vlanId			= 58,
 	IPFIX_postVlanId		= 59,
 	IPFIX_ipVersion			= 60,
-	/* reserved */
+	IPFIX_flowDirection		= 61,
 	IPFIX_ipNextHopIPv6Address	= 62,
 	IPFIX_bgpNexthopIPv6Address	= 63,
 	IPFIX_ipv6ExtensionHeaders	= 64,
