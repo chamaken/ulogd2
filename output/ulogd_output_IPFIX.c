@@ -122,10 +122,9 @@ struct ipfix_instance {
 	struct llist_head template_list;
 	struct nfct_bitmask *valid_bitmask;	/* bitmask of valid keys */
 	u_int32_t seq;
-};
-
 #define ULOGD_IPFIX_TEMPL_BASE 1024
-static u_int16_t next_template_id = ULOGD_IPFIX_TEMPL_BASE;
+	u_int16_t next_template_id;
+};
 
 static int ipfix_fprintf_header(FILE *fd, const struct ipfix_msg_hdr *hdr);
 
@@ -193,6 +192,7 @@ struct ulogd_ipfix_template *
 build_template_for_bitmask(struct ulogd_pluginstance *upi,
 			   struct nfct_bitmask *bm)
 {
+	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
 	struct ulogd_ipfix_template *tmpl;
 	struct ipfix_msg_hdr *msg_hdr;
 	struct ipfix_templ_rec_hdr *tmpl_hdr;
@@ -246,7 +246,7 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 
 	/* initialize template record header */
 	tmpl_hdr = (void *)set_hdr + sizeof(*set_hdr);
-	tmpl_hdr->templ_id = htons(next_template_id++);
+	tmpl_hdr->templ_id = htons(ii->next_template_id++);
 	tmpl_hdr->field_count = htons(field_count);
 
 	/* initialize data set header */
@@ -417,6 +417,8 @@ static int start_ipfix(struct ulogd_pluginstance *pi)
 		ret = -errno;
 		goto out_bm_free;
 	}
+
+	ii->next_template_id = ULOGD_IPFIX_TEMPL_BASE;
 
 	return 0;
 
