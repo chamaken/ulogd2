@@ -8,7 +8,7 @@
  * (C) 2005 by Harald Welte <laforge@gnumonks.org>
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 
+ *  it under the terms of the GNU General Public License version 2
  *  as published by the Free Software Foundation
  *
  *  This program is distributed in the hope that it will be useful,
@@ -39,7 +39,6 @@
 #include <netdb.h>
 
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
-
 #include <ulogd/linuxlist.h>
 
 #ifdef IPPROTO_SCTP
@@ -65,54 +64,28 @@ struct sctp_sndrcvinfo {
 };
 #endif
 
-#include <byteswap.h>
-#if __BYTE_ORDER == __BIG_ENDIAN
-#  ifndef __be64_to_cpu
-#  define __be64_to_cpu(x)	(x)
-#  endif
-# else
-# if __BYTE_ORDER == __LITTLE_ENDIAN
-#  ifndef __be64_to_cpu
-#  define __be64_to_cpu(x)	__bswap_64(x)
-#  endif
-# endif
-#endif
-
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
 #include <ulogd/linuxlist.h>
 #include <ulogd/ipfix_protocol.h>
+#include <ulogd/ipfix_util.h>
 
 #define IPFIX_DEFAULT_TCPUDP_PORT	4739
 
 enum {
-	IPFIX_CONF_HOST	= 0,
-	IPFIX_CONF_PORT,
-	IPFIX_CONF_PROTO,
+	IPFIX_CONF_DEST	= 0,
 	IPFIX_CONF_DOMAIN_ID,
 	IPFIX_CONF_NTH_TEMPLATE,
 	IPFIX_CONF_MAX = IPFIX_CONF_NTH_TEMPLATE,
 };
 
 static struct config_keyset ipfix_kset = {
-	.num_ces = 5,
+	.num_ces = 3,
 	.ces = {
-		[IPFIX_CONF_HOST] = {
-			.key 	 = "host",
+		[IPFIX_CONF_DEST] = {
+			.key 	 = "dest",
 			.type	 = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
-		},
-		[IPFIX_CONF_PORT] = {
-			.key	 = "port",
-			.type	 = CONFIG_TYPE_STRING,
-			.options = CONFIG_OPT_NONE,
-			.u	 = { .string = "4739" },
-		},
-		[IPFIX_CONF_PROTO] = {
-			.key	 = "protocol",
-			.type	 = CONFIG_TYPE_STRING,
-			.options = CONFIG_OPT_NONE,
-			.u	= { .string = "udp" },
 		},
 		[IPFIX_CONF_DOMAIN_ID] = {
 			.key	 = "domain_id",
@@ -129,9 +102,7 @@ static struct config_keyset ipfix_kset = {
 	},
 };
 
-#define host_ce(x)	(x->ces[IPFIX_CONF_HOST])
-#define port_ce(x)	(x->ces[IPFIX_CONF_PORT])
-#define proto_ce(x)	(x->ces[IPFIX_CONF_PROTO])
+#define dest_ce(x)	(x->ces[IPFIX_CONF_DEST])
 #define domain_ce(x)	(x->ces[IPFIX_CONF_DOMAIN_ID])
 #define nth_template_ce(x)	(x->ces[IPFIX_CONF_NTH_TEMPLATE])
 
@@ -146,8 +117,7 @@ struct ulogd_ipfix_template {
 
 struct ipfix_instance {
 	int fd;		/* socket that we use for sending IPFIX data */
-	int sock_type;	/* type (SOCK_*) */
-	int sock_proto;	/* protocol (IPPROTO_*) */
+	int socktype;	/* socket type */
 
 	struct llist_head template_list;
 	struct nfct_bitmask *valid_bitmask;	/* bitmask of valid keys */
@@ -304,7 +274,7 @@ find_template_for_bitmask(struct ulogd_pluginstance *upi,
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
 	struct ulogd_ipfix_template *tmpl;
-	
+
 	/* FIXME: this can be done more efficient! */
 	llist_for_each_entry(tmpl, &ii->template_list, list) {
 		if (nfct_bitmask_equal(bm, tmpl->bitmask))
@@ -313,62 +283,9 @@ find_template_for_bitmask(struct ulogd_pluginstance *upi,
 	return NULL;
 }
 
-static int ulogd_key_putn(struct ulogd_key *key, void *buf)
-{
-	int ret;
-
-	switch (key->type) {
-	case ULOGD_RET_INT8:
-	case ULOGD_RET_UINT8:
-	case ULOGD_RET_BOOL:
-		*(u_int8_t *)buf = ikey_get_u8(key);
-		ret = 1;
-		break;
-	case ULOGD_RET_INT16:
-	case ULOGD_RET_UINT16:
-		*(u_int16_t *)buf = htons(ikey_get_u16(key));
-		ret = 2;
-		break;
-	case ULOGD_RET_INT32:
-	case ULOGD_RET_UINT32:
-		*(u_int32_t *)buf = htonl(ikey_get_u32(key));
-		ret = 4;
-		break;
-	case ULOGD_RET_IPADDR:
-		*(u_int32_t *)buf = ikey_get_u32(key);
-		ret = 4;
-		break;
-	case ULOGD_RET_INT64:
-	case ULOGD_RET_UINT64:
-		*(u_int64_t *)buf = __be64_to_cpu(ikey_get_u64(key));
-		ret = 8;
-		break;
-	case ULOGD_RET_IP6ADDR:
-		memcpy(buf, ikey_get_u128(key), 16);
-		ret = 16;
-		break;
-	case ULOGD_RET_STRING:
-		ret = strlen(key->u.value.ptr);
-		memcpy(buf, key->u.value.ptr, ret);
-		break;
-	case ULOGD_RET_RAW:
-		ulogd_log(ULOGD_NOTICE, "put raw data in network byte order "
-			  "`%s' type 0x%x\n", key->name, key->type);
-		ret = key->len;
-		memcpy(buf, key->u.value.ptr, ret);
-		break;
-	default:
-		ulogd_log(ULOGD_ERROR, "unknown size - key "
-			  "`%s' type 0x%x\n", key->name, key->type);
-		ret = -1;
-		break;
-	}
-
-	return ret;
-}
-
 static int put_data_records(struct ulogd_pluginstance *upi,
-			    struct ulogd_ipfix_template *tmpl, void *buf)
+			    struct ulogd_ipfix_template *tmpl,
+			    void *buf, int buflen)
 {
 	int ret;
 	unsigned int i, len = 0;
@@ -376,10 +293,11 @@ static int put_data_records(struct ulogd_pluginstance *upi,
 	for (i = 0; i < upi->input.num_keys; i++) {
 		if (!nfct_bitmask_test_bit(tmpl->bitmask, i))
 			continue;
-		ret = ulogd_key_putn(&upi->input.keys[i], buf + len);
+		ret = ulogd_key_putn(&upi->input.keys[i], buf + len, buflen);
 		if (ret < 0)
 			return ret;
 		len += ret;
+		buflen -= ret;
 	}
 
 	return len;
@@ -410,7 +328,7 @@ static struct ipfix_msg_hdr *build_ipfix_msg(struct ulogd_pluginstance *upi,
 		- sizeof(struct ipfix_set_hdr);
 	memset(data_records, 0, data_len);
 
-	ret = put_data_records(upi, template, data_records);
+	ret = put_data_records(upi, template, data_records, data_len);
 	if (ret < 0) {
 		ulogd_log(ULOGD_ERROR, "could not build ipfix dataset");
 		return NULL;
@@ -450,7 +368,7 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 
 		nfct_bitmask_set_bit(ii->valid_bitmask, i);
 	}
-	
+
 	/* lookup template ID for this bitmask */
 	template = find_template_for_bitmask(upi, ii->valid_bitmask);
 	if (!template) {
@@ -463,7 +381,7 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 		llist_add(&template->list, &ii->template_list);
 		need_template = true;
 	}
-	
+
 	if (template->until_template == 0) {
 		need_template = true;
 		template->until_template = nth_template_ce(upi->config_kset).u.value;
@@ -481,82 +399,6 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 	return ULOGD_IRET_OK;
 }
 
-static int open_connect_socket(struct ulogd_pluginstance *pi)
-{
-	struct ipfix_instance *ii = (struct ipfix_instance *) &pi->private;
-	struct addrinfo hint, *res, *resave;
-	int ret;
-
-	memset(&hint, 0, sizeof(hint));
-	hint.ai_socktype = ii->sock_type;
-	hint.ai_protocol = ii->sock_proto;
-	hint.ai_flags = AI_ADDRCONFIG;
-
-	ret = getaddrinfo(host_ce(pi->config_kset).u.string,
-			  port_ce(pi->config_kset).u.string,
-			  &hint, &res);
-	if (ret != 0) {
-		ulogd_log(ULOGD_ERROR, "can't resolve host/service: %s\n",
-			  gai_strerror(ret));
-		return -1;
-	}
-
-	resave = res;
-
-	for (; res; res = res->ai_next) {
-		ii->fd = socket(res->ai_family, res->ai_socktype,
-				res->ai_protocol);
-		if (ii->fd < 0) {
-			switch (errno) {
-			case EACCES:
-			case EAFNOSUPPORT:
-			case EINVAL:
-			case EPROTONOSUPPORT:
-				/* try next result */
-				continue;
-			default:
-				ulogd_log(ULOGD_ERROR, "error: %s\n",
-					  strerror(errno));
-				break;
-			}
-		}
-
-#ifdef IPPROTO_SCTP
-		/* Set the number of SCTP output streams */
-		if (res->ai_protocol == IPPROTO_SCTP) {
-			struct sctp_initmsg initmsg;
-			int ret; 
-			memset(&initmsg, 0, sizeof(initmsg));
-			initmsg.sinit_num_ostreams = 2;
-			ret = setsockopt(ii->fd, IPPROTO_SCTP, SCTP_INITMSG,
-					 &initmsg, sizeof(initmsg));
-			if (ret < 0) {
-				ulogd_log(ULOGD_ERROR, "cannot set number of"
-					  "sctp streams: %s\n",
-					  strerror(errno));
-				close(ii->fd);
-				freeaddrinfo(resave);
-				return ret;
-			}
-		}
-#endif
-
-		if (connect(ii->fd, res->ai_addr, res->ai_addrlen) != 0) {
-			close(ii->fd);
-			/* try next result */
-			continue;
-		}
-
-		/* if we reach this, we have a working connection */
-		ulogd_log(ULOGD_NOTICE, "connection established\n");
-		freeaddrinfo(resave);
-		return 0;
-	}
-
-	freeaddrinfo(resave);
-	return -1;
-}
-
 static int start_ipfix(struct ulogd_pluginstance *pi)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &pi->private;
@@ -570,9 +412,11 @@ static int start_ipfix(struct ulogd_pluginstance *pi)
 
 	INIT_LLIST_HEAD(&ii->template_list);
 
-	ret = open_connect_socket(pi);
-	if (ret < 0)
+	ii->fd = open_connect_descriptor(pi->config_kset->ces[0].u.string);
+	if (ii->fd < 0) {
+		ret = -errno;
 		goto out_bm_free;
+	}
 
 	return 0;
 
@@ -583,12 +427,11 @@ out_bm_free:
 	return ret;
 }
 
-static int stop_ipfix(struct ulogd_pluginstance *pi) 
+static int stop_ipfix(struct ulogd_pluginstance *pi)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &pi->private;
 
 	close(ii->fd);
-
 	nfct_bitmask_destroy(ii->valid_bitmask);
 	ii->valid_bitmask = NULL;
 
@@ -607,12 +450,10 @@ static void signal_handler_ipfix(struct ulogd_pluginstance *pi, int signal)
 		break;
 	}
 }
-	
+
 static int configure_ipfix(struct ulogd_pluginstance *pi,
 			    struct ulogd_pluginstance_stack *stack)
 {
-	struct ipfix_instance *ii = (struct ipfix_instance *) &pi->private;
-	char *proto_str = proto_ce(pi->config_kset).u.string;
 	int ret;
 
 	/* FIXME: error handling */
@@ -621,39 +462,16 @@ static int configure_ipfix(struct ulogd_pluginstance *pi,
 	if (ret < 0)
 		return ret;
 
-	/* determine underlying protocol */
-	if (!strcasecmp(proto_str, "udp")) {
-		ii->sock_type = SOCK_DGRAM;
-		ii->sock_proto = IPPROTO_UDP;
-	} else if (!strcasecmp(proto_str, "tcp")) {
-		ii->sock_type = SOCK_STREAM;
-		ii->sock_proto = IPPROTO_TCP;
-#ifdef IPPROTO_SCTP
-	} else if (!strcasecmp(proto_str, "sctp")) {
-		ii->sock_type = SOCK_SEQPACKET;
-		ii->sock_proto = IPPROTO_SCTP;
-#endif
-#ifdef _HAVE_DCCP
-	} else if (!strcasecmp(proto_str, "dccp")) {
-		ii->sock_type = SOCK_SEQPACKET;
-		ii->sock_proto = IPPROTO_DCCP;
-#endif
-	} else {
-		ulogd_log(ULOGD_ERROR, "unknown protocol `%s'\n",
-			  proto_ce(pi->config_kset));
-		return -EINVAL;
-	}
-
-	/* postpone address lookup to ->start() time, since we want to 
+	/* postpone address lookup to ->start() time, since we want to
 	 * re-lookup an address on SIGHUP */
 
 	return ulogd_wildcard_inputkeys(pi);
 }
 
-static struct ulogd_plugin ipfix_plugin = { 
+static struct ulogd_plugin ipfix_plugin = {
 	.name = "IPFIX",
 	.input = {
-		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW, 
+		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW,
 	},
 	.output = {
 		.type = ULOGD_DTYPE_SINK,
@@ -665,7 +483,7 @@ static struct ulogd_plugin ipfix_plugin = {
 	.start	 	= &start_ipfix,
 	.stop	 	= &stop_ipfix,
 
-	.interp 	= &output_ipfix, 
+	.interp 	= &output_ipfix,
 	.signal 	= &signal_handler_ipfix,
 	.version	= VERSION,
 };
