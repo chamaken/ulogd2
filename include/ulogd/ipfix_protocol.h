@@ -9,6 +9,9 @@
 /* defined in http://www.iana.org/assignments/enterprise-numbers */
 #define IPFIX_VENDOR_NETFILTER	21373	/* FIXME: htonl? */
 
+/* defined in RFC 5103 IPFIX Biflow Export */
+#define IPFIX_VENDOR_REVERSE	29305
+
 /* Section 3.1 */
 struct ipfix_msg_hdr {
 	u_int16_t	version;

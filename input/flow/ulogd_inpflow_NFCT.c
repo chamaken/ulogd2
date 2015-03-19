@@ -313,7 +313,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "reply.raw.pktlen",
 		.ipfix	= {
-			.vendor 	= IPFIX_VENDOR_IETF,
+			.vendor 	= IPFIX_VENDOR_REVERSE,
 			.field_id 	= IPFIX_octetTotalCount,
 			/* FIXME: this could also be octetDeltaCount */
 		},
@@ -323,7 +323,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "reply.raw.pktcount",
 		.ipfix	= {
-			.vendor 	= IPFIX_VENDOR_IETF,
+			.vendor 	= IPFIX_VENDOR_REVERSE,
 			.field_id 	= IPFIX_packetTotalCount,
 			/* FIXME: this could also be packetDeltaCount */
 		},
