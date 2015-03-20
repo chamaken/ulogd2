@@ -23,9 +23,9 @@
  *	  flowStart / flowEnd NanoSeconds.
  *	- SIGHUP for reconfiguration without loosing hash table contents, but
  *	  re-read of config and reallocation / rehashing of table, if required
- *	- Split hashtable code into separate [filter] plugin, so we can run 
+ *	- Split hashtable code into separate [filter] plugin, so we can run
  * 	  small non-hashtable ulogd installations on the firewall boxes, send
- * 	  the messages via IPFX to one aggregator who then runs ulogd with a 
+ * 	  the messages via IPFX to one aggregator who then runs ulogd with a
  * 	  network wide connection hash table.
  */
 
@@ -265,7 +265,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.ip.saddr",
 		.ipfix	= {
 			.vendor = IPFIX_VENDOR_IETF,
-			.field_id = IPFIX_sourceIPv4Address,
+			.field_id = IPFIX_postNATSourceIPv4Address,
 		},
 	},
 	{
@@ -274,7 +274,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.ip.daddr",
 		.ipfix	= {
 			.vendor = IPFIX_VENDOR_IETF,
-			.field_id = IPFIX_destinationIPv4Address,
+			.field_id = IPFIX_postNATDestinationIPv4Address,
 		},
 	},
 	{
@@ -292,7 +292,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.l4.sport",
 		.ipfix	= {
 			.vendor 	= IPFIX_VENDOR_IETF,
-			.field_id 	= IPFIX_sourceTransportPort,
+			.field_id 	= IPFIX_postNAPTSourceTransportPort,
 		},
 	},
 	{
@@ -301,7 +301,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.l4.dport",
 		.ipfix	= {
 			.vendor 	= IPFIX_VENDOR_IETF,
-			.field_id 	= IPFIX_destinationTransportPort,
+			.field_id 	= IPFIX_postNAPTDestinationTransportPort,
 		},
 	},
 	{
@@ -605,8 +605,8 @@ do_propagate_ct(struct ulogd_pluginstance *upi,
 			(struct nfct_pluginstance *) upi->private;
 
 	/* we copy the conntrack object to the plugin cache.
-	 * Thus, we only copy the object once, then it is used 
-	 * by the several output plugin instance that reference 
+	 * Thus, we only copy the object once, then it is used
+	 * by the several output plugin instance that reference
 	 * it by means of a pointer. */
 	nfct_copy(cpi->ct, ct, NFCT_CP_OVERRIDE);
 
@@ -1565,4 +1565,3 @@ void init(void)
 {
 	ulogd_register_plugin(&nfct_plugin);
 }
-

@@ -219,6 +219,16 @@ enum {
 	/* reserved */
 	IPFIX_headerLengthIPv4		= 213,
 	IPFIX_mplsPayloadLength		= 214,
+
+	/* select usefuls from:
+	 * http://www.iana.org/assignments/ipfix/ipfix.txt */
+	IPFIX_postNATSourceIPv4Address		= 225,
+	IPFIX_postNATDestinationIPv4Address	= 226,
+	IPFIX_postNAPTSourceTransportPort	= 227,
+	IPFIX_postNAPTDestinationTransportPort	= 228,
+	IPFIX_firewallEvent			= 233,
+	IPFIX_postNATSourceIPv6Address		= 281,
+	IPFIX_postNATDestinationIPv6Address	= 282,
 };
 
 /* Information elements of the netfilter vendor id */
