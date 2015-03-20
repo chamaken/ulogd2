@@ -16,6 +16,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <libnetfilter_conntrack/libnetfilter_conntrack.h>
+
 #include <ulogd/ulogd.h>
 #include <ulogd/ipfix_util.h>
 
@@ -239,4 +241,22 @@ int ulogd_key_putn(struct ulogd_key *key, void *buf, int buflen)
 		ulogd_log(ULOGD_ERROR, "excess buflen, do nothing.\n");
 
 	return ret;
+}
+
+
+u_int8_t event_ct_to_firewall(u_int32_t ct_event)
+{
+	/* 0 - Ignore (invalid)
+	 * 1 - Flow Created
+	 * 2 - Flow Deleted
+	 * 3 - Flow Denied
+	 * 4 - Flow Alert
+	 * 5 - Flow Update */
+	if (ct_event & NFCT_T_NEW)
+		return 1;
+	if (ct_event & NFCT_T_UPDATE)
+		return 5;
+	if (ct_event & NFCT_T_DESTROY)
+		return 2;
+	return 0;
 }

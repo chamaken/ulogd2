@@ -269,7 +269,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.ip.saddr",
 		.ipfix	= {
 			.vendor = IPFIX_VENDOR_IETF,
-			.field_id = IPFIX_sourceIPv4Address,
+			.field_id = IPFIX_postNATSourceIPv4Address,
 		},
 	},
 	[NFCT_REPLY_IP_DADDR]	= {
@@ -278,7 +278,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.ip.daddr",
 		.ipfix	= {
 			.vendor = IPFIX_VENDOR_IETF,
-			.field_id = IPFIX_destinationIPv4Address,
+			.field_id = IPFIX_postNATDestinationIPv4Address,
 		},
 	},
 	[NFCT_REPLY_IP_PROTOCOL]	= {
@@ -296,7 +296,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.l4.sport",
 		.ipfix	= {
 			.vendor 	= IPFIX_VENDOR_IETF,
-			.field_id 	= IPFIX_sourceTransportPort,
+			.field_id 	= IPFIX_postNAPTSourceTransportPort,
 		},
 	},
 	[NFCT_REPLY_L4_DPORT]	= {
@@ -305,7 +305,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.l4.dport",
 		.ipfix	= {
 			.vendor 	= IPFIX_VENDOR_IETF,
-			.field_id 	= IPFIX_destinationTransportPort,
+			.field_id 	= IPFIX_postNAPTDestinationTransportPort,
 		},
 	},
 	[NFCT_REPLY_RAW_PKTLEN]	= {
@@ -444,7 +444,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.ip6.saddr",
 		.ipfix	= {
 			.vendor = IPFIX_VENDOR_IETF,
-			.field_id = IPFIX_sourceIPv6Address,
+			.field_id = IPFIX_postNATSourceIPv6Address,
 		},
 	},
 	[NFCT_REPLY_IP6_DADDR]	= {
@@ -453,7 +453,7 @@ static struct ulogd_key nfct_okeys[] = {
 		.name	= "reply.ip6.daddr",
 		.ipfix	= {
 			.vendor = IPFIX_VENDOR_IETF,
-			.field_id = IPFIX_destinationIPv6Address,
+			.field_id = IPFIX_postNATDestinationIPv6Address,
 		},
 	},
 };
