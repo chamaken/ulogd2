@@ -14,10 +14,16 @@
 #  ifndef __be64_to_cpu
 #  define __be64_to_cpu(x)	(x)
 #  endif
+#  ifndef __cpu_to_be64
+#  define __cpu_to_be64(x)	(x)
+#  endif
 # else
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  ifndef __be64_to_cpu
 #  define __be64_to_cpu(x)	__bswap_64(x)
+#  endif
+#  ifndef __cpu_to_be64
+#  define __cpu_to_be64(x)	__bswap_64(x)
 #  endif
 # endif
 #endif
