@@ -277,6 +277,9 @@ char *type_to_string(int type)
 		case ULOGD_RET_IPADDR:
 			return strdup("IP addr");
 			break;
+		case ULOGD_RET_IP6ADDR:
+			return strdup("IPv6 addr");
+			break;
 		case ULOGD_RET_STRING:
 			return strdup("string");
 			break;
