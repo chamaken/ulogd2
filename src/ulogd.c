@@ -64,6 +64,7 @@
 #include <syslog.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+#include <sys/signalfd.h>
 #include <ulogd/conffile.h>
 #include <ulogd/ulogd.h>
 #ifdef DEBUG
@@ -89,6 +90,8 @@ static int info_mode = 0;
 
 static int verbose = 0;
 static int created_pidfile = 0;
+
+struct ulogd_fd signal_ufd;
 
 /* linked list for all registered plugins */
 static LLIST_HEAD(ulogd_plugins);
@@ -1217,6 +1220,11 @@ static void stop_stack()
 	}
 }
 
+static int signal_ufd_fini(void)
+{
+	ulogd_unregister_fd(&signal_ufd);
+	return close(signal_ufd. fd);
+}
 
 static void sigterm_handler(int signal)
 {
@@ -1228,6 +1236,8 @@ static void sigterm_handler(int signal)
 	stop_pluginstances();
 
 	stop_stack();
+
+	signal_ufd_fini();
 
 #ifndef DEBUG_VALGRIND
 	unload_plugins();
@@ -1248,30 +1258,74 @@ static void sigterm_handler(int signal)
 	exit(0);
 }
 
-static void signal_handler(int signal)
+static int signal_handler(int fd, unsigned int what, void *data)
 {
+	struct signalfd_siginfo fdsi;
+	ssize_t s;
+
 	ulogd_log(ULOGD_NOTICE, "signal received, calling pluginstances\n");
-	
-	switch (signal) {
+	s = read(fd, &fdsi, sizeof(struct signalfd_siginfo));
+	if (s != sizeof(struct signalfd_siginfo)) {
+		ulogd_log(ULOGD_ERROR, "read: %s\n", strerror(errno));
+		return ULOGD_IRET_ERR;
+	}
+
+	switch (fdsi.ssi_signo) {
+	case SIGTERM:
+	case SIGINT:
+		sigterm_handler(fdsi.ssi_signo);
+		break;
 	case SIGHUP:
 		/* reopen logfile */
 		if (logfile != stdout && logfile != &syslog_dummy) {
 			fclose(logfile);
 			logfile = fopen(ulogd_logfile, "a");
- 			if (!logfile) {
-				fprintf(stderr, 
-					"ERROR: can't open logfile %s: %s\n", 
+			if (!logfile) {
+				fprintf(stderr,
+					"ERROR: can't open logfile %s: %s\n",
 					ulogd_logfile, strerror(errno));
-				sigterm_handler(signal);
+				sigterm_handler(fdsi.ssi_signo);
 			}
-	
+
 		}
 		break;
 	default:
 		break;
 	}
 
-	deliver_signal_pluginstances(signal);
+	deliver_signal_pluginstances(fdsi.ssi_signo);
+	return ULOGD_IRET_OK;
+}
+
+static int signal_ufd_init(void)
+{
+	sigset_t mask;
+
+	sigemptyset(&mask);
+	if (sigaddset(&mask, SIGTERM)	!= 0 ||
+	    sigaddset(&mask, SIGINT)	!= 0 ||
+	    sigaddset(&mask, SIGHUP)	!= 0 ||
+	    sigaddset(&mask, SIGALRM)	!= 0 ||
+	    sigaddset(&mask, SIGUSR1)	!= 0 ||
+	    sigaddset(&mask, SIGUSR2)	!= 0) {
+		ulogd_log(ULOGD_FATAL, "sigaddset: %s\n", strerror(errno));
+		return -1;
+	}
+
+	if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1) {
+		ulogd_log(ULOGD_FATAL, "sigprocmask: %s\n", strerror(errno));
+		return -1;
+	}
+
+	signal_ufd.fd = signalfd(-1, &mask, 0);
+	if (signal_ufd.fd < 0) {
+		ulogd_log(ULOGD_FATAL, "signalfd: %s\n", strerror(errno));
+		return -1;
+	}
+	signal_ufd.cb = &signal_handler;
+	signal_ufd.when = ULOGD_FD_READ;
+
+	return ulogd_register_fd(&signal_ufd);
 }
 
 static void print_usage(void)
@@ -1457,12 +1511,10 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	signal(SIGTERM, &sigterm_handler);
-	signal(SIGINT, &sigterm_handler);
-	signal(SIGHUP, &signal_handler);
-	signal(SIGALRM, &signal_handler);
-	signal(SIGUSR1, &signal_handler);
-	signal(SIGUSR2, &signal_handler);
+	if (signal_ufd_init()) {
+		ulogd_log(ULOGD_FATAL, "prepare_signal\n");
+		warn_and_exit(daemonize);
+	}
 
 	ulogd_log(ULOGD_INFO, 
 		  "initialization finished, entering main loop\n");
