@@ -921,17 +921,10 @@ out_buf:
 static void ulogd_main_loop(void)
 {
 	int ret;
-	struct timeval next_alarm;
-	struct timeval *next = NULL;
 
 	while (1) {
 		/* XXX: signal blocking? */
-		if (next != NULL && !timerisset(next))
-			next = ulogd_do_timer_run(&next_alarm);
-		else
-			next = ulogd_get_next_timer_run(&next_alarm);
-
-		ret = ulogd_select_main(next);
+		ret = ulogd_select_main(NULL);
 		if (ret < 0 && errno != EINTR)
 	                ulogd_log(ULOGD_ERROR, "select says %s\n",
 				  strerror(errno));

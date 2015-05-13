@@ -42,6 +42,9 @@ AC_SUBST([regular_CFLAGS])
 AC_SEARCH_LIBS([pthread_create], [pthread], [libpthread_LIBS="$LIBS"; LIBS=""])
 AC_SUBST([libpthread_LIBS])
 
+dnl Check for timerfd header.
+AC_CHECK_HEADER(sys/timerfd.h,[],[AC_MSG_ERROR(unable to find timerfd header)])
+
 AC_ARG_ENABLE(ulog,
        AS_HELP_STRING([--enable-ulog], [Enable ulog module [default=yes]]),[enable_ulog=$enableval],[enable_ulog=yes])
 AM_CONDITIONAL([BUILD_ULOG], [test "x$enable_ulog" = "xyes"])

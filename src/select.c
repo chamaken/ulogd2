@@ -78,7 +78,7 @@ void ulogd_unregister_fd(struct ulogd_fd *fd)
 
 int ulogd_select_main(struct timeval *tv)
 {
-	struct ulogd_fd *ufd;
+	struct ulogd_fd *ufd, *tmp;
 	fd_set rds_tmp, wrs_tmp, exs_tmp;
 	int i;
 
@@ -89,7 +89,7 @@ int ulogd_select_main(struct timeval *tv)
 	i = select(maxfd+1, &rds_tmp, &wrs_tmp, &exs_tmp, tv);
 	if (i > 0) {
 		/* call registered callback functions */
-		llist_for_each_entry(ufd, &ulogd_fds, list) {
+                llist_for_each_entry_safe(ufd, tmp, &ulogd_fds, list) {
 			int flags = 0;
 
 			if (FD_ISSET(ufd->fd, &rds_tmp))

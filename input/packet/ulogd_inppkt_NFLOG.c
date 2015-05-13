@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <sys/time.h>
 
 #include <ulogd/ulogd.h>
 #include <libnfnetlink/libnfnetlink.h>
