@@ -268,8 +268,12 @@ static int constructor_nfacct(struct ulogd_pluginstance *upi)
 static int destructor_nfacct(struct ulogd_pluginstance *upi)
 {
 	struct nfacct_pluginstance *cpi = (void *)upi->private;
+	int rc;
 
-	ulogd_del_timer(&cpi->timer);
+	rc = ulogd_fini_timer(&cpi->timer);
+	if (rc < 0)
+		return rc;
+
 	ulogd_unregister_fd(&cpi->ufd);
 	mnl_socket_close(cpi->nl);
 
