@@ -1489,7 +1489,10 @@ static int destructor_nfct_events(struct ulogd_pluginstance *upi)
 	nfct_destroy(cpi->ct);
 
 	if (usehash_ce(upi->config_kset).u.value != 0) {
-		ulogd_del_timer(&cpi->ov_timer);
+		rc = ulogd_fini_timer(&cpi->ov_timer);
+		if (rc < 0)
+			return rc;
+
 		ulogd_unregister_fd(&cpi->nfct_ov);
 
 		rc = nfct_close(cpi->ovh);
@@ -1503,6 +1506,7 @@ static int destructor_nfct_events(struct ulogd_pluginstance *upi)
 		hashtable_iterate(cpi->ct_active, NULL, do_free);
 		hashtable_destroy(cpi->ct_active);
 	}
+
 	return 0;
 }
 
@@ -1510,6 +1514,10 @@ static int destructor_nfct_polling(struct ulogd_pluginstance *upi)
 {
 	int rc;
 	struct nfct_pluginstance *cpi = (void *)upi->private;
+
+	rc = ulogd_fini_timer(&cpi->timer);
+	if (rc < 0)
+		return rc;
 
 	rc = nfct_close(cpi->pgh);
 	if (rc < 0)
