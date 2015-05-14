@@ -95,7 +95,21 @@ static struct config_keyset xml_kset = {
 
 struct xml_priv {
         FILE *of;
+	int srctype;
 };
+
+static int source_type(struct ulogd_keyset *input)
+{
+	struct ulogd_key *key = input->keys;
+
+	if (key[KEY_CT].u.source != NULL)
+		return KEY_CT;
+	if (key[KEY_PCKT].u.source != NULL)
+		return KEY_PCKT;
+	if (key[KEY_SUM].u.source != NULL)
+		return KEY_SUM;
+	return -1;
+}
 
 static int
 xml_output_flow(struct ulogd_key *inp, char *buf, ssize_t size)
@@ -175,7 +189,8 @@ static int xml_output(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 
-static struct ulogd_plugin *xml_configure(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *
+xml_configure(struct ulogd_pluginstance *upi)
 {
 	int ret;
 
@@ -189,18 +204,20 @@ static struct ulogd_plugin *xml_configure(struct ulogd_pluginstance *upi)
 static int xml_fini(struct ulogd_pluginstance *pi)
 {
 	struct xml_priv *op = (struct xml_priv *) &pi->private;
-	/* XXX: provide generic function to get the input plugin. */
-	struct ulogd_pluginstance *input_plugin =
-		llist_entry(pi->stack->list.next,
-			    struct ulogd_pluginstance, list);
 
-	/* the initial tag depends on the source. */
-	if (input_plugin->plugin->output.type & ULOGD_DTYPE_FLOW)
+	switch (op->srctype) {
+	case KEY_CT:
 		fprintf(op->of, "</conntrack>\n");
-	else if (input_plugin->plugin->output.type & ULOGD_DTYPE_RAW)
+		break;
+	case KEY_PCKT:
 		fprintf(op->of, "</packet>\n");
-	else if (input_plugin->plugin->output.type & ULOGD_DTYPE_SUM)
+		break;
+	case KEY_SUM:
 		fprintf(op->of, "</sum>\n");
+		break;
+	default:
+		fprintf(op->of, "</unknown>\n");
+	}
 
 	if (op->of != stdout)
 		fclose(op->of);
@@ -216,17 +233,22 @@ static int xml_open_file(struct ulogd_pluginstance *upi)
 	struct xml_priv *op = (struct xml_priv *) &upi->private;
 	int ret;
 
-	struct ulogd_pluginstance *input_plugin =
-		llist_entry(upi->stack->list.next,
-			    struct ulogd_pluginstance, list);
-	char file_infix[strlen("flow")+1];
+	char file_infix[strlen("unknown")+1];
 
-	if (input_plugin->plugin->output.type & ULOGD_DTYPE_FLOW)
+	switch (op->srctype) {
+	case KEY_CT:
 		strcpy(file_infix, "flow");
-        else if (input_plugin->plugin->output.type & ULOGD_DTYPE_RAW)
+		break;
+	case KEY_PCKT:
 		strcpy(file_infix, "pkt");
-        else if (input_plugin->plugin->output.type & ULOGD_DTYPE_SUM)
+		break;
+	case KEY_SUM:
 		strcpy(file_infix, "sum");
+		break;
+	default:
+		strcpy(file_infix, "unknown");
+		break;
+	}
 
 	now = time(NULL);
 	tm = localtime(&now);
@@ -258,23 +280,25 @@ static void xml_print_header(struct ulogd_pluginstance *upi)
 
 	fprintf(op->of, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
 
-	struct ulogd_pluginstance *input_plugin =
-		llist_entry(upi->stack->list.next,
-			    struct ulogd_pluginstance, list);
-
-	if (input_plugin->plugin->output.type & ULOGD_DTYPE_FLOW)
+	switch (op->srctype) {
+	case KEY_CT:
 		fprintf(op->of, "<conntrack>\n");
-	else if (input_plugin->plugin->output.type & ULOGD_DTYPE_RAW)
+		break;
+	case KEY_PCKT:
 		fprintf(op->of, "<packet>\n");
-	else if (input_plugin->plugin->output.type & ULOGD_DTYPE_SUM)
+		break;
+	case KEY_SUM:
 		fprintf(op->of, "<sum>\n");
+		break;
+	default:
+		fprintf(op->of, "<unknown>\n");
+	}
 
 	if (upi->config_kset->ces[CFG_XML_SYNC].u.value != 0)
 		fflush(op->of);
 }
 
-static int xml_start(struct ulogd_pluginstance *upi,
-		     struct ulogd_keyset *input)
+static int xml_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 {
 	struct xml_priv *op = (struct xml_priv *) &upi->private;
 
@@ -287,6 +311,13 @@ static int xml_start(struct ulogd_pluginstance *upi,
 			return -1;
 		}
 	}
+
+	op->srctype = source_type(input);
+	if (op->srctype == -1) {
+		ulogd_log(ULOGD_ERROR, "unknown source type\n");
+		return ULOGD_IRET_ERR;
+	}
+
 	xml_print_header(upi);
 	return 0;
 }
