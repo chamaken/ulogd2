@@ -234,7 +234,8 @@ static int ulogd_wildcard_inputkeys(struct ulogd_pluginstance *upi)
  * PLUGIN MANAGEMENT 
  ***********************************************************************/
 
-/* try to lookup a registered plugin for a given name */
+/* try to lookup a registered plugin for a given name 
+ * plugin may not be identified after its configuration */
 static struct ulogd_plugin *find_plugin(const char *name)
 {
 	struct ulogd_plugin *pl;
@@ -245,6 +246,19 @@ static struct ulogd_plugin *find_plugin(const char *name)
 	}
 
 	return NULL;
+}
+
+static void release_updated_plugins(void)
+{
+	struct ulogd_plugin *pl, *tmp;
+
+	llist_for_each_entry_safe(pl, tmp, &ulogd_plugins, list) {
+		if (pl->update_self) {
+			/* XXX: can delete? */
+			llist_del(&pl->list);
+			free(pl);
+		}
+	}
 }
 
 char *type_to_string(int type)
@@ -394,6 +408,26 @@ struct ulogd_keyset *
 ulogd_get_output_keyset(struct ulogd_pluginstance *upi)
 {
 	return &upi->output;
+}
+
+struct ulogd_plugin *ulogd_plugin_copy_newkeys(struct ulogd_plugin *src,
+					       size_t ikeys_num,
+					       size_t okeys_num)
+{
+	struct ulogd_plugin *dst = calloc(1, sizeof(struct ulogd_plugin)
+					  + (ikeys_num + okeys_num)
+					  * sizeof(struct ulogd_key));
+	if (dst == NULL)
+		return NULL;
+
+	memcpy(dst, src, sizeof(struct ulogd_plugin));
+
+	dst->input.keys = (void *)dst + sizeof(struct ulogd_plugin);
+        dst->input.num_keys = ikeys_num;
+        dst->output.keys = &dst->input.keys[ikeys_num];
+        dst->output.num_keys = okeys_num;
+
+	return dst;
 }
 
 /***********************************************************************
@@ -671,6 +705,7 @@ static int
 create_stack_resolve_keys(struct ulogd_pluginstance_stack *stack)
 {
 	int ret, i = 0;
+	struct ulogd_plugin *newpl;
 	struct ulogd_pluginstance *pi_cur;
 
 	/* pre-configuration pass */
@@ -688,12 +723,32 @@ create_stack_resolve_keys(struct ulogd_pluginstance_stack *stack)
 		/* call plugin to tell us which keys it requires in
 		 * given configuration */
 		if (pi_cur->plugin->configure) {
-			int ret = pi_cur->plugin->configure(pi_cur);
-			if (ret < 0) {
+			newpl = pi_cur->plugin->configure(pi_cur);
+			if (newpl == NULL) {
 				ulogd_log(ULOGD_ERROR, "error during "
 					  "configure of plugin %s\n",
 					  pi_cur->plugin->name);
 				return ret;
+			}
+			if (pi_cur->plugin->update_self) {
+				if (newpl == pi_cur->plugin) {
+					ulogd_log(ULOGD_ERROR, "plugin changed "
+						  "but not update_self %s\n",
+						  pi_cur->plugin->name);
+					return ULOGD_IRET_ERR;
+				}
+				pi_cur->plugin = newpl;
+				/* can not identify plugin by its name
+				 * after this */
+				llist_del(&pi_cur->plugin->list);
+				llist_add(&newpl->list, &ulogd_plugins);
+			} else {
+				if (newpl != pi_cur->plugin) {
+					ulogd_log(ULOGD_ERROR, "plugin has not "
+						  "changed on update_self %s\n",
+						  pi_cur->plugin->name);
+					return ULOGD_IRET_ERR;
+				}
 			}
 		}
 	}
@@ -1252,6 +1307,8 @@ static void sigterm_handler(int signal)
 	stop_stack();
 
 	signal_ufd_fini();
+
+	release_updated_plugins();
 
 #ifndef DEBUG_VALGRIND
 	unload_plugins();

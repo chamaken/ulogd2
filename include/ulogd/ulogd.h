@@ -232,7 +232,10 @@ struct ulogd_plugin {
 	int (*interp)(struct ulogd_pluginstance *instance,
 		      struct ulogd_keyset *input, struct ulogd_keyset *output);
 
-	int (*configure)(struct ulogd_pluginstance *instance);
+	/* returns passed instance nomally.
+	 * returns new one if update_self is true. e.g. DB
+	 * returns NULL on error */
+	struct ulogd_plugin *(*configure)(struct ulogd_pluginstance *instance);
 
 	/* function to construct a new pluginstance */
 	int (*start)(struct ulogd_pluginstance *pi,
@@ -248,6 +251,10 @@ struct ulogd_plugin {
 
 	/* size of instance->priv */
 	unsigned int priv_size;
+
+	/* create new plugin at configure:
+	 * it's a mark free or not */
+	int update_self;
 };
 
 #define ULOGD_IRET_ERR		-1
@@ -295,6 +302,11 @@ void ulogd_register_plugin(struct ulogd_plugin *me);
 
 struct ulogd_keyset *
 ulogd_get_output_keyset(struct ulogd_pluginstance *upi);
+
+/* allocate new ulogd_plugin with specified key size, and copy */
+struct ulogd_plugin *ulogd_plugin_copy_newkeys(struct ulogd_plugin *src,
+					       size_t ikeys_num,
+					       size_t okeys_num);
 
 /* allocate a new ulogd_key */
 struct ulogd_key *alloc_ret(const u_int16_t type, const char*);
