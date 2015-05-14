@@ -97,10 +97,12 @@ static struct config_keyset kset_mysql = {
 /* find out which columns the table has */
 static int get_columns_mysql(struct ulogd_pluginstance *upi)
 {
+	struct ulogd_plugin *upl;
 	struct mysql_instance *mi = (struct mysql_instance *) upi->private;
 	MYSQL_RES *result;
 	MYSQL_FIELD *field;
 	int i;
+	unsigned int ikey_num;
 
 	if (!mi->dbh) {
 		ulogd_log(ULOGD_ERROR, "no database handle\n");
@@ -115,29 +117,23 @@ static int get_columns_mysql(struct ulogd_pluginstance *upi)
 		return -1;
 	}
 
-	/* Thea idea here is that we can create a pluginstance specific input
-	 * key array by not specifyling a plugin input key list.  ulogd core
-	 * will then set upi->input to NULL.  Yes, this creates a memory hole
-	 * in case the core just calls ->configure() and then aborts (and thus
-	 * never free()s the memory we allocate here.  FIXME. */
+	/* ulogd core will then create plugin instance keysets after configure
+	 * based on plugin.
+	 *
+	 * We can not create different schema plugin instance because changing
+	 * plugin is deemd to change factory so that instances created after
+	 * this will be affected of cource.
+	 */
 
-	/* Cleanup before reconnect */
-	if (upi->input.keys)
-		free(upi->input.keys);
-
-	upi->input.num_keys = mysql_num_fields(result);
-	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", upi->input.num_keys);
-	upi->input.keys = malloc(sizeof(struct ulogd_key) * 
-						upi->input.num_keys);
-	if (!upi->input.keys) {
-		upi->input.num_keys = 0;
-		ulogd_log(ULOGD_ERROR, "ENOMEM\n");
+	ikey_num =  mysql_num_fields(result);
+	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", ikey_num);
+	upl = ulogd_plugin_copy_newkeys(upi->plugin, ikey_num, 0);
+	if (upl == NULL) {
+		ulogd_log(ULOGD_ERROR, "ulogd_plugin_copy_newkeys\n");
 		return -ENOMEM;
 	}
+	upi->plugin = upl;
 	
-	memset(upi->input.keys, 0, sizeof(struct ulogd_key) *
-						upi->input.num_keys);
-
 	for (i = 0; (field = mysql_fetch_field(result)); i++) {
 		char buf[ULOGD_MAX_KEYLEN+1];
 		char *underscore;
@@ -150,10 +146,10 @@ static int get_columns_mysql(struct ulogd_pluginstance *upi)
 		DEBUGP("field '%s' found\n", buf);
 
 		/* add it to list of input keys */
-		strncpy(upi->input.keys[i].name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(upl->input.keys[i].name, buf, ULOGD_MAX_KEYLEN);
 	}
 	/* MySQL Auto increment ... ID :) */
-	upi->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
+	upl->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
 	
 	mysql_free_result(result);
 	return 0;
@@ -253,12 +249,15 @@ static struct db_driver db_driver_mysql = {
 	.execute	= &execute_mysql,
 };
 
-static int configure_mysql(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *
+configure_mysql(struct ulogd_pluginstance *upi)
 {
 	struct db_instance *di = (struct db_instance *) &upi->private;
 	di->driver = &db_driver_mysql;
 
-	return ulogd_db_configure(upi);
+	if (ulogd_db_configure(upi) < 0)
+		return NULL;
+	return upi->plugin;
 }
 
 static struct ulogd_plugin plugin_mysql = {
@@ -279,6 +278,7 @@ static struct ulogd_plugin plugin_mysql = {
 	.signal	   = &ulogd_db_signal,
 	.interp	   = &ulogd_db_interp,
 	.version   = VERSION,
+	.update_self = 1,
 };
 
 void __attribute__ ((constructor)) init(void);

@@ -101,10 +101,11 @@ static void str_tolower(char *s)
 /* find out which columns the table has */
 static int get_columns_dbi(struct ulogd_pluginstance *upi)
 {
+	struct ulogd_plugin *upl;
 	struct dbi_instance *pi = (struct dbi_instance *) upi->private;
 	char *table = table_ce(upi->config_kset).u.string;
 	char query[256];
-	unsigned int ui;
+	unsigned int ui, ikey_num;
 
 	if (!pi->dbh) {
 		ulogd_log(ULOGD_ERROR, "no database handle\n");
@@ -123,25 +124,17 @@ static int get_columns_dbi(struct ulogd_pluginstance *upi)
 		return -1;
 	}
 
-	if (upi->input.keys)
-		free(upi->input.keys);
-
-	upi->input.num_keys = dbi_result_get_numfields(pi->result);
-	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", upi->input.num_keys);
-
-	upi->input.keys = malloc(sizeof(struct ulogd_key) *
-						upi->input.num_keys);
-	if (!upi->input.keys) {
-		upi->input.num_keys = 0;
-		ulogd_log(ULOGD_ERROR, "ENOMEM\n");
+	ikey_num = dbi_result_get_numfields(pi->result);
+	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", ikey_num);
+	upl = ulogd_plugin_copy_newkeys(upi->plugin, ikey_num, 0);
+	if (upl == NULL) {
+		ulogd_log(ULOGD_ERROR, "ulogd_plugin_copy_newkeys\n");
 		dbi_result_free(pi->result);
 		return -ENOMEM;
 	}
+	upi->plugin = upl;
 
-	memset(upi->input.keys, 0, sizeof(struct ulogd_key) *
-						upi->input.num_keys);
-
-	for (ui=1; ui<=upi->input.num_keys; ui++) {
+	for (ui=1; ui<=upl->input.num_keys; ui++) {
 		char buf[ULOGD_MAX_KEYLEN+1];
 		char *underscore;
 		const char* field_name = dbi_result_get_field_name(pi->result, ui);
@@ -159,11 +152,11 @@ static int get_columns_dbi(struct ulogd_pluginstance *upi)
 		DEBUGP("field '%s' found: ", buf);
 
 		/* add it to list of input keys */
-		strncpy(upi->input.keys[ui-1].name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(upl->input.keys[ui-1].name, buf, ULOGD_MAX_KEYLEN);
 	}
 
 	/* ID is a sequence */
-	upi->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
+	upl->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
 
 	dbi_result_free(pi->result);
 
@@ -290,13 +283,16 @@ static struct db_driver db_driver_dbi = {
 	.execute	= &execute_dbi,
 };
 
-static int configure_dbi(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *
+configure_dbi(struct ulogd_pluginstance *upi)
 {
 	struct dbi_instance *pi = (struct dbi_instance *) upi->private;
 
 	pi->db_inst.driver = &db_driver_dbi;
 
-	return ulogd_db_configure(upi);
+	if (ulogd_db_configure(upi) < 0)
+		return NULL;
+	return upi->plugin;
 }
 
 static struct ulogd_plugin dbi_plugin = { 
@@ -317,6 +313,7 @@ static struct ulogd_plugin dbi_plugin = {
 	.signal		= &ulogd_db_signal,
 	.interp		= &ulogd_db_interp,
 	.version	= VERSION,
+	.update_self	= 1,
 };
 
 void __attribute__ ((constructor)) init(void);

@@ -66,6 +66,7 @@ static int disabled_interp_db(struct ulogd_pluginstance *upi,
 /* create the static part of our insert statement */
 static int sql_createstmt(struct ulogd_pluginstance *upi)
 {
+	struct ulogd_plugin *upl = upi->plugin;
 	struct db_instance *mi = (struct db_instance *) upi->private;
 	unsigned int size;
 	unsigned int i;
@@ -79,12 +80,12 @@ static int sql_createstmt(struct ulogd_pluginstance *upi)
 	/* caclulate the size for the insert statement */
 	size = strlen(SQL_INSERTTEMPL) + strlen(table);
 
-	for (i = 0; i < upi->input.num_keys; i++) {
-		if (upi->input.keys[i].flags & ULOGD_KEYF_INACTIVE)
+	for (i = 0; i < upl->input.num_keys; i++) {
+		if (upl->input.keys[i].flags & ULOGD_KEYF_INACTIVE)
 			continue;
 		/* we need space for the key and a comma, as well as
 		 * enough space for the values */
-		size += strlen(upi->input.keys[i].name) + 1 + SQL_VALSIZE;
+		size += strlen(upl->input.keys[i].name) + 1 + SQL_VALSIZE;
 	}
 	size += strlen(procedure);
 
@@ -115,11 +116,11 @@ static int sql_createstmt(struct ulogd_pluginstance *upi)
 
 		stmt_val = mi->stmt + strlen(mi->stmt);
 
-		for (i = 0; i < upi->input.num_keys; i++) {
-			if (upi->input.keys[i].flags & ULOGD_KEYF_INACTIVE)
+		for (i = 0; i < upl->input.num_keys; i++) {
+			if (upl->input.keys[i].flags & ULOGD_KEYF_INACTIVE)
 				continue;
 
-			strncpy(buf, upi->input.keys[i].name, ULOGD_MAX_KEYLEN);	
+			strncpy(buf, upl->input.keys[i].name, ULOGD_MAX_KEYLEN);
 			while ((underscore = strchr(buf, '.')))
 				*underscore = '_';
 			sprintf(stmt_val, "%s,", buf);
@@ -286,13 +287,6 @@ static int ulogd_db_instance_stop(struct ulogd_pluginstance *upi)
 int ulogd_db_stop(struct ulogd_pluginstance *upi)
 {
 	ulogd_db_instance_stop(upi);
-
-	/* try to free our dynamically allocated input key array */
-	if (upi->input.keys) {
-		free(upi->input.keys);
-		upi->input.keys = NULL;
-	}
-
 	return 0;
 }
 
@@ -324,21 +318,22 @@ static int _init_reconnect(struct ulogd_pluginstance *upi)
 
 static void __format_query_db(struct ulogd_pluginstance *upi, char *start)
 {
+	struct ulogd_plugin *upl = upi->plugin;
 	struct db_instance *di = (struct db_instance *) &upi->private;
 
 	unsigned int i;
 
 	char *stmt_ins = start + di->stmt_offset;
 
-	for (i = 0; i < upi->input.num_keys; i++) {
-		struct ulogd_key *res = upi->input.keys[i].u.source;
+	for (i = 0; i < upl->input.num_keys; i++) {
+		struct ulogd_key *res = upl->input.keys[i].u.source;
 
-		if (upi->input.keys[i].flags & ULOGD_KEYF_INACTIVE)
+		if (upl->input.keys[i].flags & ULOGD_KEYF_INACTIVE)
 			continue;
 
 		if (!res)
 			ulogd_log(ULOGD_NOTICE, "no source for `%s' ?!?\n",
-				  upi->input.keys[i].name);
+				  upl->input.keys[i].name);
 
 		if (!res || !IS_VALID(*res)) {
 			/* no result, we have to fake something */
@@ -395,7 +390,7 @@ static void __format_query_db(struct ulogd_pluginstance *upi, char *start)
 		default:
 			ulogd_log(ULOGD_NOTICE,
 				"unknown type %d for %s\n",
-				res->type, upi->input.keys[i].name);
+				res->type, upl->input.keys[i].name);
 			break;
 		}
 		stmt_ins = start + strlen(start);

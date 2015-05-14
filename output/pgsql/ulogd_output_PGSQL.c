@@ -139,11 +139,13 @@ static int pgsql_namespace(struct ulogd_pluginstance *upi)
 /* find out which columns the table has */
 static int get_columns_pgsql(struct ulogd_pluginstance *upi)
 {
+	struct ulogd_plugin *upl;
 	struct pgsql_instance *pi = (struct pgsql_instance *) upi->private;
 	char pgbuf[strlen(PGSQL_GETCOLUMN_TEMPLATE_SCHEMA)
 		   + strlen(table_ce(upi->config_kset).u.string) 
 		   + strlen(pi->db_inst.schema) + 2];
 	int i;
+	unsigned int ikey_num;
 
 	if (!pi->dbh) {
 		ulogd_log(ULOGD_ERROR, "no database handle\n");
@@ -176,22 +178,15 @@ static int get_columns_pgsql(struct ulogd_pluginstance *upi)
 		return -1;
 	}
 
-	if (upi->input.keys)
-		free(upi->input.keys);
-
-	upi->input.num_keys = PQntuples(pi->pgres);
-	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", upi->input.num_keys);
-	upi->input.keys = malloc(sizeof(struct ulogd_key) *
-						upi->input.num_keys);
-	if (!upi->input.keys) {
-		upi->input.num_keys = 0;
-		ulogd_log(ULOGD_ERROR, "ENOMEM\n");
+	ikey_num = PQntuples(pi->pgres);
+	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", ikey_num);
+	upl = ulogd_plugin_copy_newkeys(upi->plugin, ikey_num, 0);
+	if (upl == NULL) {
+		ulogd_log(ULOGD_ERROR, "ulogd_plugin_copy_newkeys\n");
 		PQclear(pi->pgres);
 		return -ENOMEM;
 	}
-
-	memset(upi->input.keys, 0, sizeof(struct ulogd_key) *
-						upi->input.num_keys);
+	upi->plugin = upl;
 
 	for (i = 0; i < PQntuples(pi->pgres); i++) {
 		char buf[ULOGD_MAX_KEYLEN+1];
@@ -205,12 +200,12 @@ static int get_columns_pgsql(struct ulogd_pluginstance *upi)
 		DEBUGP("field '%s' found: ", buf);
 
 		/* add it to list of input keys */
-		strncpy(upi->input.keys[i].name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(upl->input.keys[i].name, buf, ULOGD_MAX_KEYLEN);
 	}
 
 	/* ID (starting by '.') is a sequence */
-	if (upi->input.keys[0].name[0] == '.')
-		upi->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
+	if (upl->input.keys[0].name[0] == '.')
+		upl->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
 
 	PQclear(pi->pgres);
 	return 0;
@@ -346,13 +341,16 @@ static struct db_driver db_driver_pgsql = {
 	.execute	= &execute_pgsql,
 };
 
-static int configure_pgsql(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *
+configure_pgsql(struct ulogd_pluginstance *upi)
 {
 	struct pgsql_instance *pi = (struct pgsql_instance *) upi->private;
 
 	pi->db_inst.driver = &db_driver_pgsql;
 
-	return ulogd_db_configure(upi);
+	if (ulogd_db_configure(upi) < 0)
+		return NULL;
+	return upi->plugin;
 }
 
 static struct ulogd_plugin pgsql_plugin = { 
@@ -373,6 +371,7 @@ static struct ulogd_plugin pgsql_plugin = {
 	.signal		= &ulogd_db_signal,
 	.interp		= &ulogd_db_interp,
 	.version	= VERSION,
+	.update_self	= 1,
 };
 
 void __attribute__ ((constructor)) init(void);
