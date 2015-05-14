@@ -232,8 +232,7 @@ struct ulogd_plugin {
 	int (*interp)(struct ulogd_pluginstance *instance,
 		      struct ulogd_keyset *input, struct ulogd_keyset *output);
 
-	int (*configure)(struct ulogd_pluginstance *instance,
-			 struct ulogd_pluginstance_stack *stack);
+	int (*configure)(struct ulogd_pluginstance *instance);
 
 	/* function to construct a new pluginstance */
 	int (*start)(struct ulogd_pluginstance *pi,

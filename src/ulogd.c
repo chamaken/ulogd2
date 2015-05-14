@@ -688,8 +688,7 @@ create_stack_resolve_keys(struct ulogd_pluginstance_stack *stack)
 		/* call plugin to tell us which keys it requires in
 		 * given configuration */
 		if (pi_cur->plugin->configure) {
-			int ret = pi_cur->plugin->configure(pi_cur, 
-							    stack);
+			int ret = pi_cur->plugin->configure(pi_cur);
 			if (ret < 0) {
 				ulogd_log(ULOGD_ERROR, "error during "
 					  "configure of plugin %s\n",
