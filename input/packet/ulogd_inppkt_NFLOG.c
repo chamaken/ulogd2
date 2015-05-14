@@ -316,10 +316,11 @@ static struct ulogd_key output_keys[] = {
 };
 
 static inline int
-interp_packet(struct ulogd_pluginstance *upi, u_int8_t pf_family,
-	      struct nflog_data *ldata)
+interp_packet(struct ulogd_pluginstance *upi,
+	      u_int8_t pf_family, struct nflog_data *ldata)
 {
-	struct ulogd_key *ret = upi->output.keys;
+	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
+	struct ulogd_key *ret = output->keys;
 
 	struct nfulnl_msg_packet_hdr *ph = nflog_get_msg_packet_hdr(ldata);
 	struct nfulnl_msg_packet_hw *hw = nflog_get_packet_hw(ldata);

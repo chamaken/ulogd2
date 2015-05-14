@@ -80,10 +80,12 @@ struct logemu_instance {
 	FILE *of;
 };
 
-static int _output_logemu(struct ulogd_pluginstance *upi)
+static int _output_logemu(struct ulogd_pluginstance *upi,
+			  struct ulogd_keyset *input,
+			  struct ulogd_keyset *output)
 {
 	struct logemu_instance *li = (struct logemu_instance *) &upi->private;
-	struct ulogd_key *res = upi->input.keys;
+	struct ulogd_key *res = input->keys;
 
 	if (res[0].u.source->flags & ULOGD_RETF_VALID) {
 		char *timestr;

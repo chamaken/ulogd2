@@ -367,11 +367,14 @@ struct ulogd_unixsock_option_t  {
 #define USOCK_ALIGNTO 8
 #define USOCK_ALIGN(len) ( ((len)+USOCK_ALIGNTO-1) & ~(USOCK_ALIGNTO-1) )
 
-static int handle_packet(struct ulogd_pluginstance *upi, struct ulogd_unixsock_packet_t *pkt, u_int16_t total_len)
+static int handle_packet(struct ulogd_pluginstance *upi,
+			 struct ulogd_keyset *output,
+			 struct ulogd_unixsock_packet_t *pkt,
+			 u_int16_t total_len)
 {
 	char *data = NULL;
 	struct iphdr *ip;
-	struct ulogd_key *ret = upi->output.keys;
+	struct ulogd_key *ret = output->keys;
 	u_int8_t oob_family;
 	u_int16_t payload_len;
 	u_int32_t option_number;
@@ -579,6 +582,7 @@ static void _disconnect_client(struct unixsock_input *ui)
 static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 {
 	struct ulogd_pluginstance *upi = param;
+	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct unixsock_input *ui = (struct unixsock_input*)upi->private;
 	int len;
 	u_int16_t needed_len;
@@ -633,7 +637,8 @@ static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 			"  We have enough data (%d bytes required), handling packet\n",
 					needed_len);
 
-			if (handle_packet(upi, unixsock_packet, needed_len) != 0) {
+			if (handle_packet(upi, output, unixsock_packet,
+					  needed_len) != 0) {
 				return -1;
 			}
 			/* consume data */

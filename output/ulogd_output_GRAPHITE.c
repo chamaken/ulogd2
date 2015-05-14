@@ -144,10 +144,12 @@ static int _connect_graphite(struct ulogd_pluginstance *pi)
 	return 0;
 }
 
-static int _output_graphite(struct ulogd_pluginstance *upi)
+static int _output_graphite(struct ulogd_pluginstance *upi,
+			    struct ulogd_keyset *input,
+			    struct ulogd_keyset *output)
 {
 	struct graphite_instance *li = (struct graphite_instance *) &upi->private;
-	struct ulogd_key *inp = upi->input.keys;
+	struct ulogd_key *inp = input->keys;
 	static char buf[256];
 	int ret;
 

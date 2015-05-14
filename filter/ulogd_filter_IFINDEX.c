@@ -58,10 +58,12 @@ static struct ulogd_fd nlif_u_fd = { .fd = -1 };
 static int nlif_users;
 static struct nlif_handle *nlif_inst;
 
-static int interp_ifindex(struct ulogd_pluginstance *pi)
+static int interp_ifindex(struct ulogd_pluginstance *pi,
+			  struct ulogd_keyset *input,
+			  struct ulogd_keyset *output)
 {
-	struct ulogd_key *ret = pi->output.keys;
-	struct ulogd_key *inp = pi->input.keys;
+	struct ulogd_key *ret = output->keys;
+	struct ulogd_key *inp = input->keys;
 	static char indev[IFNAMSIZ];
 	static char outdev[IFNAMSIZ];
 

@@ -30,10 +30,12 @@ static struct ulogd_key printflow_outp[] = {
 	},
 };
 
-static int printflow_interp(struct ulogd_pluginstance *upi)
+static int printflow_interp(struct ulogd_pluginstance *upi,
+			    struct ulogd_keyset *input,
+			    struct ulogd_keyset *output)
 {
-	struct ulogd_key *inp = upi->input.keys;
-	struct ulogd_key *ret = upi->output.keys;
+	struct ulogd_key *inp = input->keys;
+	struct ulogd_key *ret = output->keys;
 	static char buf[4096];
 
 	printflow_print(inp, buf);

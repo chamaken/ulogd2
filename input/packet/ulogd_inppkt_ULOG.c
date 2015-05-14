@@ -185,9 +185,10 @@ static struct ulogd_key output_keys[] = {
 
 };
 
-static int interp_packet(struct ulogd_pluginstance *ip, ulog_packet_msg_t *pkt)
+static int interp_packet(struct ulogd_pluginstance *ip,
+			 struct ulogd_keyset *output, ulog_packet_msg_t *pkt)
 {
-	struct ulogd_key *ret = ip->output.keys;
+	struct ulogd_key *ret = output->keys;
 
 	if (pkt->mac_len) {
 		okey_set_ptr(&ret[ULOG_KEY_RAW_MAC], pkt->mac);
@@ -232,6 +233,7 @@ static int ulog_read_cb(int fd, unsigned int what, void *param)
 {
 	struct ulogd_pluginstance *upi = (struct ulogd_pluginstance *)param;
 	struct ulogd_pluginstance *npi = NULL;
+	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulog_input *u = (struct ulog_input *) &upi->private;
 	ulog_packet_msg_t *upkt;
 	int len;
@@ -259,8 +261,8 @@ static int ulog_read_cb(int fd, unsigned int what, void *param)
 			 * several different stacks, we duplicate the message
 			 * to let them know */
 			llist_for_each_entry(npi, &upi->plist, plist)
-				interp_packet(npi, upkt);
-			interp_packet(upi, upkt);
+				interp_packet(npi, output, upkt);
+			interp_packet(upi, output, upkt);
 		}
 	}
 	return 0;

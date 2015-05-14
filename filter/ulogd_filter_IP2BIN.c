@@ -197,10 +197,12 @@ static int ip2bin(struct ulogd_key* inp, int index, int oindex)
 	return ULOGD_IRET_OK;
 }
 
-static int interp_ip2bin(struct ulogd_pluginstance *pi)
+static int interp_ip2bin(struct ulogd_pluginstance *pi,
+			 struct ulogd_keyset *input,
+			 struct ulogd_keyset *output)
 {
-	struct ulogd_key *ret = pi->output.keys;
-	struct ulogd_key *inp = pi->input.keys;
+	struct ulogd_key *ret = output->keys;
+	struct ulogd_key *inp = input->keys;
 	int i;
 	int fret;
 

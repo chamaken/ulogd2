@@ -89,7 +89,8 @@ static struct config_keyset json_kset = {
 
 #define MAX_LOCAL_TIME_STRING 32
 
-static int json_interp(struct ulogd_pluginstance *upi)
+static int json_interp(struct ulogd_pluginstance *upi,
+		       struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
 	struct json_priv *opi = (struct json_priv *) &upi->private;
 	unsigned int i;
@@ -106,7 +107,7 @@ static int json_interp(struct ulogd_pluginstance *upi)
 		char timestr[MAX_LOCAL_TIME_STRING];
 		struct tm *t;
 		struct tm result;
-		struct ulogd_key *inp = upi->input.keys;
+		struct ulogd_key *inp = input->keys;
 
 
 		if (pp_is_valid(inp, opi->sec_idx))
@@ -140,8 +141,8 @@ static int json_interp(struct ulogd_pluginstance *upi)
 
 
 
-	for (i = 0; i < upi->input.num_keys; i++) {
-		struct ulogd_key *key = upi->input.keys[i].u.source;
+	for (i = 0; i < input->num_keys; i++) {
+		struct ulogd_key *key = input->keys[i].u.source;
 		char *field_name;
 
 		if (!key)

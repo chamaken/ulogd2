@@ -40,18 +40,22 @@
 
 /* generic db layer */
 
-static int __interp_db(struct ulogd_pluginstance *upi);
+static int __interp_db(struct ulogd_pluginstance *upi,
+		       struct ulogd_keyset *input, struct ulogd_keyset *output);
 
 /* this is a wrapper that just calls the current real
  * interp function */
-int ulogd_db_interp(struct ulogd_pluginstance *upi)
+int ulogd_db_interp(struct ulogd_pluginstance *upi,
+		    struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
 	struct db_instance *dbi = (struct db_instance *) &upi->private;
-	return dbi->interp(upi);
+	return dbi->interp(upi, input, output);
 }
 
 /* no connection, plugin disabled */
-static int disabled_interp_db(struct ulogd_pluginstance *upi)
+static int disabled_interp_db(struct ulogd_pluginstance *upi,
+			      struct ulogd_keyset *input,
+			      struct ulogd_keyset *output)
 {
 	return 0;
 }
@@ -138,7 +142,8 @@ static int sql_createstmt(struct ulogd_pluginstance *upi)
 	return 0;
 }
 
-static int _init_db(struct ulogd_pluginstance *upi);
+static int _init_db(struct ulogd_pluginstance *upi,
+		    struct ulogd_keyset *input, struct ulogd_keyset *output);
 
 static void *__inject_thread(void *gdi);
 
@@ -437,7 +442,8 @@ static int __add_to_backlog(struct ulogd_pluginstance *upi, const char *stmt, un
 	return 0;
 }
 
-static int _init_db(struct ulogd_pluginstance *upi)
+static int _init_db(struct ulogd_pluginstance *upi,
+		    struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
 	struct db_instance *di = (struct db_instance *) upi->private;
 
@@ -467,7 +473,7 @@ static int _init_db(struct ulogd_pluginstance *upi)
 
 	/* call the interpreter function to actually write the
 	 * log line that we wanted to write */
-	return __interp_db(upi);
+	return __interp_db(upi, input, output);
 }
 
 static int __treat_backlog(struct ulogd_pluginstance *upi)
@@ -523,7 +529,8 @@ static int __add_to_ring(struct ulogd_pluginstance *upi, struct db_instance *di)
 }
 
 /* our main output function, called by ulogd */
-static int __interp_db(struct ulogd_pluginstance *upi)
+static int __interp_db(struct ulogd_pluginstance *upi,
+		       struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
 	struct db_instance *di = (struct db_instance *) &upi->private;
 

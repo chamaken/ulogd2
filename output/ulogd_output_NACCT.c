@@ -117,10 +117,11 @@ struct nacct_priv {
 
 
 static int
-nacct_interp(struct ulogd_pluginstance *pi)
+nacct_interp(struct ulogd_pluginstance *pi,
+	     struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
 	struct nacct_priv *priv = (struct nacct_priv *)&pi->private;
-	struct ulogd_key *inp = pi->input.keys;
+	struct ulogd_key *inp = input->keys;
 	static char buf[256];
 
 	/* try to be as close to nacct as possible.  Instead of nacct's

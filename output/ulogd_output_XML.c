@@ -150,9 +150,10 @@ xml_output_sum(struct ulogd_key *inp, char *buf, ssize_t size)
 }
 
 
-static int xml_output(struct ulogd_pluginstance *upi)
+static int xml_output(struct ulogd_pluginstance *upi,
+		      struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
-	struct ulogd_key *inp = upi->input.keys;
+	struct ulogd_key *inp = input->keys;
 	struct xml_priv *opi = (struct xml_priv *) &upi->private;
 	static char buf[4096];
 	int ret = -1;

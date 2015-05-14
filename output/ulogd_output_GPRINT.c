@@ -75,7 +75,9 @@ static struct config_keyset gprint_kset = {
         ((unsigned char *)&addr)[2], \
         ((unsigned char *)&addr)[3]
 
-static int gprint_interp(struct ulogd_pluginstance *upi)
+static int gprint_interp(struct ulogd_pluginstance *upi,
+			 struct ulogd_keyset *input,
+			 struct ulogd_keyset *output)
 {
 	struct gprint_priv *opi = (struct gprint_priv *) &upi->private;
 	unsigned int i;
@@ -99,8 +101,8 @@ static int gprint_interp(struct ulogd_pluginstance *upi)
 		size += ret;
 	}
 
-	for (i = 0; i < upi->input.num_keys; i++) {
-		struct ulogd_key *key = upi->input.keys[i].u.source;
+	for (i = 0; i < input->num_keys; i++) {
+		struct ulogd_key *key = input->keys[i].u.source;
 
 		if (!key)
 			continue;

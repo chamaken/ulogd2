@@ -536,10 +536,11 @@ static struct ulogd_key iphdr_rets[] = {
  * 			TCP HEADER
  ***********************************************************************/
 
-static int _interp_tcp(struct ulogd_pluginstance *pi, struct tcphdr *tcph,
-		       u_int32_t len)
+static int _interp_tcp(struct ulogd_pluginstance *pi,
+		       struct ulogd_keyset *output,
+		       struct tcphdr *tcph, u_int32_t len)
 {
-	struct ulogd_key *ret = pi->output.keys;
+	struct ulogd_key *ret = output->keys;
 
 	if (len < sizeof(struct tcphdr))
 		return ULOGD_IRET_OK;
@@ -571,11 +572,12 @@ static int _interp_tcp(struct ulogd_pluginstance *pi, struct tcphdr *tcph,
  * 			UDP HEADER
  ***********************************************************************/
 
-static int _interp_udp(struct ulogd_pluginstance *pi, struct udphdr *udph,
-		       u_int32_t len)
+static int _interp_udp(struct ulogd_pluginstance *pi,
+		       struct ulogd_keyset *output,
+		       struct udphdr *udph, u_int32_t len)
 		
 {
-	struct ulogd_key *ret = pi->output.keys;
+	struct ulogd_key *ret = output->keys;
 
 	if (len < sizeof(struct udphdr))
 		return ULOGD_IRET_OK;
@@ -600,11 +602,12 @@ typedef struct sctphdr {
 	__be32 checksum;
 } __attribute__((packed)) sctp_sctphdr_t;
 
-static int _interp_sctp(struct ulogd_pluginstance *pi, struct sctphdr *sctph,
-		       u_int32_t len)
+static int _interp_sctp(struct ulogd_pluginstance *pi,
+			struct ulogd_keyset *output,
+			struct sctphdr *sctph, u_int32_t len)
 		
 {
-	struct ulogd_key *ret = pi->output.keys;
+	struct ulogd_key *ret = output->keys;
 
 	if (len < sizeof(struct sctphdr))
 		return ULOGD_IRET_OK;
@@ -623,10 +626,11 @@ static int _interp_sctp(struct ulogd_pluginstance *pi, struct sctphdr *sctph,
  * 			ICMP HEADER
  ***********************************************************************/
 
-static int _interp_icmp(struct ulogd_pluginstance *pi, struct icmphdr *icmph,
-			u_int32_t len)
+static int _interp_icmp(struct ulogd_pluginstance *pi,
+			struct ulogd_keyset *output,
+			struct icmphdr *icmph, u_int32_t len)
 {
-	struct ulogd_key *ret = pi->output.keys;
+	struct ulogd_key *ret = output->keys;
 
 	if (len < sizeof(struct icmphdr))
 		return ULOGD_IRET_OK;
@@ -661,10 +665,11 @@ static int _interp_icmp(struct ulogd_pluginstance *pi, struct icmphdr *icmph,
  * 			ICMPv6 HEADER
  ***********************************************************************/
 
-static int _interp_icmpv6(struct ulogd_pluginstance *pi, struct icmp6_hdr *icmph,
-			  u_int32_t len)
+static int _interp_icmpv6(struct ulogd_pluginstance *pi,
+			  struct ulogd_keyset *output,
+			  struct icmp6_hdr *icmph, u_int32_t len)
 {
-	struct ulogd_key *ret = pi->output.keys;
+	struct ulogd_key *ret = output->keys;
 
 	if (len < sizeof(struct icmp6_hdr))
 		return ULOGD_IRET_OK;
@@ -710,11 +715,13 @@ static int _interp_ahesp(struct ulogd_pluginstance *pi, void *protoh,
  * 			IP HEADER
  ***********************************************************************/
 
-static int _interp_iphdr(struct ulogd_pluginstance *pi, u_int32_t len)
+static int _interp_iphdr(struct ulogd_pluginstance *pi,
+			 struct ulogd_keyset *input,
+			 struct ulogd_keyset *output, u_int32_t len)
 {
-	struct ulogd_key *ret = pi->output.keys;
+	struct ulogd_key *ret = output->keys;
 	struct iphdr *iph =
-		ikey_get_ptr(&pi->input.keys[INKEY_RAW_PCKT]);
+		ikey_get_ptr(&input->keys[INKEY_RAW_PCKT]);
 	void *nexthdr = (u_int32_t *)iph + iph->ihl;
 
 	if (len < sizeof(struct iphdr) || len <= (u_int32_t)(iph->ihl * 4))
@@ -734,16 +741,16 @@ static int _interp_iphdr(struct ulogd_pluginstance *pi, u_int32_t len)
 
 	switch (iph->protocol) {
 	case IPPROTO_TCP:
-		_interp_tcp(pi, nexthdr, len);
+		_interp_tcp(pi, output, nexthdr, len);
 		break;
 	case IPPROTO_UDP:
-		_interp_udp(pi, nexthdr, len);
+		_interp_udp(pi, output, nexthdr, len);
 		break;
 	case IPPROTO_ICMP:
-		_interp_icmp(pi, nexthdr, len);
+		_interp_icmp(pi, output, nexthdr, len);
 		break;
 	case IPPROTO_SCTP:
-		_interp_sctp(pi, nexthdr, len);
+		_interp_sctp(pi, output, nexthdr, len);
 		break;
 	case IPPROTO_AH:
 	case IPPROTO_ESP:
@@ -773,10 +780,12 @@ static int ip6_ext_hdr(u_int8_t nexthdr)
 	}
 }
 
-static int _interp_ipv6hdr(struct ulogd_pluginstance *pi, u_int32_t len)
+static int _interp_ipv6hdr(struct ulogd_pluginstance *pi,
+			   struct ulogd_keyset *input,
+			   struct ulogd_keyset *output, u_int32_t len)
 {
-	struct ulogd_key *ret = pi->output.keys;
-	struct ip6_hdr *ipv6h = ikey_get_ptr(&pi->input.keys[INKEY_RAW_PCKT]);
+	struct ulogd_key *ret = output->keys;
+	struct ip6_hdr *ipv6h = ikey_get_ptr(&input->keys[INKEY_RAW_PCKT]);
 	unsigned int ptr, hdrlen = 0;
 	u_int8_t curhdr;
 	int fragment = 0;
@@ -870,13 +879,13 @@ static int _interp_ipv6hdr(struct ulogd_pluginstance *pi, u_int32_t len)
 
 	switch (curhdr) {
 	case IPPROTO_TCP:
-		_interp_tcp(pi, (void *)ipv6h + ptr, len);
+		_interp_tcp(pi, output, (void *)ipv6h + ptr, len);
 		break;
 	case IPPROTO_UDP:
-		_interp_udp(pi, (void *)ipv6h + ptr, len);
+		_interp_udp(pi, output, (void *)ipv6h + ptr, len);
 		break;
 	case IPPROTO_ICMPV6:
-		_interp_icmpv6(pi, (void *)ipv6h + ptr, len);
+		_interp_icmpv6(pi, output, (void *)ipv6h + ptr, len);
 		break;
 	}
 
@@ -888,11 +897,13 @@ out:
 /***********************************************************************
  * 			ARP HEADER
  ***********************************************************************/
-static int _interp_arp(struct ulogd_pluginstance *pi, u_int32_t len)
+static int _interp_arp(struct ulogd_pluginstance *pi,
+		       struct ulogd_keyset *input,
+		       struct ulogd_keyset *output, u_int32_t len)
 {
-	struct ulogd_key *ret = pi->output.keys;
+	struct ulogd_key *ret = output->keys;
 	const struct ether_arp *arph =
-		ikey_get_ptr(&pi->input.keys[INKEY_RAW_PCKT]);
+		ikey_get_ptr(&input->keys[INKEY_RAW_PCKT]);
 
 	if (len < sizeof(struct ether_arp))
 		return ULOGD_IRET_OK;
@@ -913,20 +924,22 @@ static int _interp_arp(struct ulogd_pluginstance *pi, u_int32_t len)
  * 			ETHER HEADER
  ***********************************************************************/
 
-static int _interp_bridge(struct ulogd_pluginstance *pi, u_int32_t len)
+static int _interp_bridge(struct ulogd_pluginstance *pi,
+			  struct ulogd_keyset *input,
+			  struct ulogd_keyset *output, u_int32_t len)
 {
 	const u_int16_t proto =
-		ikey_get_u16(&pi->input.keys[INKEY_OOB_PROTOCOL]);
+		ikey_get_u16(&input->keys[INKEY_OOB_PROTOCOL]);
 
 	switch (proto) {
 	case ETH_P_IP:
-		_interp_iphdr(pi, len);
+		_interp_iphdr(pi, input, output, len);
 		break;
 	case ETH_P_IPV6:
-		_interp_ipv6hdr(pi, len);
+		_interp_ipv6hdr(pi, input, output, len);
 		break;
 	case ETH_P_ARP:
-		_interp_arp(pi, len);
+		_interp_arp(pi, input, output, len);
 		break;
 	/* ETH_P_8021Q ?? others? */
 	};
@@ -935,22 +948,23 @@ static int _interp_bridge(struct ulogd_pluginstance *pi, u_int32_t len)
 }
 
 
-static int _interp_pkt(struct ulogd_pluginstance *pi)
+static int _interp_pkt(struct ulogd_pluginstance *pi,
+		       struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
-	u_int32_t len = ikey_get_u32(&pi->input.keys[INKEY_RAW_PCKTLEN]);
-	u_int8_t family = ikey_get_u8(&pi->input.keys[INKEY_OOB_FAMILY]);
-	struct ulogd_key *ret = pi->output.keys;
+	u_int32_t len = ikey_get_u32(&input->keys[INKEY_RAW_PCKTLEN]);
+	u_int8_t family = ikey_get_u8(&input->keys[INKEY_OOB_FAMILY]);
+	struct ulogd_key *ret = output->keys;
 
 	okey_set_u16(&ret[KEY_OOB_PROTOCOL],
-		     ikey_get_u16(&pi->input.keys[INKEY_OOB_PROTOCOL]));
+		     ikey_get_u16(&input->keys[INKEY_OOB_PROTOCOL]));
 
 	switch (family) {
 	case AF_INET:
-		return _interp_iphdr(pi, len);
+		return _interp_iphdr(pi, input, output, len);
 	case AF_INET6:
-		return _interp_ipv6hdr(pi, len);
+		return _interp_ipv6hdr(pi, input, output, len);
 	case AF_BRIDGE:
-		return _interp_bridge(pi, len);
+		return _interp_bridge(pi, input, output, len);
 	}
 	return ULOGD_IRET_OK;
 }

@@ -50,7 +50,8 @@ struct db_instance {
 	int stmt_offset; /* offset to the beginning of the "VALUES" part */
 	char *schema;
 	time_t reconnect;
-	int (*interp)(struct ulogd_pluginstance *upi);
+	int (*interp)(struct ulogd_pluginstance *upi,
+		      struct ulogd_keyset *input, struct ulogd_keyset *output);
 	struct db_driver *driver;
 	/* DB ring buffer */
 	struct db_stmt_ring ring;
@@ -115,7 +116,8 @@ struct db_instance {
 void ulogd_db_signal(struct ulogd_pluginstance *upi, int signal);
 int ulogd_db_start(struct ulogd_pluginstance *upi);
 int ulogd_db_stop(struct ulogd_pluginstance *upi);
-int ulogd_db_interp(struct ulogd_pluginstance *upi);
+int ulogd_db_interp(struct ulogd_pluginstance *upi,
+		    struct ulogd_keyset *input, struct ulogd_keyset *output);
 int ulogd_db_configure(struct ulogd_pluginstance *upi,
 			struct ulogd_pluginstance_stack *stack);
 

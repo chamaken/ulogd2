@@ -105,7 +105,8 @@ static struct ulogd_key nfacct_okeys[] = {
 static void
 propagate_nfacct(struct ulogd_pluginstance *upi, struct nfacct *nfacct)
 {
-	struct ulogd_key *ret = upi->output.keys;
+	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
+	struct ulogd_key *ret = output->keys;
 	struct nfacct_pluginstance *cpi = (struct nfacct_pluginstance *) upi->private;
 
 	okey_set_ptr(&ret[ULOGD_NFACCT_NAME],

@@ -142,10 +142,11 @@ static struct ulogd_key pcap_keys[INTR_IDS] = {
 
 #define GET_FLAGS(res, x)	(res[x].u.source->flags)
 
-static int interp_pcap(struct ulogd_pluginstance *upi)
+static int interp_pcap(struct ulogd_pluginstance *upi,
+		       struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
 	struct pcap_instance *pi = (struct pcap_instance *) &upi->private;
-	struct ulogd_key *res = upi->input.keys;
+	struct ulogd_key *res = input->keys;
 	struct pcap_sf_pkthdr pchdr;
 
 	pchdr.caplen = ikey_get_u32(&res[1]);

@@ -492,7 +492,8 @@ static int propagate_ct(struct ulogd_pluginstance *main_upi,
 			int type,
 			struct ct_timestamp *ts)
 {
-	struct ulogd_key *ret = upi->output.keys;
+	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
+	struct ulogd_key *ret = output->keys;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *) main_upi->private;
 

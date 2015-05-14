@@ -167,10 +167,12 @@ static int parse_ethernet(struct ulogd_key *ret, struct ulogd_key *inp)
 	return ULOGD_IRET_OK;
 }
 
-static int interp_mac2str(struct ulogd_pluginstance *pi)
+static int interp_mac2str(struct ulogd_pluginstance *pi,
+			  struct ulogd_keyset *input,
+			  struct ulogd_keyset *output)
 {
-	struct ulogd_key *ret = pi->output.keys;
-	struct ulogd_key *inp = pi->input.keys;
+	struct ulogd_key *ret = output->keys;
+	struct ulogd_key *inp = input->keys;
 	u_int16_t type = 0;
 
 	if (pp_is_valid(inp, KEY_OOB_PROTOCOL))

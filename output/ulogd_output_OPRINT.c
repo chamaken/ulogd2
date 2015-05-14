@@ -47,18 +47,20 @@ struct oprint_priv {
 	FILE *of;
 };
 
-static int oprint_interp(struct ulogd_pluginstance *upi)
+static int oprint_interp(struct ulogd_pluginstance *upi,
+			 struct ulogd_keyset *input,
+			 struct ulogd_keyset *output)
 {
 	struct oprint_priv *opi = (struct oprint_priv *) &upi->private;
 	unsigned int i;
 	
 	fprintf(opi->of, "===>PACKET BOUNDARY\n");
-	for (i = 0; i < upi->input.num_keys; i++) {
-		struct ulogd_key *ret = upi->input.keys[i].u.source;
+	for (i = 0; i < input->num_keys; i++) {
+		struct ulogd_key *ret = input->keys[i].u.source;
 
 		if (!ret)
 			ulogd_log(ULOGD_NOTICE, "no result for %s ?!?\n",
-				  upi->input.keys[i].name);
+				  input->keys[i].name);
 		
 		if (!IS_VALID(*ret))
 			continue;

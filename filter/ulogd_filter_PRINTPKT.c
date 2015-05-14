@@ -30,10 +30,12 @@ static struct ulogd_key printpkt_outp[] = {
 	},
 };
 
-static int printpkt_interp(struct ulogd_pluginstance *upi)
+static int printpkt_interp(struct ulogd_pluginstance *upi,
+			   struct ulogd_keyset *input,
+			   struct ulogd_keyset *output)
 {
-	struct ulogd_key *inp = upi->input.keys;
-	struct ulogd_key *ret = upi->output.keys;
+	struct ulogd_key *inp = input->keys;
+	struct ulogd_key *ret = output->keys;
 	static char buf[4096];
 
 	printpkt_print(inp, buf);

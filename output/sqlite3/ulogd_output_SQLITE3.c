@@ -137,7 +137,8 @@ add_row(struct ulogd_pluginstance *pi)
 
 /* our main output function, called by ulogd */
 static int
-sqlite3_interp(struct ulogd_pluginstance *pi)
+sqlite3_interp(struct ulogd_pluginstance *pi,
+	       struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
 	struct sqlite3_priv *priv = (void *)pi->private;
 	struct field *f;
@@ -282,13 +283,14 @@ sqlite3_createstmt(struct ulogd_pluginstance *pi)
 
 
 static struct ulogd_key *
-ulogd_find_key(struct ulogd_pluginstance *pi, const char *name)
+ulogd_find_key(struct ulogd_pluginstance *pi,
+	       struct ulogd_keyset *input, const char *name)
 {
 	unsigned int i;
 
-	for (i = 0; i < pi->input.num_keys; i++) {
-		if (strcmp(pi->input.keys[i].name, name) == 0)
-			return &pi->input.keys[i];
+	for (i = 0; i < input->num_keys; i++) {
+		if (strcmp(input->keys[i].name, name) == 0)
+			return &input->keys[i];
 	}
 
 	return NULL;
@@ -313,7 +315,7 @@ db_count_cols(struct ulogd_pluginstance *pi, sqlite3_stmt **stmt)
 
 /* initialize DB, possibly creating it */
 static int
-sqlite3_init_db(struct ulogd_pluginstance *pi)
+sqlite3_init_db(struct ulogd_pluginstance *pi, struct ulogd_keyset *input)
 {
 	struct sqlite3_priv *priv = (void *)pi->private;
 	char buf[ULOGD_MAX_KEYLEN];
@@ -353,7 +355,7 @@ sqlite3_init_db(struct ulogd_pluginstance *pi)
 		}
 		strncpy(f->name, buf, ULOGD_MAX_KEYLEN);
 
-		if ((f->key = ulogd_find_key(pi, buf)) == NULL)
+		if ((f->key = ulogd_find_key(pi, input, buf)) == NULL)
 			return -1;
 
 		TAILQ_INSERT_TAIL(&priv->fields, f, link);
@@ -396,7 +398,7 @@ sqlite3_start(struct ulogd_pluginstance *pi)
 	sqlite3_busy_timeout(priv->dbh, SQLITE3_BUSY_TIMEOUT);
 
 	/* read the fieldnames to know which values to insert */
-	if (sqlite3_init_db(pi) < 0) {
+	if (sqlite3_init_db(pi, &pi->input) < 0) {
 		ulogd_log(ULOGD_ERROR, "SQLITE3: Could not read database fieldnames.\n");
 		return -1;
 	}

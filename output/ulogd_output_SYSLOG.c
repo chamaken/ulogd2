@@ -68,10 +68,11 @@ struct syslog_instance {
 	int syslog_facility;
 };
 
-static int _output_syslog(struct ulogd_pluginstance *upi)
+static int _output_syslog(struct ulogd_pluginstance *upi,
+			  struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
 	struct syslog_instance *li = (struct syslog_instance *) &upi->private;
-	struct ulogd_key *res = upi->input.keys;
+	struct ulogd_key *res = input->keys;
 
 	if (res[0].u.source->flags & ULOGD_RETF_VALID)
 		syslog(li->syslog_level | li->syslog_facility, "%s",

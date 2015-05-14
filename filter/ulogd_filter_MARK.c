@@ -67,9 +67,10 @@ static struct ulogd_key mark_inp[] = {
 	},
 };
 
-static int interp_mark(struct ulogd_pluginstance *pi)
+static int interp_mark(struct ulogd_pluginstance *pi,
+		       struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
-	struct ulogd_key *inp = pi->input.keys;
+	struct ulogd_key *inp = input->keys;
 	if (pp_is_valid(inp, KEY_CT_MARK)) {
 		if ((ikey_get_u32(&inp[KEY_CT_MARK]) &
 			pi->config_kset->ces[MARK_MASK].u.value) !=

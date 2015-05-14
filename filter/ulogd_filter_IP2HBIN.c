@@ -112,10 +112,12 @@ static struct ulogd_key ip2hbin_keys[] = {
 	},
 };
 
-static int interp_ip2hbin(struct ulogd_pluginstance *pi)
+static int interp_ip2hbin(struct ulogd_pluginstance *pi,
+			  struct ulogd_keyset *input,
+			  struct ulogd_keyset *output)
 {
-	struct ulogd_key *ret = pi->output.keys;
-	struct ulogd_key *inp = pi->input.keys;
+	struct ulogd_key *ret = output->keys;
+	struct ulogd_key *inp = input->keys;
 	u_int8_t family = ikey_get_u8(&inp[KEY_OOB_FAMILY]);
 	u_int8_t convfamily = family;
 	int i;
