@@ -187,7 +187,8 @@ static int _output_graphite(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 
-static int start_graphite(struct ulogd_pluginstance *pi)
+static int start_graphite(struct ulogd_pluginstance *pi,
+			  struct ulogd_keyset *input)
 {
 	char *host;
 	char *port;

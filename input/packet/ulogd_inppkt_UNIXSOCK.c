@@ -717,7 +717,7 @@ static int configure(struct ulogd_pluginstance *upi,
 	return 0;
 }
 
-static int start(struct ulogd_pluginstance *upi)
+static int start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 {
 	struct unixsock_input *ui = (struct unixsock_input *) upi->private;
 	int fd;

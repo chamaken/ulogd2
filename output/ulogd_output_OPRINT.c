@@ -153,7 +153,8 @@ static int oprint_configure(struct ulogd_pluginstance *upi,
 	return 0;
 }
 
-static int oprint_init(struct ulogd_pluginstance *upi)
+static int oprint_init(struct ulogd_pluginstance *upi,
+		       struct ulogd_keyset *input)
 {
 	struct oprint_priv *op = (struct oprint_priv *) &upi->private;
 

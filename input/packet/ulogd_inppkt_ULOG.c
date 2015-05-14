@@ -273,7 +273,7 @@ static int configure(struct ulogd_pluginstance *upi,
 {
 	return config_parse_file(upi->id, upi->config_kset);
 }
-static int init(struct ulogd_pluginstance *upi)
+static int init(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 {
 	struct ulog_input *ui = (struct ulog_input *) &upi->private;
 

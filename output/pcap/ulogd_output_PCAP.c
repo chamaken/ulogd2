@@ -274,7 +274,8 @@ static int configure_pcap(struct ulogd_pluginstance *upi,
 	return config_parse_file(upi->id, upi->config_kset);
 }
 
-static int start_pcap(struct ulogd_pluginstance *upi)
+static int start_pcap(struct ulogd_pluginstance *upi,
+		      struct ulogd_keyset *input)
 {
 	return append_create_outfile(upi);
 }

@@ -88,7 +88,8 @@ static int nlif_read_cb(int fd, unsigned int what, void *param)
 	return nlif_catch(nlif_inst);
 }
 
-static int ifindex_start(struct ulogd_pluginstance *upi)
+static int ifindex_start(struct ulogd_pluginstance *upi,
+			 struct ulogd_keyset *input)
 {
 	int rc;
 

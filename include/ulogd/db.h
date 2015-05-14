@@ -114,7 +114,7 @@ struct db_instance {
 #define ringsize_ce(x)		(x->ces[6])
 
 void ulogd_db_signal(struct ulogd_pluginstance *upi, int signal);
-int ulogd_db_start(struct ulogd_pluginstance *upi);
+int ulogd_db_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input);
 int ulogd_db_stop(struct ulogd_pluginstance *upi);
 int ulogd_db_interp(struct ulogd_pluginstance *upi,
 		    struct ulogd_keyset *input, struct ulogd_keyset *output);

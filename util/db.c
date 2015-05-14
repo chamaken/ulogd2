@@ -202,7 +202,7 @@ int ulogd_db_configure(struct ulogd_pluginstance *upi,
 	return ret;
 }
 
-int ulogd_db_start(struct ulogd_pluginstance *upi)
+int ulogd_db_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 {
 	struct db_instance *di = (struct db_instance *) upi->private;
 	int ret;
@@ -622,7 +622,7 @@ void ulogd_db_signal(struct ulogd_pluginstance *upi, int signal)
 		if (!di->ring.size) {
 			/* reopen database connection */
 			ulogd_db_instance_stop(upi);
-			ulogd_db_start(upi);
+			ulogd_db_start(upi, NULL);
 		} else
 			ulogd_log(ULOGD_ERROR,
 				  "No SIGHUP handling if ring buffer is used\n");

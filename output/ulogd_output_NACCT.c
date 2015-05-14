@@ -211,7 +211,7 @@ nacct_conf(struct ulogd_pluginstance *pi,
 }
 
 static int
-nacct_init(struct ulogd_pluginstance *pi)
+nacct_init(struct ulogd_pluginstance *pi, struct ulogd_keyset *input)
 {
 	struct nacct_priv *op = (struct nacct_priv *)&pi->private;
 

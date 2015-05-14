@@ -274,7 +274,8 @@ static void xml_print_header(struct ulogd_pluginstance *upi)
 		fflush(op->of);
 }
 
-static int xml_start(struct ulogd_pluginstance *upi)
+static int xml_start(struct ulogd_pluginstance *upi,
+		     struct ulogd_keyset *input)
 {
 	struct xml_priv *op = (struct xml_priv *) &upi->private;
 

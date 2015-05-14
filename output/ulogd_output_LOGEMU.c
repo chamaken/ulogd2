@@ -134,7 +134,8 @@ static void signal_handler_logemu(struct ulogd_pluginstance *pi, int signal)
 }
 		
 
-static int start_logemu(struct ulogd_pluginstance *pi)
+static int start_logemu(struct ulogd_pluginstance *pi,
+			struct ulogd_keyset *input)
 {
 	struct logemu_instance *li = (struct logemu_instance *) &pi->private;
 	char *tmp;

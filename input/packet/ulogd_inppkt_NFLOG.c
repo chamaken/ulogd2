@@ -520,7 +520,7 @@ static int become_system_logging(struct ulogd_pluginstance *upi, u_int8_t pf)
 	return 0;
 }
 
-static int start(struct ulogd_pluginstance *upi)
+static int start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 {
 	struct nflog_input *ui = (struct nflog_input *) upi->private;
 	unsigned int flags;

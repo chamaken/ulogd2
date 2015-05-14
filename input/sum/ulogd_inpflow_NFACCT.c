@@ -233,7 +233,8 @@ static int configure_nfacct(struct ulogd_pluginstance *upi,
 	return 0;
 }
 
-static int constructor_nfacct(struct ulogd_pluginstance *upi)
+static int constructor_nfacct(struct ulogd_pluginstance *upi,
+			      struct ulogd_keyset *input)
 {
 	struct nfacct_pluginstance *cpi =
 		(struct nfacct_pluginstance *)upi->private;

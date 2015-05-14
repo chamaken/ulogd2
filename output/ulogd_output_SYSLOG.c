@@ -157,7 +157,8 @@ static int syslog_fini(struct ulogd_pluginstance *pi)
 	return 0;
 }
 
-static int syslog_start(struct ulogd_pluginstance *pi)
+static int syslog_start(struct ulogd_pluginstance *pi,
+			struct ulogd_keyset *input)
 {
 	openlog("ulogd", LOG_NDELAY|LOG_PID, LOG_DAEMON);
 

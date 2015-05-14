@@ -221,7 +221,8 @@ static int gprint_configure(struct ulogd_pluginstance *upi,
 	return 0;
 }
 
-static int gprint_init(struct ulogd_pluginstance *upi)
+static int gprint_init(struct ulogd_pluginstance *upi,
+		       struct ulogd_keyset *input)
 {
 	struct gprint_priv *op = (struct gprint_priv *) &upi->private;
 

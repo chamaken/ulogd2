@@ -1462,7 +1462,8 @@ err:
 	return -1;
 }
 
-static int constructor_nfct(struct ulogd_pluginstance *upi)
+static int constructor_nfct(struct ulogd_pluginstance *upi,
+			    struct ulogd_keyset *input)
 {
 	if (pollint_ce(upi->config_kset).u.value == 0) {
 		/* listen to ctnetlink events. */

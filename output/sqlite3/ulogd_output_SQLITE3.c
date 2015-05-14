@@ -382,7 +382,7 @@ sqlite3_configure(struct ulogd_pluginstance *pi,
 }
 
 static int
-sqlite3_start(struct ulogd_pluginstance *pi)
+sqlite3_start(struct ulogd_pluginstance *pi, struct ulogd_keyset *input)
 {
 	struct sqlite3_priv *priv = (void *)pi->private;
 
@@ -398,7 +398,7 @@ sqlite3_start(struct ulogd_pluginstance *pi)
 	sqlite3_busy_timeout(priv->dbh, SQLITE3_BUSY_TIMEOUT);
 
 	/* read the fieldnames to know which values to insert */
-	if (sqlite3_init_db(pi, &pi->input) < 0) {
+	if (sqlite3_init_db(pi, input) < 0) {
 		ulogd_log(ULOGD_ERROR, "SQLITE3: Could not read database fieldnames.\n");
 		return -1;
 	}

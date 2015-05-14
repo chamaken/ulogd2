@@ -239,7 +239,8 @@ static int json_configure(struct ulogd_pluginstance *upi,
 	return 0;
 }
 
-static int json_init(struct ulogd_pluginstance *upi)
+static int json_init(struct ulogd_pluginstance *upi,
+		     struct ulogd_keyset *input)
 {
 	struct json_priv *op = (struct json_priv *) &upi->private;
 	unsigned int i;
@@ -254,8 +255,8 @@ static int json_init(struct ulogd_pluginstance *upi)
 	/* search for time */
 	op->sec_idx = -1;
 	op->usec_idx = -1;
-	for (i = 0; i < upi->input.num_keys; i++) {
-		struct ulogd_key *key = upi->input.keys[i].u.source;
+	for (i = 0; i < input->num_keys; i++) {
+		struct ulogd_key *key = input->keys[i].u.source;
 		if (!strcmp(key->name, "oob.time.sec"))
 			op->sec_idx = i;
 		else if (!strcmp(key->name, "oob.time.usec"))
