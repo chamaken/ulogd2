@@ -564,10 +564,8 @@ static int _unix_socket_set_permissions(struct ulogd_pluginstance *upi)
 }
 
 /* warning: this code is NOT reentrant ! */
-static void _timer_unregister_cb(struct ulogd_timer *a, void *param)
+static void _disconnect_client(struct unixsock_input *ui)
 {
-	struct unixsock_input *ui = param;
-
 	if (ui->unixsock_instance_fd.fd >= 0) {
 		ulogd_log(ULOGD_DEBUG, "  removing client from list\n");
 		ulogd_unregister_fd(&ui->unixsock_instance_fd);
@@ -575,18 +573,6 @@ static void _timer_unregister_cb(struct ulogd_timer *a, void *param)
 		ui->unixsock_instance_fd.fd = -1;
 		ui->unixsock_buf_avail = 0;
 	}
-}
-
-static void _disconnect_client(struct unixsock_input *ui)
-{
-	struct ulogd_timer *t = malloc(sizeof(struct ulogd_timer));
-
-	/* we can't call ulogd_unregister_fd fd, it will segfault
-	 * (unable to remove an entry while inside llist_for_each_entry)
-	 * so we schedule removal for next loop
-	 */
-	ulogd_init_timer(t, ui, _timer_unregister_cb);
-	ulogd_add_timer(t, 0);
 }
 
 /* callback called from ulogd core when fd is readable */
