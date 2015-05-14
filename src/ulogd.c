@@ -95,6 +95,8 @@ struct ulogd_fd signal_ufd;
 
 /* linked list for all registered plugins */
 static LLIST_HEAD(ulogd_plugins);
+/* linked list for all registered source plugins */
+static LLIST_HEAD(ulogd_source_plugins);
 /* linked list for all plugins handle */
 static LLIST_HEAD(ulogd_plugins_handle);
 static LLIST_HEAD(ulogd_pi_stacks);
@@ -248,6 +250,18 @@ static struct ulogd_plugin *find_plugin(const char *name)
 	return NULL;
 }
 
+static struct ulogd_source_plugin *find_source_plugin(const char *name)
+{
+	struct ulogd_source_plugin *pl;
+
+	llist_for_each_entry(pl, &ulogd_source_plugins, list) {
+		if (strcmp(name, pl->name) == 0)
+			return pl;
+	}
+
+	return NULL;
+}
+
 static void release_updated_plugins(void)
 {
 	struct ulogd_plugin *pl, *tmp;
@@ -305,8 +319,8 @@ char *type_to_string(int type)
 	}
 }
 
-
-void get_plugin_infos(struct ulogd_plugin *me)
+/* XXX: handle both plugin and source_plugin */
+void get_plugin_infos(struct ulogd_plugin *me, int has_input)
 {
 	unsigned int i;
 	printf("Name: %s\n", me->name);
@@ -340,7 +354,7 @@ void get_plugin_infos(struct ulogd_plugin *me)
 		}
 	}
 	printf("Input keys:\n");
-	if (me->input.type != ULOGD_DTYPE_SOURCE) {
+	if (has_input) {
 		if (me->input.num_keys == 0) {
 			printf("\tNo statically defined keys\n");
 		} else {
@@ -386,7 +400,7 @@ void ulogd_register_plugin(struct ulogd_plugin *me)
 	if (strcmp(me->version, VERSION)) { 
 		ulogd_log(ULOGD_NOTICE, 
 			  "plugin `%s' has incompatible version %s\n",
-			  me->version);
+			  me->name, me->version);
 		return;
 	}
 	if (info_mode == 0) {
@@ -399,13 +413,37 @@ void ulogd_register_plugin(struct ulogd_plugin *me)
 		ulogd_log(ULOGD_DEBUG, "registering plugin `%s'\n", me->name);
 		llist_add(&me->list, &ulogd_plugins);
 	} else {
-		get_plugin_infos(me);
+		get_plugin_infos(me, 1);
 	}
 }
 
+/* the function called by all source plugins for registering themselves */
+void ulogd_register_source_plugin(struct ulogd_source_plugin *me)
+{
+	if (strcmp(me->version, VERSION)) {
+		ulogd_log(ULOGD_NOTICE,
+			  "plugin `%s' has incompatible version %s\n",
+			  me->name, me->version);
+		return;
+	}
+	if (info_mode == 0) {
+		if (find_source_plugin(me->name)) {
+			ulogd_log(ULOGD_NOTICE,
+				  "plugin `%s' already registered\n",
+				  me->name);
+			exit(EXIT_FAILURE);
+		}
+		ulogd_log(ULOGD_DEBUG, "registering source plugin `%s'\n",
+			  me->name);
+		llist_add(&me->list, &ulogd_source_plugins);
+	} else {
+		/* XXX: assume get_plugin_infos() not accessing diff part */
+		get_plugin_infos((struct ulogd_plugin *)me, 0);
+	}
+}
 
 struct ulogd_keyset *
-ulogd_get_output_keyset(struct ulogd_pluginstance *upi)
+ulogd_get_output_keyset(struct ulogd_source_pluginstance *upi)
 {
 	return &upi->output;
 }
@@ -523,7 +561,7 @@ exit(1);
 }
 
 /* clean results (set all values to 0 and free pointers) */
-static void ulogd_clean_results(struct ulogd_pluginstance *pi)
+static void ulogd_clean_results(struct ulogd_source_pluginstance *pi)
 {
 	struct ulogd_pluginstance *cur;
 
@@ -551,9 +589,9 @@ static void ulogd_clean_results(struct ulogd_pluginstance *pi)
 }
 
 /* propagate results to all downstream plugins in the stack */
-void ulogd_propagate_results(struct ulogd_pluginstance *pi)
+void ulogd_propagate_results(struct ulogd_source_pluginstance *pi)
 {
-	struct ulogd_pluginstance *cur = pi;
+	struct ulogd_pluginstance *cur = (struct ulogd_pluginstance *)pi;
 	int abort_stack = 0;
 	/* iterate over remaining plugin stack */
 	llist_for_each_entry_continue(cur, &pi->stack->list, list) {
@@ -600,10 +638,76 @@ pluginstance_alloc_init(struct ulogd_plugin *pl, char *pi_id,
 	if (pl->config_kset) {
 		size += sizeof(struct config_keyset);
 		if (pl->config_kset->num_ces)
-			size += pl->config_kset->num_ces * 
+			size += pl->config_kset->num_ces *
 						sizeof(struct config_entry);
 	}
 	size += pl->input.num_keys * sizeof(struct ulogd_key);
+	size += pl->output.num_keys * sizeof(struct ulogd_key);
+	pi = malloc(size);
+	if (!pi)
+		return NULL;
+
+	/* initialize */
+	memset(pi, 0, size);
+	INIT_LLIST_HEAD(&pi->list);
+	pi->plugin = pl;
+	pi->stack = stack;
+	memcpy(pi->id, pi_id, sizeof(pi->id));
+
+	ptr = (void *)pi + sizeof(*pi);
+
+	ptr += pl->priv_size;
+	/* copy config keys */
+	if (pl->config_kset) {
+		pi->config_kset = ptr;
+		ptr += sizeof(struct config_keyset);
+		pi->config_kset->num_ces = pl->config_kset->num_ces;
+		if (pi->config_kset->num_ces) {
+			ptr += pi->config_kset->num_ces
+						* sizeof(struct config_entry);
+			memcpy(pi->config_kset->ces, pl->config_kset->ces, 
+			       pi->config_kset->num_ces
+						* sizeof(struct config_entry));
+		}
+	} else
+		pi->config_kset = NULL;
+
+	/* copy input keys */
+	if (pl->input.num_keys) {
+		pi->input.num_keys = pl->input.num_keys;
+		pi->input.keys = ptr;
+		memcpy(pi->input.keys, pl->input.keys,
+		       pl->input.num_keys * sizeof(struct ulogd_key));
+		ptr += pl->input.num_keys * sizeof(struct ulogd_key);
+	}
+	
+	/* copy output keys */
+	if (pl->output.num_keys) {
+		pi->output.num_keys = pl->output.num_keys;
+		pi->output.keys = ptr;
+		memcpy(pi->output.keys, pl->output.keys,
+		       pl->output.num_keys * sizeof(struct ulogd_key));
+	}
+
+	return pi;
+}
+
+static struct ulogd_source_pluginstance *
+source_pluginstance_alloc_init(struct ulogd_source_plugin *pl, char *pi_id,
+			       struct ulogd_pluginstance_stack *stack)
+{
+	unsigned int size;
+	struct ulogd_source_pluginstance *pi;
+	void *ptr;
+
+	size = sizeof(struct ulogd_pluginstance);
+	size += pl->priv_size;
+	if (pl->config_kset) {
+		size += sizeof(struct config_keyset);
+		if (pl->config_kset->num_ces)
+			size += pl->config_kset->num_ces *
+				sizeof(struct config_entry);
+	}
 	size += pl->output.num_keys * sizeof(struct ulogd_key);
 	pi = malloc(size);
 	if (!pi)
@@ -626,35 +730,25 @@ pluginstance_alloc_init(struct ulogd_plugin *pl, char *pi_id,
 		ptr += sizeof(struct config_keyset);
 		pi->config_kset->num_ces = pl->config_kset->num_ces;
 		if (pi->config_kset->num_ces) {
-			ptr += pi->config_kset->num_ces 
-						* sizeof(struct config_entry);
-			memcpy(pi->config_kset->ces, pl->config_kset->ces, 
+			ptr += pi->config_kset->num_ces
+				* sizeof(struct config_entry);
+			memcpy(pi->config_kset->ces, pl->config_kset->ces,
 			       pi->config_kset->num_ces
-						* sizeof(struct config_entry));
+			       * sizeof(struct config_entry));
 		}
 	} else
 		pi->config_kset = NULL;
 
 	/* copy input keys */
-	if (pl->input.num_keys) {
-		pi->input.num_keys = pl->input.num_keys;
-		pi->input.keys = ptr;
-		memcpy(pi->input.keys, pl->input.keys, 
-		       pl->input.num_keys * sizeof(struct ulogd_key));
-		ptr += pl->input.num_keys * sizeof(struct ulogd_key);
-	}
-	
-	/* copy input keys */
 	if (pl->output.num_keys) {
 		pi->output.num_keys = pl->output.num_keys;
 		pi->output.keys = ptr;
-		memcpy(pi->output.keys, pl->output.keys, 
+		memcpy(pi->output.keys, pl->output.keys,
 		       pl->output.num_keys * sizeof(struct ulogd_key));
 	}
 
 	return pi;
 }
-
 
 /* plugin loader to dlopen() a plugins */
 static int load_plugin(const char *file)
@@ -707,11 +801,22 @@ create_stack_resolve_keys(struct ulogd_pluginstance_stack *stack)
 	int ret, i = 0;
 	struct ulogd_plugin *newpl;
 	struct ulogd_pluginstance *pi_cur;
+	struct ulogd_source_pluginstance *spi;
+	unsigned int j;
 
+	spi = llist_entry(stack->list.next,
+			  struct ulogd_source_pluginstance, list);
 	/* pre-configuration pass */
 	llist_for_each_entry_reverse(pi_cur, &stack->list, list) {
-		ulogd_log(ULOGD_DEBUG, "traversing plugin `%s'\n", 
+		ulogd_log(ULOGD_DEBUG, "traversing plugin 1: `%s'\n",
 			  pi_cur->plugin->name);
+
+		/* skip source plugin */
+		if (&pi_cur->list == &spi->list) {
+			ulogd_log(ULOGD_DEBUG, "source pluginstance 1: %s\n",
+				  pi_cur->plugin->name);
+			break;
+		}
 
 		/* is it right to call here? */
 		if (pi_cur->plugin->input.type & ULOGD_KEYF_WILDCARD) {
@@ -728,7 +833,7 @@ create_stack_resolve_keys(struct ulogd_pluginstance_stack *stack)
 				ulogd_log(ULOGD_ERROR, "error during "
 					  "configure of plugin %s\n",
 					  pi_cur->plugin->name);
-				return ret;
+				return ULOGD_IRET_ERR;
 			}
 			if (pi_cur->plugin->update_self) {
 				if (newpl == pi_cur->plugin) {
@@ -752,14 +857,23 @@ create_stack_resolve_keys(struct ulogd_pluginstance_stack *stack)
 			}
 		}
 	}
+	if (spi->plugin->configure) {
+		ret = spi->plugin->configure(spi);
+		if (ret < 0) {
+			ulogd_log(ULOGD_ERROR, "error during "
+				  "configure of source plugin %s\n",
+				  spi->plugin->name);
+			return ret;
+		}
+	}
 
 	/* PASS 2: */
 	ulogd_log(ULOGD_DEBUG, "connecting input/output keys of stack:\n");
 	llist_for_each_entry_reverse(pi_cur, &stack->list, list) {
 		struct ulogd_pluginstance *pi_prev =
 					llist_entry(pi_cur->list.prev,
-						   struct ulogd_pluginstance,
-						   list);
+						    struct ulogd_pluginstance,
+						    list);
 		i++;
 		ulogd_log(ULOGD_DEBUG, "traversing plugin `%s'\n",
 			  pi_cur->plugin->name);
@@ -774,119 +888,109 @@ create_stack_resolve_keys(struct ulogd_pluginstance_stack *stack)
 			/* continue further down */
 		} /* no "else' since first could be the last one, too ! */
 
+		/* skip source plugin */
 		if (&pi_prev->list == &stack->list) {
-			/* this is the last one in the stack */
-			if (!(pi_cur->plugin->input.type 
-						& ULOGD_DTYPE_SOURCE)) {
-				ulogd_log(ULOGD_ERROR, "first plugin in stack "
-					  "has to be source plugin\n");
+			ulogd_log(ULOGD_DEBUG, "source pluginstance 2: %s\n",
+				  pi_cur->plugin->name);
+			continue; /* break? */
+		}
+
+		/* not the last one in the stack */
+		if (!(pi_cur->plugin->input.type &
+		      pi_prev->plugin->output.type)) {
+			ulogd_log(ULOGD_ERROR, "type mismatch between "
+				  "%s and %s in stack\n",
+				  pi_cur->plugin->name,
+				  pi_prev->plugin->name);
+		}
+
+		for (j = 0; j < pi_cur->input.num_keys; j++) {
+			struct ulogd_key *okey;
+			struct ulogd_key *ikey = &pi_cur->input.keys[j];
+
+			/* skip those marked as 'inactive' by
+			 * pl->configure() */
+			if (ikey->flags & ULOGD_KEYF_INACTIVE)
+				continue;
+
+			if (ikey->u.source) {
+				ulogd_log(ULOGD_ERROR, "input key `%s' "
+					  "already has source\n",
+					  ikey->name);
 				return -EINVAL;
 			}
-			/* no need to match keys */
-		} else {
-			unsigned int j;
 
-			/* not the last one in the stack */
-			if (!(pi_cur->plugin->input.type &
-					pi_prev->plugin->output.type)) {
-				ulogd_log(ULOGD_ERROR, "type mismatch between "
-					  "%s and %s in stack\n",
-					  pi_cur->plugin->name,
-					  pi_prev->plugin->name);
-			}
-	
-			for (j = 0; j < pi_cur->input.num_keys; j++) {
-				struct ulogd_key *okey;
-				struct ulogd_key *ikey = &pi_cur->input.keys[j];
-
-				/* skip those marked as 'inactive' by
-				 * pl->configure() */
-				if (ikey->flags & ULOGD_KEYF_INACTIVE)
+			okey = find_okey_in_stack(ikey->name, stack, pi_cur);
+			if (!okey) {
+				if (ikey->flags & ULOGD_KEYF_OPTIONAL)
 					continue;
-
-				if (ikey->u.source) { 
-					ulogd_log(ULOGD_ERROR, "input key `%s' "
-						  "already has source\n",
-						  ikey->name);
-
-					return -EINVAL;
-				}
-
-				okey = find_okey_in_stack(ikey->name, 
-							  stack, pi_cur);
-				if (!okey) {
-					if (ikey->flags & ULOGD_KEYF_OPTIONAL)
-						continue;
-					ulogd_log(ULOGD_ERROR, "cannot find "
-						  "key `%s' in stack\n",
-						  ikey->name);
-					return -EINVAL;
-				}
-
-				ulogd_log(ULOGD_DEBUG, "assigning `%s(?)' as "
-					  "source for %s(%s)\n", okey->name,
-					  pi_cur->plugin->name, ikey->name);
-				ikey->u.source = okey;
+				ulogd_log(ULOGD_ERROR, "cannot find "
+					  "key `%s' in stack\n",
+					  ikey->name);
+				return -EINVAL;
 			}
+
+			ulogd_log(ULOGD_DEBUG, "assigning `%s(?)' as "
+				  "source for %s(%s)\n", okey->name,
+				  pi_cur->plugin->name, ikey->name);
+			ikey->u.source = okey;
 		}
 	}
 
 	return 0;
 }
 
-/* iterate on already defined stack to find a plugininstance matching */
-static int pluginstance_started(struct ulogd_pluginstance *npi)
+/* assume source pluginstance is the first of stack */
+struct ulogd_source_pluginstance *find_source_pluginstance(char *id)
 {
+	struct ulogd_source_pluginstance *spi;
 	struct ulogd_pluginstance_stack *stack;
-	struct ulogd_pluginstance *pi;
 
-	/* Only SOURCE plugin need to be started once */
-	if (npi->plugin->input.type == ULOGD_DTYPE_SOURCE) {
-		llist_for_each_entry(stack, &ulogd_pi_stacks, stack_list) {
-			llist_for_each_entry(pi, &stack->list, list) {
-				if (!strcmp(pi->id, npi->id)) {
-					ulogd_log(ULOGD_INFO,
-							"%s instance already "
-							"loaded\n", pi->id);
-					llist_add(&npi->plist, &pi->plist);
-					return 1;
-				}
-			}
-		}
+	llist_for_each_entry(stack, &ulogd_pi_stacks, stack_list) {
+		spi = llist_entry(stack->list.next,
+				  struct ulogd_source_pluginstance,
+				  list);
+		if (!strcmp(id, spi->id))
+			return spi;
 	}
-	return 0;
-}
-
-static int pluginstance_stop(struct ulogd_pluginstance *npi)
-{
-	if (--npi->plugin->usage > 0 &&
-	    npi->plugin->input.type == ULOGD_DTYPE_SOURCE) {
-		return 0;
-	}
-	return 1;
+	return NULL;
 }
 
 static int create_stack_start_instances(struct ulogd_pluginstance_stack *stack)
 {
 	int ret;
 	struct ulogd_pluginstance *pi;
+	struct ulogd_source_pluginstance *spi, *spi2;
 
-	/* start from input to output plugin */
-	llist_for_each_entry(pi, &stack->list, list) {
+	/* start head of stack (source) pluginstance */
+	spi = llist_entry(stack->list.next, struct ulogd_source_pluginstance,
+			  list);
+	spi2 = find_source_pluginstance(spi->id);
+	if (spi2 != NULL) {
+		llist_add(&spi->plist, &spi2->plist);
+	} else if (spi->plugin->start) {
+		ret = spi->plugin->start(spi);
+		if (ret < 0) {
+			ulogd_log(ULOGD_ERROR, "error starting `%s'\n",
+				  spi->id);
+			return ret;
+		}
+	}
+
+	/* start subsequent plugins */
+	pi = (struct ulogd_pluginstance *)spi;
+	llist_for_each_entry_continue(pi, &stack->list, list) {
 		if (!pi->plugin->start)
 			continue;
 
-		/* only call start if a plugin with same ID was not started */
-		if (!pluginstance_started(pi)) {
-			ret = pi->plugin->start(pi, &pi->input);
-			if (ret < 0) {
-				ulogd_log(ULOGD_ERROR, 
-					  "error starting `%s'\n",
-					  pi->id);
-				return ret;
-			}
+		ret = pi->plugin->start(pi, &pi->input);
+		if (ret < 0) {
+			ulogd_log(ULOGD_ERROR, "error starting `%s'\n",
+				  pi->id);
+			return ret;
 		}
 	}
+
 	return 0;
 }
 
@@ -894,8 +998,13 @@ static int create_stack_start_instances(struct ulogd_pluginstance_stack *stack)
 static int create_stack(const char *option)
 {
 	struct ulogd_pluginstance_stack *stack;
+	struct ulogd_plugin *pl;
+	struct ulogd_pluginstance *pi;
+	struct ulogd_source_plugin *spl;
+	struct ulogd_source_pluginstance *spi;
 	char *buf = strdup(option);
-	char *tok;
+	char *tok, *plname, *equals;
+	char pi_id[ULOGD_MAX_KEYLEN];
 	int ret;
 
 	if (!buf) {
@@ -914,12 +1023,44 @@ static int create_stack(const char *option)
 	ulogd_log(ULOGD_NOTICE, "building new pluginstance stack: '%s'\n",
 		  option);
 
-	/* PASS 1: find and instanciate plugins of stack, link them together */
-	for (tok = strtok(buf, ",\n"); tok; tok = strtok(NULL, ",\n")) {
-		char *plname, *equals;
+	/* PASS 1: find and instanciate source plugins */
+	tok = strtok(buf, ",\n");
+	ulogd_log(ULOGD_DEBUG, "tok=`%s'\n", tok);
+	equals = strchr(tok, ':');
+	if (!equals || (equals - tok >= ULOGD_MAX_KEYLEN)) {
+		ulogd_log(ULOGD_ERROR, "syntax error while parsing `%s'"
+			  "of line `%s'\n", tok, buf);
+		ret = -EINVAL;
+		goto out;
+	}
+	strncpy(pi_id, tok, ULOGD_MAX_KEYLEN-1);
+	pi_id[equals-tok] = '\0';
+	plname = equals+1;
+	/* find matching source plugin */
+	spl = find_source_plugin(plname);
+	if (!spl) {
+		ulogd_log(ULOGD_ERROR, "can't find requested source plugin "
+			  "%s\n", plname);
+		ret = -ENODEV;
+		goto out;
+	}
+	spl->usage++;
+
+	/* allocate */
+	spi = source_pluginstance_alloc_init(spl, pi_id, stack);
+	if (!spi) {
+		ulogd_log(ULOGD_ERROR,
+			  "unable to allocate pluginstance for %s\n",
+			  pi_id);
+		ret = -ENOMEM;
+		goto out;
+	}
+	ulogd_log(ULOGD_DEBUG, "pushing `%s' on stack\n", spl->name);
+	llist_add_tail(&spi->list, &stack->list);
+
+	/* PASS 2: find and instanciate plugins of stack, link them together */
+	for (tok = strtok(NULL, ",\n"); tok; tok = strtok(NULL, ",\n")) {
 		char pi_id[ULOGD_MAX_KEYLEN];
-		struct ulogd_pluginstance *pi;
-		struct ulogd_plugin *pl;
 
 		ulogd_log(ULOGD_DEBUG, "tok=`%s'\n", tok);
 
@@ -948,7 +1089,7 @@ static int create_stack(const char *option)
 		/* allocate */
 		pi = pluginstance_alloc_init(pl, pi_id, stack);
 		if (!pi) {
-			ulogd_log(ULOGD_ERROR, 
+			ulogd_log(ULOGD_ERROR,
 				  "unable to allocate pluginstance for %s\n",
 				  pi_id);
 			ret = -ENOMEM;
@@ -962,14 +1103,14 @@ static int create_stack(const char *option)
 		llist_add_tail(&pi->list, &stack->list);
 	}
 
-	/* PASS 2: resolve key connections from bottom to top of stack */
+	/* PASS 3: resolve key connections from bottom to top of stack */
 	ret = create_stack_resolve_keys(stack);
 	if (ret < 0) {
 		ulogd_log(ULOGD_DEBUG, "destroying stack\n");
 		goto out;
 	}
 
-	/* PASS 3: start each plugin in stack */
+	/* PASS 4: start each plugin in stack */
 	ret = create_stack_start_instances(stack);
 	if (ret < 0) {
 		ulogd_log(ULOGD_DEBUG, "destroying stack\n");
@@ -1257,8 +1398,10 @@ static void stop_pluginstances()
 
 	llist_for_each_entry(stack, &ulogd_pi_stacks, stack_list) {
 		llist_for_each_entry_safe(pi, npi, &stack->list, list) {
-			if ((pi->plugin->priv_size > 0 || *pi->plugin->stop) &&
-			    pluginstance_stop(pi)) {
+			if (&pi->list == stack->list.next /* measn source */
+			    && --pi->plugin->usage > 0)
+				continue;
+			if (*pi->plugin->stop) {
 				ulogd_log(ULOGD_DEBUG, "calling stop for %s\n",
 					  pi->plugin->name);
 				(*pi->plugin->stop)(pi);

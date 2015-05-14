@@ -75,7 +75,6 @@
 /* ulogd data type */
 enum ulogd_dtype {
 	ULOGD_DTYPE_NULL	= 0x0000,
-	ULOGD_DTYPE_SOURCE	= 0x0001, /* source of data, no input keys */
 	ULOGD_DTYPE_RAW		= 0x0002, /* raw packet data */
 	ULOGD_DTYPE_PACKET	= 0x0004, /* packet metadata */
 	ULOGD_DTYPE_FLOW	= 0x0008, /* flow metadata */
@@ -205,6 +204,7 @@ static inline void *ikey_get_ptr(struct ulogd_key *key)
 
 struct ulogd_pluginstance_stack;
 struct ulogd_pluginstance;
+struct ulogd_source_pluginstance;
 
 struct ulogd_plugin_handle {
 	/* global list of plugins */
@@ -223,26 +223,7 @@ struct ulogd_plugin {
 	/* how many stacks are using this plugin? initially set to zero. */
 	unsigned int usage;
 
-	struct ulogd_keyset input;
 	struct ulogd_keyset output;
-
-	/* function to call for each packet */
-	int (*interp)(struct ulogd_pluginstance *instance,
-		      struct ulogd_keyset *input, struct ulogd_keyset *output);
-
-	/* returns passed instance nomally.
-	 * returns new one if update_self is true. e.g. DB
-	 * returns NULL on error */
-	struct ulogd_plugin *(*configure)(struct ulogd_pluginstance *instance);
-
-	/* function to construct a new pluginstance */
-	int (*start)(struct ulogd_pluginstance *pi,
-		     struct ulogd_keyset *input);
-	/* function to destruct an existing pluginstance */
-	int (*stop)(struct ulogd_pluginstance *pi);
-
-	/* function to receive a signal */
-	void (*signal)(struct ulogd_pluginstance *pi, int signal);
 
 	/* configuration parameters */
 	struct config_keyset *config_kset;
@@ -250,9 +231,45 @@ struct ulogd_plugin {
 	/* size of instance->priv */
 	unsigned int priv_size;
 
+	/* followings are plugin (not source)  specific */
+	struct ulogd_keyset input;
+
+	/* returns passed instance nomally.
+	 * returns new one if update_self is true. e.g. DB
+	 * returns NULL on error */
+	struct ulogd_plugin *(*configure)(struct ulogd_pluginstance *instance);
+	/* function to construct a new pluginstance */
+	int (*start)(struct ulogd_pluginstance *pi,
+		     struct ulogd_keyset *input);
+	/* function to destruct an existing pluginstance */
+	int (*stop)(struct ulogd_pluginstance *pi);
+	/* function to receive a signal */
+	void (*signal)(struct ulogd_pluginstance *pi, int signal);
+	/* function to call for each packet */
+	int (*interp)(struct ulogd_pluginstance *instance,
+		      struct ulogd_keyset *input, struct ulogd_keyset *output);
+
 	/* create new plugin at configure:
 	 * it's a mark free or not */
 	int update_self;
+};
+
+struct ulogd_source_plugin {
+	struct llist_head list;
+	char *version;
+	char name[ULOGD_MAX_KEYLEN+1];
+	unsigned int usage;
+
+	struct ulogd_keyset output;
+
+	struct config_keyset *config_kset;
+	unsigned int priv_size;
+
+	/* followings are source plugin specific */
+	int (*configure)(struct ulogd_source_pluginstance *instance);
+	int (*start)(struct ulogd_source_pluginstance *pi);
+	int (*stop)(struct ulogd_source_pluginstance *pi);
+	void (*signal)(struct ulogd_source_pluginstance *pi, int signal);
 };
 
 #define ULOGD_IRET_ERR		-1
@@ -263,20 +280,43 @@ struct ulogd_plugin {
 struct ulogd_pluginstance {
 	/* local list of plugins in this stack */
 	struct llist_head list;
-	/* local list of plugininstance in other stacks */
-	struct llist_head plist;
-	/* plugin */
-	struct ulogd_plugin *plugin;
 	/* stack that we're part of */
 	struct ulogd_pluginstance_stack *stack;
 	/* name / id  of this instance*/
 	char id[ULOGD_MAX_KEYLEN+1];
-	/* per-instance input keys */
-	struct ulogd_keyset input;
 	/* per-instance output keys */
 	struct ulogd_keyset output;
 	/* per-instance config parameters (array) */
 	struct config_keyset *config_kset;
+
+	/* followings are specific pluginstance */
+
+	/* plugin */
+	struct ulogd_plugin *plugin;
+	/* per-instance input keys */
+	struct ulogd_keyset input;
+	/* private data */
+	char private[0];
+};
+
+struct ulogd_source_pluginstance {
+	/* local list of plugins in this stack */
+	struct llist_head list;
+	/* stack that we're part of */
+	struct ulogd_pluginstance_stack *stack;
+	/* name / id  of this instance*/
+	char id[ULOGD_MAX_KEYLEN+1];
+	/* per-instance output keys */
+	struct ulogd_keyset output;
+	/* per-instance config parameters (array) */
+	struct config_keyset *config_kset;
+
+	/* followings are specific source_pluginstance */
+
+	/* plugin */
+	struct ulogd_source_plugin *plugin;
+	/* local list of plugininstance in other stacks */
+	struct llist_head plist;
 	/* private data */
 	char private[0];
 };
@@ -293,13 +333,15 @@ struct ulogd_pluginstance_stack {
  * PUBLIC INTERFACE 
  ***********************************************************************/
 
-void ulogd_propagate_results(struct ulogd_pluginstance *pi);
+void ulogd_propagate_results(struct ulogd_source_pluginstance *pi);
 
 /* register a new interpreter plugin */
 void ulogd_register_plugin(struct ulogd_plugin *me);
+/* register a new interpreter source plugin */
+void ulogd_register_source_plugin(struct ulogd_source_plugin *me);
 
 struct ulogd_keyset *
-ulogd_get_output_keyset(struct ulogd_pluginstance *upi);
+ulogd_get_output_keyset(struct ulogd_source_pluginstance *upi);
 
 /* allocate new ulogd_plugin with specified key size, and copy */
 struct ulogd_plugin *ulogd_plugin_copy_newkeys(struct ulogd_plugin *src,
