@@ -824,7 +824,7 @@ static int create_stack_start_instances(struct ulogd_pluginstance_stack *stack)
 
 		/* only call start if a plugin with same ID was not started */
 		if (!pluginstance_started(pi)) {
-			ret = pi->plugin->start(pi);
+			ret = pi->plugin->start(pi, &pi->input);
 			if (ret < 0) {
 				ulogd_log(ULOGD_ERROR, 
 					  "error starting `%s'\n",
