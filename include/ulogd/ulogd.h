@@ -229,7 +229,8 @@ struct ulogd_plugin {
 	struct ulogd_keyset output;
 
 	/* function to call for each packet */
-	int (*interp)(struct ulogd_pluginstance *instance);
+	int (*interp)(struct ulogd_pluginstance *instance,
+		      struct ulogd_keyset *input, struct ulogd_keyset *output);
 
 	int (*configure)(struct ulogd_pluginstance *instance,
 			 struct ulogd_pluginstance_stack *stack);
@@ -291,6 +292,9 @@ void ulogd_propagate_results(struct ulogd_pluginstance *pi);
 
 /* register a new interpreter plugin */
 void ulogd_register_plugin(struct ulogd_plugin *me);
+
+struct ulogd_keyset *
+ulogd_get_output_keyset(struct ulogd_pluginstance *upi);
 
 /* allocate a new ulogd_key */
 struct ulogd_key *alloc_ret(const u_int16_t type, const char*);

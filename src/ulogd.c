@@ -389,6 +389,13 @@ void ulogd_register_plugin(struct ulogd_plugin *me)
 	}
 }
 
+
+struct ulogd_keyset *
+ulogd_get_output_keyset(struct ulogd_pluginstance *upi)
+{
+	return &upi->output;
+}
+
 /***********************************************************************
  * MAIN PROGRAM
  ***********************************************************************/
@@ -518,7 +525,7 @@ void ulogd_propagate_results(struct ulogd_pluginstance *pi)
 	llist_for_each_entry_continue(cur, &pi->stack->list, list) {
 		int ret;
 		
-		ret = cur->plugin->interp(cur);
+		ret = cur->plugin->interp(cur, &cur->input, &cur->output);
 		switch (ret) {
 		case ULOGD_IRET_ERR:
 			ulogd_log(ULOGD_NOTICE,
