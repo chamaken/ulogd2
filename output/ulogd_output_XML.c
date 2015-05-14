@@ -175,15 +175,15 @@ static int xml_output(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 
-static int xml_configure(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *xml_configure(struct ulogd_pluginstance *upi)
 {
 	int ret;
 
 	ret = config_parse_file(upi->id, upi->config_kset);
 	if (ret < 0)
-		return ret;
+		return NULL;
 
-	return 0;
+	return upi->plugin;
 }
 
 static int xml_fini(struct ulogd_pluginstance *pi)

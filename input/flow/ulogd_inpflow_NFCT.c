@@ -1024,15 +1024,15 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
 }
 
-static int configure_nfct(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *configure_nfct(struct ulogd_pluginstance *upi)
 {
 	int ret;
 
 	ret = config_parse_file(upi->id, upi->config_kset);
 	if (ret < 0)
-		return ret;
+		return NULL;
 
-	return 0;
+	return upi->plugin;
 }
 
 static void overrun_timeout(struct ulogd_timer *a, void *data)

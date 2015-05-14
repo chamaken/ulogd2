@@ -368,16 +368,17 @@ sqlite3_init_db(struct ulogd_pluginstance *pi, struct ulogd_keyset *input)
 
 #define SQLITE3_BUSY_TIMEOUT 300
 
-static int
+struct ulogd_plugin *
 sqlite3_configure(struct ulogd_pluginstance *pi)
 {
 	/* struct sqlite_priv *priv = (void *)pi->private; */
 
-	config_parse_file(pi->id, pi->config_kset);
+	if (config_parse_file(pi->id, pi->config_kset) < 0)
+		return NULL;
 
 	DEBUGP("%s: db='%s' table='%s'\n", pi->id, db_ce(pi), table_ce(pi));
 
-	return 0;
+	return pi->plugin;
 }
 
 static int

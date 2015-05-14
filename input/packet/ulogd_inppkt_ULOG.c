@@ -268,9 +268,11 @@ static int ulog_read_cb(int fd, unsigned int what, void *param)
 	return 0;
 }
 
-static int configure(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *configure(struct ulogd_pluginstance *upi)
 {
-	return config_parse_file(upi->id, upi->config_kset);
+	if (config_parse_file(upi->id, upi->config_kset) < 0)
+		return NULL;
+	return upi->plugin;
 }
 static int init(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 {

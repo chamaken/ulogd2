@@ -209,15 +209,15 @@ static void sighup_handler_print(struct ulogd_pluginstance *upi, int signal)
 	}
 }
 
-static int gprint_configure(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *gprint_configure(struct ulogd_pluginstance *upi)
 {
 	int ret;
 
 	ret = config_parse_file(upi->id, upi->config_kset);
 	if (ret < 0)
-		return ret;
+		return NULL;
 
-	return 0;
+	return upi->plugin;
 }
 
 static int gprint_init(struct ulogd_pluginstance *upi,

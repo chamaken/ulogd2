@@ -217,19 +217,19 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
 }
 
-static int configure_nfacct(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *configure_nfacct(struct ulogd_pluginstance *upi)
 {
 	int ret;
 
 	ret = config_parse_file(upi->id, upi->config_kset);
 	if (ret < 0)
-		return ret;
+		return NULL;
 
 	if (pollint_ce(upi->config_kset).u.value <= 0) {
 		ulogd_log(ULOGD_FATAL, "You have to set pollint\n");
-		return -1;
+		return NULL;
 	}
-	return 0;
+	return upi->plugin;
 }
 
 static int constructor_nfacct(struct ulogd_pluginstance *upi,

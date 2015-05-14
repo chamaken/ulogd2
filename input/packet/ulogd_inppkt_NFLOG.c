@@ -485,13 +485,14 @@ static int msg_cb(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
 	return interp_packet(upi, nfmsg->nfgen_family, nfa);
 }
 
-static int configure(struct ulogd_pluginstance *upi)
+static struct ulogd_plugin *configure(struct ulogd_pluginstance *upi)
 {
 	ulogd_log(ULOGD_DEBUG, "parsing config file section `%s', "
 		  "plugin `%s'\n", upi->id, upi->plugin->name);
 
-	config_parse_file(upi->id, upi->config_kset);
-	return 0;
+	if (config_parse_file(upi->id, upi->config_kset) < 0)
+		return NULL;
+	return upi->plugin;
 }
 
 static int become_system_logging(struct ulogd_pluginstance *upi, u_int8_t pf)
