@@ -147,8 +147,7 @@ static int _init_db(struct ulogd_pluginstance *upi,
 
 static void *__inject_thread(void *gdi);
 
-int ulogd_db_configure(struct ulogd_pluginstance *upi,
-			struct ulogd_pluginstance_stack *stack)
+int ulogd_db_configure(struct ulogd_pluginstance *upi)
 {
 	struct db_instance *di = (struct db_instance *) upi->private;
 	int ret;

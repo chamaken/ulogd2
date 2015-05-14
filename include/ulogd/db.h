@@ -118,8 +118,7 @@ int ulogd_db_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input);
 int ulogd_db_stop(struct ulogd_pluginstance *upi);
 int ulogd_db_interp(struct ulogd_pluginstance *upi,
 		    struct ulogd_keyset *input, struct ulogd_keyset *output);
-int ulogd_db_configure(struct ulogd_pluginstance *upi,
-			struct ulogd_pluginstance_stack *stack);
+int ulogd_db_configure(struct ulogd_pluginstance *upi);
 
 
 #endif

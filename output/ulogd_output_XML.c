@@ -175,8 +175,7 @@ static int xml_output(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 
-static int xml_configure(struct ulogd_pluginstance *upi,
-			 struct ulogd_pluginstance_stack *stack)
+static int xml_configure(struct ulogd_pluginstance *upi)
 {
 	int ret;
 

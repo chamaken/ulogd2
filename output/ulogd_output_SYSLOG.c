@@ -81,8 +81,7 @@ static int _output_syslog(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 		
-static int syslog_configure(struct ulogd_pluginstance *pi,
-			    struct ulogd_pluginstance_stack *stack)
+static int syslog_configure(struct ulogd_pluginstance *pi)
 {
 	int syslog_facility, syslog_level;
 	char *facility, *level;

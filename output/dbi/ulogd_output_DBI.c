@@ -290,14 +290,13 @@ static struct db_driver db_driver_dbi = {
 	.execute	= &execute_dbi,
 };
 
-static int configure_dbi(struct ulogd_pluginstance *upi,
-			 struct ulogd_pluginstance_stack *stack)
+static int configure_dbi(struct ulogd_pluginstance *upi)
 {
 	struct dbi_instance *pi = (struct dbi_instance *) upi->private;
 
 	pi->db_inst.driver = &db_driver_dbi;
 
-	return ulogd_db_configure(upi, stack);
+	return ulogd_db_configure(upi);
 }
 
 static struct ulogd_plugin dbi_plugin = { 

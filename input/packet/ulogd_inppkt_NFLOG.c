@@ -485,8 +485,7 @@ static int msg_cb(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
 	return interp_packet(upi, nfmsg->nfgen_family, nfa);
 }
 
-static int configure(struct ulogd_pluginstance *upi,
-		     struct ulogd_pluginstance_stack *stack)
+static int configure(struct ulogd_pluginstance *upi)
 {
 	ulogd_log(ULOGD_DEBUG, "parsing config file section `%s', "
 		  "plugin `%s'\n", upi->id, upi->plugin->name);

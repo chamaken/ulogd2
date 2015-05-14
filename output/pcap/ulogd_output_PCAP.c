@@ -268,8 +268,7 @@ static void signal_pcap(struct ulogd_pluginstance *upi, int signal)
 	}
 }
 
-static int configure_pcap(struct ulogd_pluginstance *upi,
-			  struct ulogd_pluginstance_stack *stack)
+static int configure_pcap(struct ulogd_pluginstance *upi)
 {
 	return config_parse_file(upi->id, upi->config_kset);
 }

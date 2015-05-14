@@ -217,8 +217,7 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
 }
 
-static int configure_nfacct(struct ulogd_pluginstance *upi,
-			    struct ulogd_pluginstance_stack *stack)
+static int configure_nfacct(struct ulogd_pluginstance *upi)
 {
 	int ret;
 

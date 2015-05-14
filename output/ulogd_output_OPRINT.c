@@ -141,8 +141,7 @@ static void sighup_handler_print(struct ulogd_pluginstance *upi, int signal)
 	}
 }
 
-static int oprint_configure(struct ulogd_pluginstance *upi,
-			    struct ulogd_pluginstance_stack *stack)
+static int oprint_configure(struct ulogd_pluginstance *upi)
 {
 	int ret;
 

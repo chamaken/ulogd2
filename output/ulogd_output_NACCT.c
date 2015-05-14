@@ -199,8 +199,7 @@ sighup_handler_print(struct ulogd_pluginstance *pi, int signal)
 }
 
 static int
-nacct_conf(struct ulogd_pluginstance *pi,
-		   struct ulogd_pluginstance_stack *stack)
+nacct_conf(struct ulogd_pluginstance *pi)
 {
 	int ret;
 

@@ -369,8 +369,7 @@ sqlite3_init_db(struct ulogd_pluginstance *pi, struct ulogd_keyset *input)
 #define SQLITE3_BUSY_TIMEOUT 300
 
 static int
-sqlite3_configure(struct ulogd_pluginstance *pi,
-				  struct ulogd_pluginstance_stack *stack)
+sqlite3_configure(struct ulogd_pluginstance *pi)
 {
 	/* struct sqlite_priv *priv = (void *)pi->private; */
 
