@@ -212,10 +212,6 @@ static int gprint_configure(struct ulogd_pluginstance *upi,
 {
 	int ret;
 
-	ret = ulogd_wildcard_inputkeys(upi);
-	if (ret < 0)
-		return ret;
-
 	ret = config_parse_file(upi->id, upi->config_kset);
 	if (ret < 0)
 		return ret;
@@ -249,7 +245,8 @@ static int gprint_fini(struct ulogd_pluginstance *pi)
 static struct ulogd_plugin gprint_plugin = {
 	.name = "GPRINT",
 	.input = {
-		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW | ULOGD_DTYPE_SUM,
+		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW
+			| ULOGD_DTYPE_SUM | ULOGD_KEYF_WILDCARD,
 	},
 	.output = {
 		.type = ULOGD_DTYPE_SINK,

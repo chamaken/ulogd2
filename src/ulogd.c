@@ -186,7 +186,7 @@ int ulogd_key_size(struct ulogd_key *key)
 	return ret;
 }
 
-int ulogd_wildcard_inputkeys(struct ulogd_pluginstance *upi)
+static int ulogd_wildcard_inputkeys(struct ulogd_pluginstance *upi)
 {
 	struct ulogd_pluginstance_stack *stack = upi->stack;
 	struct ulogd_pluginstance *pi_cur;
@@ -663,13 +663,21 @@ find_okey_in_stack(char *name,
 static int
 create_stack_resolve_keys(struct ulogd_pluginstance_stack *stack)
 {
-	int i = 0;
+	int ret, i = 0;
 	struct ulogd_pluginstance *pi_cur;
 
 	/* pre-configuration pass */
 	llist_for_each_entry_reverse(pi_cur, &stack->list, list) {
 		ulogd_log(ULOGD_DEBUG, "traversing plugin `%s'\n", 
 			  pi_cur->plugin->name);
+
+		/* is it right to call here? */
+		if (pi_cur->plugin->input.type & ULOGD_KEYF_WILDCARD) {
+			ret = ulogd_wildcard_inputkeys(pi_cur);
+			if (ret)
+				return ret;
+		}
+
 		/* call plugin to tell us which keys it requires in
 		 * given configuration */
 		if (pi_cur->plugin->configure) {

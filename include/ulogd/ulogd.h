@@ -60,6 +60,7 @@
 #define ULOGD_KEYF_OPTIONAL	0x0100	/* this key is optional */
 #define ULOGD_KEYF_INACTIVE	0x0200	/* marked as inactive (i.e. totally
 					   to be ignored by everyone */
+#define ULOGD_KEYF_WILDCARD	0x0400	/* call ulogd_wildcard_inputkeys() */
 
 
 /* maximum length of ulogd key */
@@ -312,7 +313,6 @@ void __ulogd_log(int level, char *file, int line, const char *message, ...);
 	(res[x].u.source && (GET_FLAGS(res, x) & ULOGD_RETF_VALID))
 
 int ulogd_key_size(struct ulogd_key *key);
-int ulogd_wildcard_inputkeys(struct ulogd_pluginstance *upi);
 
 /***********************************************************************
  * file descriptor handling

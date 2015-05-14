@@ -374,9 +374,6 @@ sqlite3_configure(struct ulogd_pluginstance *pi,
 
 	config_parse_file(pi->id, pi->config_kset);
 
-	if (ulogd_wildcard_inputkeys(pi) < 0)
-		return -1;
-
 	DEBUGP("%s: db='%s' table='%s'\n", pi->id, db_ce(pi), table_ce(pi));
 
 	return 0;
@@ -439,7 +436,8 @@ sqlite3_stop(struct ulogd_pluginstance *pi)
 static struct ulogd_plugin sqlite3_plugin = { 
 	.name = "SQLITE3", 
 	.input = {
-		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW,
+		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW
+			| ULOGD_KEYF_WILDCARD,
 	},
 	.output = {
 		.type = ULOGD_DTYPE_SINK,
