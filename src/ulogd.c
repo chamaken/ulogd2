@@ -589,8 +589,10 @@ static void ulogd_clean_results(struct ulogd_source_pluginstance *pi)
 }
 
 /* propagate results to all downstream plugins in the stack */
-void ulogd_propagate_results(struct ulogd_source_pluginstance *pi)
+void ulogd_propagate_results(struct ulogd_keyset *output)
 {
+	struct ulogd_source_pluginstance *pi
+		= container_of(output, struct ulogd_source_pluginstance, output);
 	struct ulogd_pluginstance *cur = (struct ulogd_pluginstance *)pi;
 	int abort_stack = 0;
 	/* iterate over remaining plugin stack */

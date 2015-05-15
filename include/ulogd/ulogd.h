@@ -333,7 +333,7 @@ struct ulogd_pluginstance_stack {
  * PUBLIC INTERFACE 
  ***********************************************************************/
 
-void ulogd_propagate_results(struct ulogd_source_pluginstance *pi);
+void ulogd_propagate_results(struct ulogd_keyset *output);
 
 /* register a new interpreter plugin */
 void ulogd_register_plugin(struct ulogd_plugin *me);
