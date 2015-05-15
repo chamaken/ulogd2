@@ -486,8 +486,8 @@ static int compare(const void *data1, const void *data2)
 }
 
 /* only the main_upi plugin instance contains the correct private data. */
-static int propagate_ct(struct ulogd_pluginstance *main_upi,
-			struct ulogd_pluginstance *upi,
+static int propagate_ct(struct ulogd_source_pluginstance *main_upi,
+			struct ulogd_source_pluginstance *upi,
 			struct nf_conntrack *ct,
 			int type,
 			struct ct_timestamp *ts)
@@ -596,12 +596,12 @@ static int propagate_ct(struct ulogd_pluginstance *main_upi,
 }
 
 static void
-do_propagate_ct(struct ulogd_pluginstance *upi,
+do_propagate_ct(struct ulogd_source_pluginstance *upi,
 		struct nf_conntrack *ct,
 		int type,
 		struct ct_timestamp *ts)
 {
-	struct ulogd_pluginstance *npi = NULL;
+	struct ulogd_source_pluginstance *npi = NULL;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *) upi->private;
 
@@ -653,7 +653,7 @@ static int
 event_handler_hashtable(enum nf_conntrack_msg_type type,
 			struct nf_conntrack *ct, void *data)
 {
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 				(struct nfct_pluginstance *) upi->private;
 	struct ct_timestamp *ts;
@@ -728,7 +728,7 @@ static int
 event_handler_no_hashtable(enum nf_conntrack_msg_type type,
 			   struct nf_conntrack *ct, void *data)
 {
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 	struct ct_timestamp tmp = {
 		.ct = ct,
 	};
@@ -758,7 +758,7 @@ static int
 polling_handler(enum nf_conntrack_msg_type type,
 		struct nf_conntrack *ct, void *data)
 {
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 				(struct nfct_pluginstance *) upi->private;
 	struct ct_timestamp *ts;
@@ -795,7 +795,7 @@ polling_handler(enum nf_conntrack_msg_type type,
 	return NFCT_CB_CONTINUE;
 }
 
-static int setnlbufsiz(struct ulogd_pluginstance *upi, int size)
+static int setnlbufsiz(struct ulogd_source_pluginstance *upi, int size)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
@@ -822,9 +822,9 @@ static int setnlbufsiz(struct ulogd_pluginstance *upi, int size)
 static int read_cb_nfct(int fd, unsigned int what, void *param)
 {
 	struct nfct_pluginstance *cpi = (struct nfct_pluginstance *) param;
-	struct ulogd_pluginstance *upi = container_of(param,
-						      struct ulogd_pluginstance,
-						      private);
+	struct ulogd_source_pluginstance *upi
+		= container_of(param, struct ulogd_source_pluginstance,
+			       private);
 	static int warned = 0;
 
 	if (!(what & ULOGD_FD_READ))
@@ -878,7 +878,7 @@ static int do_free(void *data1, void *data2)
 static int do_purge(void *data1, void *data2)
 {
 	int ret;
-	struct ulogd_pluginstance *upi = data1;
+	struct ulogd_source_pluginstance *upi = data1;
 	struct ct_timestamp *ts = data2;
 	struct nfct_pluginstance *cpi =
 				(struct nfct_pluginstance *) upi->private;
@@ -899,7 +899,7 @@ static int overrun_handler(enum nf_conntrack_msg_type type,
 			   struct nf_conntrack *ct,
 			   void *data)
 {
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 				(struct nfct_pluginstance *) upi->private;
 	struct ct_timestamp *ts;
@@ -930,9 +930,9 @@ static int overrun_handler(enum nf_conntrack_msg_type type,
 static int read_cb_ovh(int fd, unsigned int what, void *param)
 {
 	struct nfct_pluginstance *cpi = (struct nfct_pluginstance *) param;
-	struct ulogd_pluginstance *upi = container_of(param,
-						      struct ulogd_pluginstance,
-						      private);
+	struct ulogd_source_pluginstance *upi
+		= container_of(param, struct ulogd_source_pluginstance,
+			       private);
 
 	if (!(what & ULOGD_FD_READ))
 		return 0;
@@ -958,7 +958,7 @@ static int
 dump_reset_handler(enum nf_conntrack_msg_type type,
 		   struct nf_conntrack *ct, void *data)
 {
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
 	int ret = NFCT_CB_CONTINUE, rc, id;
@@ -995,7 +995,7 @@ dump_reset_handler(enum nf_conntrack_msg_type type,
 	return ret;
 }
 
-static void get_ctr_zero(struct ulogd_pluginstance *upi)
+static void get_ctr_zero(struct ulogd_source_pluginstance *upi)
 {
 	struct nfct_handle *h;
 	int family = AF_UNSPEC;
@@ -1014,7 +1014,7 @@ static void get_ctr_zero(struct ulogd_pluginstance *upi)
 
 static void polling_timer_cb(struct ulogd_timer *t, void *data)
 {
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
 	int family = AF_UNSPEC;
@@ -1024,21 +1024,15 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
 }
 
-static struct ulogd_plugin *configure_nfct(struct ulogd_pluginstance *upi)
+static int configure_nfct(struct ulogd_source_pluginstance *upi)
 {
-	int ret;
-
-	ret = config_parse_file(upi->id, upi->config_kset);
-	if (ret < 0)
-		return NULL;
-
-	return upi->plugin;
+	return config_parse_file(upi->id, upi->config_kset);
 }
 
 static void overrun_timeout(struct ulogd_timer *a, void *data)
 {
 	int family = AF_UNSPEC;
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
 
@@ -1222,7 +1216,7 @@ static int build_nfct_filter_proto(struct nfct_filter *filter, char* filter_stri
 }
 
 
-static int build_nfct_filter(struct ulogd_pluginstance *upi)
+static int build_nfct_filter(struct ulogd_source_pluginstance *upi)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
@@ -1281,7 +1275,7 @@ err_init:
 	return -1;
 }
 
-static int constructor_nfct_events(struct ulogd_pluginstance *upi)
+static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
@@ -1413,7 +1407,7 @@ err_cth:
 	return -1;
 }
 
-static int constructor_nfct_polling(struct ulogd_pluginstance *upi)
+static int constructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 {
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
@@ -1461,8 +1455,7 @@ err:
 	return -1;
 }
 
-static int constructor_nfct(struct ulogd_pluginstance *upi,
-			    struct ulogd_keyset *input)
+static int constructor_nfct(struct ulogd_source_pluginstance *upi)
 {
 	if (pollint_ce(upi->config_kset).u.value == 0) {
 		/* listen to ctnetlink events. */
@@ -1476,7 +1469,7 @@ static int constructor_nfct(struct ulogd_pluginstance *upi,
 	return -1;
 }
 
-static int destructor_nfct_events(struct ulogd_pluginstance *upi)
+static int destructor_nfct_events(struct ulogd_source_pluginstance *upi)
 {
 	struct nfct_pluginstance *cpi = (void *) upi->private;
 	int rc;
@@ -1511,7 +1504,7 @@ static int destructor_nfct_events(struct ulogd_pluginstance *upi)
 	return 0;
 }
 
-static int destructor_nfct_polling(struct ulogd_pluginstance *upi)
+static int destructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 {
 	int rc;
 	struct nfct_pluginstance *cpi = (void *)upi->private;
@@ -1527,7 +1520,7 @@ static int destructor_nfct_polling(struct ulogd_pluginstance *upi)
 	return 0;
 }
 
-static int destructor_nfct(struct ulogd_pluginstance *upi)
+static int destructor_nfct(struct ulogd_source_pluginstance *upi)
 {
 	if (pollint_ce(upi->config_kset).u.value == 0) {
 		return destructor_nfct_events(upi);
@@ -1539,7 +1532,7 @@ static int destructor_nfct(struct ulogd_pluginstance *upi)
 	return -1;
 }
 
-static void signal_nfct(struct ulogd_pluginstance *pi, int signal)
+static void signal_nfct(struct ulogd_source_pluginstance *pi, int signal)
 {
 	switch (signal) {
 	case SIGUSR2:
@@ -1548,18 +1541,14 @@ static void signal_nfct(struct ulogd_pluginstance *pi, int signal)
 	}
 }
 
-static struct ulogd_plugin nfct_plugin = {
+static struct ulogd_source_plugin nfct_plugin = {
 	.name = "NFCT",
-	.input = {
-		.type = ULOGD_DTYPE_SOURCE,
-	},
 	.output = {
 		.keys = nfct_okeys,
 		.num_keys = ARRAY_SIZE(nfct_okeys),
 		.type = ULOGD_DTYPE_FLOW,
 	},
 	.config_kset 	= &nfct_kset,
-	.interp 	= NULL,
 	.configure	= &configure_nfct,
 	.start		= &constructor_nfct,
 	.stop		= &destructor_nfct,
@@ -1572,6 +1561,6 @@ void __attribute__ ((constructor)) init(void);
 
 void init(void)
 {
-	ulogd_register_plugin(&nfct_plugin);
+	ulogd_register_source_plugin(&nfct_plugin);
 }
 

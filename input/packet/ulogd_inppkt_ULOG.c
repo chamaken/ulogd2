@@ -185,7 +185,7 @@ static struct ulogd_key output_keys[] = {
 
 };
 
-static int interp_packet(struct ulogd_pluginstance *ip,
+static int interp_packet(struct ulogd_source_pluginstance *ip,
 			 struct ulogd_keyset *output, ulog_packet_msg_t *pkt)
 {
 	struct ulogd_key *ret = output->keys;
@@ -231,8 +231,9 @@ static int interp_packet(struct ulogd_pluginstance *ip,
 
 static int ulog_read_cb(int fd, unsigned int what, void *param)
 {
-	struct ulogd_pluginstance *upi = (struct ulogd_pluginstance *)param;
-	struct ulogd_pluginstance *npi = NULL;
+	struct ulogd_source_pluginstance *upi
+		= (struct ulogd_source_pluginstance *)param;
+	struct ulogd_source_pluginstance *npi = NULL;
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulog_input *u = (struct ulog_input *) &upi->private;
 	ulog_packet_msg_t *upkt;
@@ -268,13 +269,12 @@ static int ulog_read_cb(int fd, unsigned int what, void *param)
 	return 0;
 }
 
-static struct ulogd_plugin *configure(struct ulogd_pluginstance *upi)
+int configure(struct ulogd_source_pluginstance *upi)
 {
-	if (config_parse_file(upi->id, upi->config_kset) < 0)
-		return NULL;
-	return upi->plugin;
+	return config_parse_file(upi->id, upi->config_kset);
 }
-static int init(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
+
+static int init(struct ulogd_source_pluginstance *upi)
 {
 	struct ulog_input *ui = (struct ulog_input *) &upi->private;
 
@@ -307,7 +307,7 @@ out_buf:
 	return -1;
 }
 
-static int fini(struct ulogd_pluginstance *pi)
+static int fini(struct ulogd_source_pluginstance *pi)
 {
 	struct ulog_input *ui = (struct ulog_input *)pi->private;
 
@@ -316,13 +316,8 @@ static int fini(struct ulogd_pluginstance *pi)
 	return 0;
 }
 
-struct ulogd_plugin libulog_plugin = {
+struct ulogd_source_plugin libulog_plugin = {
 	.name = "ULOG",
-	.input = {
-		.type = ULOGD_DTYPE_SOURCE,
-		.keys = NULL,
-		.num_keys = 0,
-	},
 	.output = {
 		.type = ULOGD_DTYPE_RAW,
 		.keys = output_keys,
@@ -337,5 +332,5 @@ struct ulogd_plugin libulog_plugin = {
 
 void __attribute__ ((constructor)) initializer(void)
 {
-	ulogd_register_plugin(&libulog_plugin);
+	ulogd_register_source_plugin(&libulog_plugin);
 }

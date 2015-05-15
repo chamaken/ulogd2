@@ -367,7 +367,7 @@ struct ulogd_unixsock_option_t  {
 #define USOCK_ALIGNTO 8
 #define USOCK_ALIGN(len) ( ((len)+USOCK_ALIGNTO-1) & ~(USOCK_ALIGNTO-1) )
 
-static int handle_packet(struct ulogd_pluginstance *upi,
+static int handle_packet(struct ulogd_source_pluginstance *upi,
 			 struct ulogd_keyset *output,
 			 struct ulogd_unixsock_packet_t *pkt,
 			 u_int16_t total_len)
@@ -521,7 +521,7 @@ static int _create_unix_socket(const char *unix_path)
 	return s;
 }
 
-static int _unix_socket_set_permissions(struct ulogd_pluginstance *upi)
+static int _unix_socket_set_permissions(struct ulogd_source_pluginstance *upi)
 {
 	const char *socket_path;
 	const char *owner = owner_ce(upi->config_kset).u.string;
@@ -581,7 +581,7 @@ static void _disconnect_client(struct unixsock_input *ui)
 /* callback called from ulogd core when fd is readable */
 static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 {
-	struct ulogd_pluginstance *upi = param;
+	struct ulogd_source_pluginstance *upi = param;
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct unixsock_input *ui = (struct unixsock_input*)upi->private;
 	int len;
@@ -668,7 +668,7 @@ static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 /* callback called from ulogd core when fd is readable */
 static int unixsock_server_read_cb(int fd, unsigned int what, void *param)
 {
-	struct ulogd_pluginstance *upi = param;
+	struct ulogd_source_pluginstance *upi = param;
 	struct unixsock_input *ui = (struct unixsock_input*)upi->private;
 	socklen_t len;
 	int s;
@@ -707,17 +707,15 @@ static int unixsock_server_read_cb(int fd, unsigned int what, void *param)
 	return 0;
 }
 
-static struct ulogd_plugin *configure(struct ulogd_pluginstance *upi)
+static int configure(struct ulogd_source_pluginstance *upi)
 {
 	ulogd_log(ULOGD_DEBUG, "parsing config file section `%s', "
 		  "plugin `%s'\n", upi->id, upi->plugin->name);
 
-	if (config_parse_file(upi->id, upi->config_kset) < 0)
-		return NULL;
-	return upi->plugin;
+	return config_parse_file(upi->id, upi->config_kset);
 }
 
-static int start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
+static int start(struct ulogd_source_pluginstance *upi)
 {
 	struct unixsock_input *ui = (struct unixsock_input *) upi->private;
 	int fd;
@@ -777,7 +775,7 @@ static int start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 	return 0;
 }
 
-static int stop(struct ulogd_pluginstance *upi)
+static int stop(struct ulogd_source_pluginstance *upi)
 {
 	struct unixsock_input *ui = (struct unixsock_input *) upi->private;
 	char *unix_path = unixpath_ce(upi->config_kset).u.string;
@@ -793,11 +791,8 @@ static int stop(struct ulogd_pluginstance *upi)
 	return 0;
 }
 
-struct ulogd_plugin libunixsock_plugin = {
+struct ulogd_source_plugin libunixsock_plugin = {
 	.name = "UNIXSOCK",
-	.input = {
-		.type = ULOGD_DTYPE_SOURCE,
-	},
 	.output = {
 		.type = ULOGD_DTYPE_RAW,
 		.keys = output_keys,
@@ -813,5 +808,5 @@ struct ulogd_plugin libunixsock_plugin = {
 
 static void __attribute__ ((constructor)) init(void)
 {
-	ulogd_register_plugin(&libunixsock_plugin);
+	ulogd_register_source_plugin(&libunixsock_plugin);
 }

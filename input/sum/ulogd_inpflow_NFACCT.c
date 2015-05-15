@@ -103,7 +103,7 @@ static struct ulogd_key nfacct_okeys[] = {
 };
 
 static void
-propagate_nfacct(struct ulogd_pluginstance *upi, struct nfacct *nfacct)
+propagate_nfacct(struct ulogd_source_pluginstance *upi, struct nfacct *nfacct)
 {
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulogd_key *ret = output->keys;
@@ -126,9 +126,10 @@ propagate_nfacct(struct ulogd_pluginstance *upi, struct nfacct *nfacct)
 }
 
 static void
-do_propagate_nfacct(struct ulogd_pluginstance *upi, struct nfacct *nfacct)
+do_propagate_nfacct(struct ulogd_source_pluginstance *upi,
+		    struct nfacct *nfacct)
 {
-	struct ulogd_pluginstance *npi = NULL;
+	struct ulogd_source_pluginstance *npi = NULL;
 
 	llist_for_each_entry(npi, &upi->plist, plist)
 		propagate_nfacct(npi, nfacct);
@@ -141,7 +142,7 @@ do_propagate_nfacct(struct ulogd_pluginstance *upi, struct nfacct *nfacct)
 static int nfacct_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nfacct *nfacct;
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 
 	nfacct = nfacct_alloc();
 	if (nfacct == NULL) {
@@ -164,7 +165,7 @@ static int nfacct_read_cb(int fd, unsigned int what, void *param)
 {
 	int ret;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
-	struct ulogd_pluginstance *upi = param;
+	struct ulogd_source_pluginstance *upi = param;
 	struct nfacct_pluginstance *cpi =
 		(struct nfacct_pluginstance *) upi->private;
 
@@ -179,7 +180,7 @@ static int nfacct_read_cb(int fd, unsigned int what, void *param)
 	return ret;
 }
 
-static int nfacct_send_request(struct ulogd_pluginstance *upi)
+static int nfacct_send_request(struct ulogd_source_pluginstance *upi)
 {
 	struct nfacct_pluginstance *cpi =
 		(struct nfacct_pluginstance *)upi->private;
@@ -208,7 +209,7 @@ static int nfacct_send_request(struct ulogd_pluginstance *upi)
 
 static void polling_timer_cb(struct ulogd_timer *t, void *data)
 {
-	struct ulogd_pluginstance *upi = data;
+	struct ulogd_source_pluginstance *upi = data;
 	struct nfacct_pluginstance *cpi =
 		(struct nfacct_pluginstance *)upi->private;
 
@@ -217,23 +218,22 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
 }
 
-static struct ulogd_plugin *configure_nfacct(struct ulogd_pluginstance *upi)
+static int configure_nfacct(struct ulogd_source_pluginstance *upi)
 {
 	int ret;
 
 	ret = config_parse_file(upi->id, upi->config_kset);
 	if (ret < 0)
-		return NULL;
+		return ret;
 
 	if (pollint_ce(upi->config_kset).u.value <= 0) {
 		ulogd_log(ULOGD_FATAL, "You have to set pollint\n");
-		return NULL;
+		return ULOGD_IRET_ERR;
 	}
-	return upi->plugin;
+	return ULOGD_IRET_OK;
 }
 
-static int constructor_nfacct(struct ulogd_pluginstance *upi,
-			      struct ulogd_keyset *input)
+static int constructor_nfacct(struct ulogd_source_pluginstance *upi)
 {
 	struct nfacct_pluginstance *cpi =
 		(struct nfacct_pluginstance *)upi->private;
@@ -266,7 +266,7 @@ static int constructor_nfacct(struct ulogd_pluginstance *upi,
 	return 0;
 }
 
-static int destructor_nfacct(struct ulogd_pluginstance *upi)
+static int destructor_nfacct(struct ulogd_source_pluginstance *upi)
 {
 	struct nfacct_pluginstance *cpi = (void *)upi->private;
 	int rc;
@@ -281,7 +281,7 @@ static int destructor_nfacct(struct ulogd_pluginstance *upi)
 	return 0;
 }
 
-static void signal_nfacct(struct ulogd_pluginstance *upi, int signal)
+static void signal_nfacct(struct ulogd_source_pluginstance *upi, int signal)
 {
 	switch (signal) {
 	case SIGUSR2:
@@ -290,18 +290,14 @@ static void signal_nfacct(struct ulogd_pluginstance *upi, int signal)
 	}
 }
 
-static struct ulogd_plugin nfacct_plugin = {
+static struct ulogd_source_plugin nfacct_plugin = {
 	.name = "NFACCT",
-	.input = {
-		.type = ULOGD_DTYPE_SOURCE,
-	},
 	.output = {
 		.keys = nfacct_okeys,
 		.num_keys = ARRAY_SIZE(nfacct_okeys),
 		.type = ULOGD_DTYPE_SUM,
 	},
 	.config_kset	= &nfacct_kset,
-	.interp		= NULL,
 	.configure	= &configure_nfacct,
 	.start		= &constructor_nfacct,
 	.stop		= &destructor_nfacct,
@@ -314,5 +310,5 @@ void __attribute__ ((constructor)) init(void);
 
 void init(void)
 {
-	ulogd_register_plugin(&nfacct_plugin);
+	ulogd_register_source_plugin(&nfacct_plugin);
 }
