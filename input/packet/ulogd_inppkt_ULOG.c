@@ -225,7 +225,7 @@ static int interp_packet(struct ulogd_source_pluginstance *ip,
 	/* Undef in ULOG but necessary */
 	okey_set_u16(&ret[ULOG_KEY_OOB_PROTOCOL], 0);
 
-	ulogd_propagate_results(ip);
+	ulogd_propagate_results(output);
 	return 0;
 }
 

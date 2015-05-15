@@ -590,7 +590,7 @@ static int propagate_ct(struct ulogd_source_pluginstance *main_upi,
 	}
 	okey_set_ptr(&ret[NFCT_CT], cpi->ct);
 
-	ulogd_propagate_results(upi);
+	ulogd_propagate_results(output);
 
 	return 0;
 }

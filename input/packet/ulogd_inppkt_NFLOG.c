@@ -399,7 +399,7 @@ interp_packet(struct ulogd_source_pluginstance *upi,
 
 	okey_set_ptr(&ret[NFLOG_KEY_RAW], ldata);
 
-	ulogd_propagate_results(upi);
+	ulogd_propagate_results(output);
 	return 0;
 }
 

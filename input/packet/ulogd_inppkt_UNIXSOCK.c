@@ -469,7 +469,7 @@ static int handle_packet(struct ulogd_source_pluginstance *upi,
 	/* number of packets */
 	okey_set_u32(&ret[UNIXSOCK_KEY_RAW_PCKTCOUNT], 1);
 
-	ulogd_propagate_results(upi);
+	ulogd_propagate_results(output);
 
 	return 0;
 }

@@ -122,7 +122,7 @@ propagate_nfacct(struct ulogd_source_pluginstance *upi, struct nfacct *nfacct)
 		okey_set_u32(&ret[ULOGD_NFACCT_TIME_USEC], cpi->tv.tv_usec);
 	}
 
-	ulogd_propagate_results(upi);
+	ulogd_propagate_results(output);
 }
 
 static void
