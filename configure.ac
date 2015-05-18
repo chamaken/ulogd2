@@ -159,6 +159,9 @@ else
 	enable_jansson="no"
 fi
 
+dnl Check for urcu lib (uatomic only now)
+AC_CHECK_HEADER(urcu/uatomic.h,[],[AC_MSG_ERROR(requires urcu).])
+
 dnl AC_SUBST(DATABASE_DIR)
 dnl AC_SUBST(DATABASE_LIB)
 dnl AC_SUBST(DATABASE_LIB_DIR)

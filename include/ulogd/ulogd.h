@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <inttypes.h>
 #include <string.h>
+#include <pthread.h>
 #include <config.h>
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
@@ -56,11 +57,12 @@
 #define ULOGD_RETF_FREE		0x0002	/* ptr needs to be free()d */
 #define ULOGD_RETF_NEEDED	0x0004	/* this parameter is actually needed
 					 * by some downstream plugin */
+#define ULOGD_RETF_DESTRUCT	0x0008	/* call destructor */
 
 #define ULOGD_KEYF_OPTIONAL	0x0100	/* this key is optional */
 #define ULOGD_KEYF_INACTIVE	0x0200	/* marked as inactive (i.e. totally
 					   to be ignored by everyone */
-#define ULOGD_KEYF_WILDCARD	0x0400	/* call ulogd_wildcard_inputkeys() */
+#define ULOGD_KEYF_WILDCARD	0x0400
 
 
 /* maximum length of ulogd key */
@@ -100,6 +102,9 @@ struct ulogd_key {
 
 	/* Store field name for Common Information Model */
 	char *cim_name;
+
+	/* destructor for this key */
+	void (*destruct)(void *u_value_ptr);
 
 	union {
 		/* and finally the returned value */
@@ -172,6 +177,15 @@ static inline void okey_set_ptr(struct ulogd_key *key, void *value)
 	key->flags |= ULOGD_RETF_VALID;
 }
 
+static inline void *okey_get_ptr(struct ulogd_key *key)
+{
+	return key->u.value.ptr;
+}
+static inline void okey_set_valid(struct ulogd_key *key)
+{
+	key->flags |= ULOGD_RETF_VALID;
+}
+
 static inline u_int8_t ikey_get_u8(struct ulogd_key *key)
 {
 	return key->u.source->u.value.ui8;
@@ -202,7 +216,6 @@ static inline void *ikey_get_ptr(struct ulogd_key *key)
 	return key->u.source->u.value.ptr;
 }
 
-struct ulogd_pluginstance_stack;
 struct ulogd_pluginstance;
 struct ulogd_source_pluginstance;
 
@@ -212,7 +225,10 @@ struct ulogd_plugin_handle {
 	void *handle;
 };
 
-
+/*
+ * configure, mtsafe, update_self and input in start()
+ * may be specific to sink plugin
+ */
 struct ulogd_plugin {
 	/* global list of plugins */
 	struct llist_head list;
@@ -238,7 +254,8 @@ struct ulogd_plugin {
 	 * returns new one if update_self is true. e.g. DB
 	 * returns NULL on error */
 	struct ulogd_plugin *(*configure)(struct ulogd_pluginstance *instance);
-	/* function to construct a new pluginstance */
+	/* function to construct a new pluginstance
+	 * input may be specific to sink plugin which use wildcard */
 	int (*start)(struct ulogd_pluginstance *pi,
 		     struct ulogd_keyset *input);
 	/* function to destruct an existing pluginstance */
@@ -252,6 +269,9 @@ struct ulogd_plugin {
 	/* create new plugin at configure:
 	 * it's a mark free or not */
 	int update_self;
+
+	/* protect interp by mutex */
+	int mtsafe;
 };
 
 struct ulogd_source_plugin {
@@ -278,14 +298,11 @@ struct ulogd_source_plugin {
 
 /* an instance of a plugin, element in a stack */
 struct ulogd_pluginstance {
-	/* local list of plugins in this stack */
+	/* global list of pluginstances */
 	struct llist_head list;
-	/* stack that we're part of */
-	struct ulogd_pluginstance_stack *stack;
+
 	/* name / id  of this instance*/
-	char id[ULOGD_MAX_KEYLEN+1];
-	/* per-instance output keys */
-	struct ulogd_keyset output;
+	char id[ULOGD_MAX_KEYLEN + 1];
 	/* per-instance config parameters (array) */
 	struct config_keyset *config_kset;
 
@@ -293,21 +310,24 @@ struct ulogd_pluginstance {
 
 	/* plugin */
 	struct ulogd_plugin *plugin;
-	/* per-instance input keys */
-	struct ulogd_keyset input;
+
+	int usage;
+
+	/* syncronize interp by BIG lock */
+	pthread_mutex_t interp_mutex;
+
+	/* represent input for wildcarded (sink) pluginstance */
+	struct ulogd_keyset *input_template;
+
 	/* private data */
 	char private[0];
 };
 
 struct ulogd_source_pluginstance {
-	/* local list of plugins in this stack */
+	/* global list of source pluginstances */
 	struct llist_head list;
-	/* stack that we're part of */
-	struct ulogd_pluginstance_stack *stack;
 	/* name / id  of this instance*/
-	char id[ULOGD_MAX_KEYLEN+1];
-	/* per-instance output keys */
-	struct ulogd_keyset output;
+	char id[ULOGD_MAX_KEYLEN + 1];
 	/* per-instance config parameters (array) */
 	struct config_keyset *config_kset;
 
@@ -315,41 +335,71 @@ struct ulogd_source_pluginstance {
 
 	/* plugin */
 	struct ulogd_source_plugin *plugin;
-	/* local list of plugininstance in other stacks */
-	struct llist_head plist;
+
+	int usage;
+	int refcnt; /* based on keysets_bundle.nstacks */
+	pthread_mutex_t refcnt_mutex;
+	pthread_cond_t refcnt_condv;
+
+	/* list of keysets_bundles used by stacks
+	 * whose head is this pluginstance */
+	struct llist_head keysets_bundles;
+	pthread_mutex_t keysets_bundles_mutex;
+	pthread_cond_t keysets_bundles_condv;
+
+	/* list of stack which source is this source pluginstance */
+	struct llist_head stacks;
+
+	/* number of stacks == usage? */
+	int nstacks;
+
 	/* private data */
 	char private[0];
 };
 
-struct ulogd_pluginstance_stack {
-	/* global list of pluginstance stacks */
-	struct llist_head stack_list;
+struct ulogd_stack {
+	struct llist_head list;
+	/* list of stack_element in this stack */
+	struct llist_head elements;
+	/* no thought, this stack name? */
+	char *name;
+	/* source pluginstance which this belongs to */
+	struct ulogd_source_pluginstance *spi;
+};
+
+/* args for ulogd_pluginstance.interp() */
+struct ulogd_stack_element {
 	/* list of plugins in this stack */
 	struct llist_head list;
-	char *name;
+
+	struct ulogd_pluginstance *pi;
+	/* index of input keyset in keyset bundle */
+	unsigned int iksbi;
+	/* index of output keyset in keyset bundle */
+	unsigned int oksbi;
 };
 
 /***********************************************************************
- * PUBLIC INTERFACE 
+ * PUBLIC INTERFACE
  ***********************************************************************/
 
-void ulogd_propagate_results(struct ulogd_keyset *output);
+/* thread.c */
+int ulogd_propagate_results(struct ulogd_keyset *okeys);
+int ulogd_wait_consume(struct ulogd_source_pluginstance *spi);
 
 /* register a new interpreter plugin */
 void ulogd_register_plugin(struct ulogd_plugin *me);
 /* register a new interpreter source plugin */
 void ulogd_register_source_plugin(struct ulogd_source_plugin *me);
 
+/* keysets.c */
 struct ulogd_keyset *
-ulogd_get_output_keyset(struct ulogd_source_pluginstance *upi);
+ulogd_get_output_keyset(struct ulogd_source_pluginstance *spi);
 
 /* allocate new ulogd_plugin with specified key size, and copy */
 struct ulogd_plugin *ulogd_plugin_copy_newkeys(struct ulogd_plugin *src,
 					       size_t ikeys_num,
 					       size_t okeys_num);
-
-/* allocate a new ulogd_key */
-struct ulogd_key *alloc_ret(const u_int16_t type, const char*);
 
 /* write a message to the daemons' logfile */
 void __ulogd_log(int level, char *file, int line, const char *message, ...);
@@ -406,5 +456,9 @@ int ulogd_select_main(struct timeval *tv);
 #ifndef IPPROTO_UDPLITE
 #define IPPROTO_UDPLITE 136
 #endif
+
+/* XXX: should be configured */
+#define ULOGD_N_PERSTACK_DATA 8
+#define ULOGD_N_INTERP_THREAD 16
 
 #endif /* _ULOGD_H */
