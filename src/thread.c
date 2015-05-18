@@ -114,7 +114,7 @@ static void *interp_bundle(void *arg)
 	struct ulogd_interp_thread *th = arg;
 	struct ulogd_source_pluginstance *spi;
 	struct ulogd_stack *stack;
-	int ret;
+	int ret, usage;
 
 	while (th->runnable) {
 		/* wait message */
@@ -145,6 +145,7 @@ static void *interp_bundle(void *arg)
 			break;
 		}
 
+		usage = 0;
 		spi = th->bundle->spi;
 		/* exec stacks */
 		llist_for_each_entry(stack, &spi->stacks, list) {
@@ -157,7 +158,8 @@ static void *interp_bundle(void *arg)
 			}
 			/* no atomic op is needed since we own entire */
 			th->bundle->refcnt--;
-			assert(uatomic_sub_return(&spi->refcnt, 1) >= 0);
+			usage = uatomic_sub_return(&spi->refcnt, 1);
+			assert(usage >= 0);
 		}
 		assert(th->bundle->refcnt == 0); /* XXX: if and log */
 
@@ -175,7 +177,7 @@ static void *interp_bundle(void *arg)
 		}
 
 		/* XXX: need to check runnable? */
-		if (uatomic_read(&spi->refcnt) == 0) {
+		if (usage == 0) {
 			ret = pthread_mutex_lock(&spi->refcnt_mutex);
 			if (ret != 0) {
 				ulogd_log(ULOGD_FATAL,
