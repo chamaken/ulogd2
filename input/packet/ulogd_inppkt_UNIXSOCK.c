@@ -594,6 +594,8 @@ static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 	if (!(what & ULOGD_FD_READ))
 		return 0;
 
+	ulogd_wait_consume(upi);
+
 	len = read(fd, buf, sizeof(buf));
 	if (len < 0) {
 		ulogd_log(ULOGD_NOTICE, "  read returned %d, errno is %d (%s)\n",

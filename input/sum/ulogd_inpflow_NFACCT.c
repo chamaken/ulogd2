@@ -89,6 +89,7 @@ static struct ulogd_key nfacct_okeys[] = {
 		.type	= ULOGD_RET_RAW,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "sum",
+		.len	= 4096, /* XXX: sizeof struct nfacct */
 	},
 	[ULOGD_NFACCT_TIME_SEC] = {
 		.type = ULOGD_RET_UINT32,
@@ -103,11 +104,12 @@ static struct ulogd_key nfacct_okeys[] = {
 };
 
 static void
-propagate_nfacct(struct ulogd_source_pluginstance *upi, struct nfacct *nfacct)
+propagate_nfacct(struct ulogd_source_pluginstance *upi,
+		 struct ulogd_keyset *output, struct nfacct *nfacct)
 {
-	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulogd_key *ret = output->keys;
-	struct nfacct_pluginstance *cpi = (struct nfacct_pluginstance *) upi->private;
+	struct nfacct_pluginstance *cpi
+		= (struct nfacct_pluginstance *) upi->private;
 
 	okey_set_ptr(&ret[ULOGD_NFACCT_NAME],
 			(void *)nfacct_attr_get_str(nfacct, NFACCT_ATTR_NAME));
@@ -115,7 +117,7 @@ propagate_nfacct(struct ulogd_source_pluginstance *upi, struct nfacct *nfacct)
 			nfacct_attr_get_u64(nfacct, NFACCT_ATTR_PKTS));
 	okey_set_u64(&ret[ULOGD_NFACCT_BYTES],
 			nfacct_attr_get_u64(nfacct, NFACCT_ATTR_BYTES));
-	okey_set_ptr(&ret[ULOGD_NFACCT_RAW], nfacct);
+	okey_set_valid(&ret[ULOGD_NFACCT_RAW]);
 
 	if (timestamp_ce(upi->config_kset).u.value != 0) {
 		okey_set_u32(&ret[ULOGD_NFACCT_TIME_SEC], cpi->tv.tv_sec);
@@ -127,30 +129,27 @@ propagate_nfacct(struct ulogd_source_pluginstance *upi, struct nfacct *nfacct)
 
 static void
 do_propagate_nfacct(struct ulogd_source_pluginstance *upi,
+		    struct ulogd_keyset *output,
 		    struct nfacct *nfacct)
 {
-	propagate_nfacct(upi, nfacct);
-
-	nfacct_free(nfacct);
+	propagate_nfacct(upi, output, nfacct);
 }
 
 static int nfacct_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nfacct *nfacct;
 	struct ulogd_source_pluginstance *upi = data;
+	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
+	struct ulogd_key *ret = output->keys;
 
-	nfacct = nfacct_alloc();
-	if (nfacct == NULL) {
-		ulogd_log(ULOGD_ERROR, "OOM");
-		goto err;
-	}
+	nfacct = (struct nfacct *)okey_get_ptr(&ret[ULOGD_NFACCT_RAW]);
 
 	if (nfacct_nlmsg_parse_payload(nlh, nfacct) < 0) {
 		ulogd_log(ULOGD_ERROR, "Error parsing nfacct message");
 		goto err;
 	}
 
-	do_propagate_nfacct(upi, nfacct);
+	do_propagate_nfacct(upi, output, nfacct);
 
 err:
 	return MNL_CB_OK;

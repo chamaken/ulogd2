@@ -70,7 +70,6 @@ struct nfct_pluginstance {
 	struct ulogd_timer ov_timer;	/* overrun retry timer */
 	struct hashtable *ct_active;
 	int nlbufsiz;			/* current netlink buffer size */
-	struct nf_conntrack *ct;
 };
 
 #define HTABLE_SIZE	(8192)
@@ -191,6 +190,7 @@ enum nfct_keys {
 	NFCT_OOB_FAMILY,
 	NFCT_OOB_PROTOCOL,
 	NFCT_CT,
+	NFCT_DESTROY_CT,
 };
 
 static struct ulogd_key nfct_okeys[] = {
@@ -417,6 +417,12 @@ static struct ulogd_key nfct_okeys[] = {
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "ct",
 	},
+	{
+		.type	= ULOGD_RET_RAW,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "ct.destroy",
+		.destruct = (void (*)(void *))nfct_destroy,
+	},
 };
 
 static uint32_t
@@ -486,16 +492,14 @@ static int compare(const void *data1, const void *data2)
 }
 
 /* only the main_upi plugin instance contains the correct private data. */
-static int propagate_ct(struct ulogd_source_pluginstance *main_upi,
-			struct ulogd_source_pluginstance *upi,
+static int propagate_ct(struct ulogd_source_pluginstance *upi,
 			struct nf_conntrack *ct,
+			struct nf_conntrack *destroy_ct,
 			int type,
 			struct ct_timestamp *ts)
 {
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulogd_key *ret = output->keys;
-	struct nfct_pluginstance *cpi =
-			(struct nfct_pluginstance *) main_upi->private;
 
 	okey_set_u32(&ret[NFCT_CT_EVENT], type);
 	okey_set_u8(&ret[NFCT_OOB_FAMILY], nfct_get_attr_u8(ct, ATTR_L3PROTO));
@@ -588,7 +592,8 @@ static int propagate_ct(struct ulogd_source_pluginstance *main_upi,
 				     ts->time[STOP].tv_usec);
 		}
 	}
-	okey_set_ptr(&ret[NFCT_CT], cpi->ct);
+	okey_set_ptr(&ret[NFCT_CT], ct);
+	okey_set_ptr(&ret[NFCT_DESTROY_CT], destroy_ct);
 
 	ulogd_propagate_results(output);
 
@@ -598,23 +603,15 @@ static int propagate_ct(struct ulogd_source_pluginstance *main_upi,
 static void
 do_propagate_ct(struct ulogd_source_pluginstance *upi,
 		struct nf_conntrack *ct,
+		struct nf_conntrack *destroy_ct,
 		int type,
 		struct ct_timestamp *ts)
 {
-	struct nfct_pluginstance *cpi =
-			(struct nfct_pluginstance *) upi->private;
-
-	/* we copy the conntrack object to the plugin cache.
-	 * Thus, we only copy the object once, then it is used 
-	 * by the several output plugin instance that reference 
-	 * it by means of a pointer. */
-	nfct_copy(cpi->ct, ct, NFCT_CP_OVERRIDE);
-
-	propagate_ct(upi, upi, ct, type, ts);
+	propagate_ct(upi, ct, destroy_ct, type, ts);
 }
 
 static int set_timestamp_from_ct_try(struct ct_timestamp *ts,
-				   struct nf_conntrack *ct, int name)
+				     struct nf_conntrack *ct, int name)
 {
 	int attr_name;
 
@@ -693,9 +690,8 @@ event_handler_hashtable(enum nf_conntrack_msg_type type,
 			hashtable_find(cpi->ct_active, ct, id);
 		if (ts) {
 			set_timestamp_from_ct(ts, ct, STOP);
-			do_propagate_ct(upi, ct, type, ts);
+			do_propagate_ct(upi, ct, ct, type, ts);
 			hashtable_del(cpi->ct_active, &ts->hashnode);
-			nfct_destroy(ts->ct);
 			free(ts);
 		} else {
 			struct ct_timestamp tmp = {
@@ -704,7 +700,7 @@ event_handler_hashtable(enum nf_conntrack_msg_type type,
 			set_timestamp_from_ct(&tmp, ct, STOP);
 			tmp.time[START].tv_sec = 0;
 			tmp.time[START].tv_usec = 0;
-			do_propagate_ct(upi, ct, type, &tmp);
+			do_propagate_ct(upi, ct, NULL, type, &tmp);
 		}
 		break;
 	default:
@@ -741,7 +737,7 @@ event_handler_no_hashtable(enum nf_conntrack_msg_type type,
 		ulogd_log(ULOGD_NOTICE, "unsupported message type\n");
 		return NFCT_CB_CONTINUE;
 	}
-	do_propagate_ct(upi, ct, type, &tmp);
+	do_propagate_ct(upi, ct, NULL, type, &tmp);
 	return NFCT_CB_CONTINUE;
 }
 
@@ -877,9 +873,8 @@ static int do_purge(void *data1, void *data2)
 	/* if it is not in kernel anymore, purge it */
 	ret = nfct_query(cpi->pgh, NFCT_Q_GET, ts->ct);
 	if (ret == -1 && errno == ENOENT) {
-		do_propagate_ct(upi, ts->ct, NFCT_T_DESTROY, ts);
+		do_propagate_ct(upi, ts->ct, ts->ct, NFCT_T_DESTROY, ts);
 		hashtable_del(cpi->ct_active, &ts->hashnode);
-		nfct_destroy(ts->ct);
 		free(ts);
 	}
 
@@ -977,7 +972,7 @@ dump_reset_handler(enum nf_conntrack_msg_type type,
 			}
 			ret = NFCT_CB_STOLEN;
 		}
-		do_propagate_ct(upi, ct, type, ts);
+		do_propagate_ct(upi, ct, NULL, type, ts);
 		break;
 	default:
 		ulogd_log(ULOGD_NOTICE, "unknown netlink message type\n");
@@ -1321,10 +1316,6 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 
 	ulogd_register_fd(&cpi->nfct_fd);
 
-	cpi->ct = nfct_new();
-	if (cpi->ct == NULL)
-		goto err_nfctobj;
-
 	if (usehash_ce(upi->config_kset).u.value != 0) {
 		int family = AF_UNSPEC;
 		struct nfct_handle *h;
@@ -1390,8 +1381,6 @@ err_pgh:
 err_ovh:
 	hashtable_destroy(cpi->ct_active);
 err_hashtable:
-	nfct_destroy(cpi->ct);
-err_nfctobj:
 	ulogd_unregister_fd(&cpi->nfct_fd);
 	nfct_close(cpi->cth);
 err_cth:
@@ -1426,10 +1415,6 @@ static int constructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 		goto err_hashtable;
 	}
 
-	cpi->ct = nfct_new();
-	if (cpi->ct == NULL)
-		goto err_ct_cache;
-
 	ulogd_init_timer(&cpi->timer, upi, polling_timer_cb);
 	if (pollint_ce(upi->config_kset).u.value != 0)
 		ulogd_add_timer(&cpi->timer,
@@ -1438,8 +1423,6 @@ static int constructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 	ulogd_log(ULOGD_NOTICE, "NFCT working in polling mode\n");
 	return 0;
 
-err_ct_cache:
-	hashtable_destroy(cpi->ct_active);
 err_hashtable:
 	nfct_close(cpi->pgh);
 err:
@@ -1470,8 +1453,6 @@ static int destructor_nfct_events(struct ulogd_source_pluginstance *upi)
 	rc = nfct_close(cpi->cth);
 	if (rc < 0)
 		return rc;
-
-	nfct_destroy(cpi->ct);
 
 	if (usehash_ce(upi->config_kset).u.value != 0) {
 		rc = ulogd_fini_timer(&cpi->ov_timer);

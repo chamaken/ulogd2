@@ -241,6 +241,9 @@ static int ulog_read_cb(int fd, unsigned int what, void *param)
 	if (!(what & ULOGD_FD_READ))
 		return 0;
 
+	/* wait whole read buffer has processed */
+	ulogd_wait_consume(upi);
+
 	while ((len = ipulog_read(u->libulog_h, u->libulog_buf,
 				 upi->config_kset->ces[0].u.value))) {
 		if (len <= 0) {

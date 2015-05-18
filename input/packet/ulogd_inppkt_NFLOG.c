@@ -431,6 +431,9 @@ static int nful_read_cb(int fd, unsigned int what, void *param)
 	if (!(what & ULOGD_FD_READ))
 		return 0;
 
+	/* wait whole read buffer has processed */
+	ulogd_wait_consume(upi);
+
 	/* we don't have a while loop here, since we don't want to
 	 * grab all the processing time just for us.  there might be other
 	 * sockets that have pending work */
