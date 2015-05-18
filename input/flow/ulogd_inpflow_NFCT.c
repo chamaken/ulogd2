@@ -690,7 +690,7 @@ event_handler_hashtable(enum nf_conntrack_msg_type type,
 			hashtable_find(cpi->ct_active, ct, id);
 		if (ts) {
 			set_timestamp_from_ct(ts, ct, STOP);
-			do_propagate_ct(upi, ct, ct, type, ts);
+			do_propagate_ct(upi, ct, ts->ct, type, ts);
 			hashtable_del(cpi->ct_active, &ts->hashnode);
 			free(ts);
 		} else {
