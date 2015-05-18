@@ -589,7 +589,7 @@ static void ulogd_clean_results(struct ulogd_source_pluginstance *pi)
 }
 
 /* propagate results to all downstream plugins in the stack */
-void ulogd_propagate_results(struct ulogd_keyset *output)
+static void _ulogd_propagate_results(struct ulogd_keyset *output)
 {
 	struct ulogd_source_pluginstance *pi
 		= container_of(output, struct ulogd_source_pluginstance, output);
@@ -625,6 +625,23 @@ void ulogd_propagate_results(struct ulogd_keyset *output)
 	}
 
 	ulogd_clean_results(pi);
+}
+
+void ulogd_propagate_results(struct ulogd_keyset *src)
+{
+	struct ulogd_source_pluginstance *spi
+		= container_of(src, struct ulogd_source_pluginstance, output);
+	struct ulogd_keyset *dst;
+
+	/* since we support the re-use of one instance in several 
+	 * different stacks, we duplicate the message to let them know */
+	llist_for_each_entry(spi, &spi->plist, plist) {
+		dst = ulogd_get_output_keyset(spi);
+		memcpy(dst->keys, src->keys,
+		       dst->num_keys * sizeof(struct ulogd_key));
+		_ulogd_propagate_results(dst);
+	}
+	_ulogd_propagate_results(src);
 }
 
 static struct ulogd_pluginstance *
