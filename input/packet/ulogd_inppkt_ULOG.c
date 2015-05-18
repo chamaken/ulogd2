@@ -233,7 +233,6 @@ static int ulog_read_cb(int fd, unsigned int what, void *param)
 {
 	struct ulogd_source_pluginstance *upi
 		= (struct ulogd_source_pluginstance *)param;
-	struct ulogd_source_pluginstance *npi = NULL;
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulog_input *u = (struct ulog_input *) &upi->private;
 	ulog_packet_msg_t *upkt;
@@ -258,11 +257,6 @@ static int ulog_read_cb(int fd, unsigned int what, void *param)
 		}
 		while ((upkt = ipulog_get_packet(u->libulog_h,
 						 u->libulog_buf, len))) {
-			/* since we support the re-use of one instance in
-			 * several different stacks, we duplicate the message
-			 * to let them know */
-			llist_for_each_entry(npi, &upi->plist, plist)
-				interp_packet(npi, output, upkt);
 			interp_packet(upi, output, upkt);
 		}
 	}

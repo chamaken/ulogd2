@@ -601,7 +601,6 @@ do_propagate_ct(struct ulogd_source_pluginstance *upi,
 		int type,
 		struct ct_timestamp *ts)
 {
-	struct ulogd_source_pluginstance *npi = NULL;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *) upi->private;
 
@@ -610,14 +609,6 @@ do_propagate_ct(struct ulogd_source_pluginstance *upi,
 	 * by the several output plugin instance that reference 
 	 * it by means of a pointer. */
 	nfct_copy(cpi->ct, ct, NFCT_CP_OVERRIDE);
-
-	/* since we support the re-use of one instance in
-	 * several different stacks, we duplicate the message
-	 * to let them know */
-	llist_for_each_entry(npi, &upi->plist, plist) {
-		if (propagate_ct(upi, npi, ct, type, ts) != 0)
-			break;
-	}
 
 	propagate_ct(upi, upi, ct, type, ts);
 }

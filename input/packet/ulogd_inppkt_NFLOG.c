@@ -473,16 +473,7 @@ static int msg_cb(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
 		  struct nflog_data *nfa, void *data)
 {
 	struct ulogd_source_pluginstance *upi = data;
-	struct ulogd_source_pluginstance *npi = NULL;
-	int ret = 0;
 
-	/* since we support the re-use of one instance in several 
-	 * different stacks, we duplicate the message to let them know */
-	llist_for_each_entry(npi, &upi->plist, plist) {
-		ret = interp_packet(npi, nfmsg->nfgen_family, nfa);
-		if (ret != 0)
-			return ret;
-	}
 	return interp_packet(upi, nfmsg->nfgen_family, nfa);
 }
 

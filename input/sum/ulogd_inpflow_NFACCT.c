@@ -129,11 +129,6 @@ static void
 do_propagate_nfacct(struct ulogd_source_pluginstance *upi,
 		    struct nfacct *nfacct)
 {
-	struct ulogd_source_pluginstance *npi = NULL;
-
-	llist_for_each_entry(npi, &upi->plist, plist)
-		propagate_nfacct(npi, nfacct);
-
 	propagate_nfacct(upi, nfacct);
 
 	nfacct_free(nfacct);
