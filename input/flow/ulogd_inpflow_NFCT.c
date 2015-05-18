@@ -419,7 +419,7 @@ static struct ulogd_key nfct_okeys[] = {
 	},
 	{
 		.type	= ULOGD_RET_RAW,
-		.flags	= ULOGD_RETF_NONE,
+		.flags	= ULOGD_RETF_DESTRUCT,
 		.name	= "ct.destroy",
 		.destruct = (void (*)(void *))nfct_destroy,
 	},
