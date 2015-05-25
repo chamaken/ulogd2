@@ -139,7 +139,6 @@ static int pgsql_namespace(struct ulogd_pluginstance *upi)
 /* find out which columns the table has */
 static int get_columns_pgsql(struct ulogd_pluginstance *upi)
 {
-	struct ulogd_plugin *upl;
 	struct pgsql_instance *pi = (struct pgsql_instance *) upi->private;
 	char pgbuf[strlen(PGSQL_GETCOLUMN_TEMPLATE_SCHEMA)
 		   + strlen(table_ce(upi->config_kset).u.string) 
@@ -180,13 +179,14 @@ static int get_columns_pgsql(struct ulogd_pluginstance *upi)
 
 	ikey_num = PQntuples(pi->pgres);
 	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", ikey_num);
-	upl = ulogd_plugin_copy_newkeys(upi->plugin, ikey_num, 0);
-	if (upl == NULL) {
+	upi->input_template = calloc(1, sizeof(struct ulogd_keyset)
+				     + sizeof(struct ulogd_key) * ikey_num);
+	if (upi->input_template == NULL) {
 		ulogd_log(ULOGD_ERROR, "ulogd_plugin_copy_newkeys\n");
 		PQclear(pi->pgres);
 		return -ENOMEM;
 	}
-	upi->plugin = upl;
+	upi->input_template->num_keys = ikey_num;
 
 	for (i = 0; i < PQntuples(pi->pgres); i++) {
 		char buf[ULOGD_MAX_KEYLEN+1];
@@ -200,12 +200,13 @@ static int get_columns_pgsql(struct ulogd_pluginstance *upi)
 		DEBUGP("field '%s' found: ", buf);
 
 		/* add it to list of input keys */
-		strncpy(upl->input.keys[i].name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(upi->input_template->keys[i].name, buf,
+			ULOGD_MAX_KEYLEN);
 	}
 
 	/* ID (starting by '.') is a sequence */
-	if (upl->input.keys[0].name[0] == '.')
-		upl->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
+	if (upi->input_template->keys[0].name[0] == '.')
+		upi->input_template->keys[0].flags |= ULOGD_KEYF_INACTIVE;
 
 	PQclear(pi->pgres);
 	return 0;

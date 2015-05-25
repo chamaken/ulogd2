@@ -101,7 +101,6 @@ static void str_tolower(char *s)
 /* find out which columns the table has */
 static int get_columns_dbi(struct ulogd_pluginstance *upi)
 {
-	struct ulogd_plugin *upl;
 	struct dbi_instance *pi = (struct dbi_instance *) upi->private;
 	char *table = table_ce(upi->config_kset).u.string;
 	char query[256];
@@ -126,15 +125,16 @@ static int get_columns_dbi(struct ulogd_pluginstance *upi)
 
 	ikey_num = dbi_result_get_numfields(pi->result);
 	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", ikey_num);
-	upl = ulogd_plugin_copy_newkeys(upi->plugin, ikey_num, 0);
-	if (upl == NULL) {
+	upi->input_template = calloc(1, sizeof(struct ulogd_keyset)
+				     + sizeof(struct ulogd_key) * ikey_num);
+	if (upi->input_template == NULL) {
 		ulogd_log(ULOGD_ERROR, "ulogd_plugin_copy_newkeys\n");
 		dbi_result_free(pi->result);
 		return -ENOMEM;
 	}
-	upi->plugin = upl;
+	upi->input_template->num_keys = ikey_num;
 
-	for (ui=1; ui<=upl->input.num_keys; ui++) {
+	for (ui=1; ui<=upi->input_template->num_keys; ui++) {
 		char buf[ULOGD_MAX_KEYLEN+1];
 		char *underscore;
 		const char* field_name = dbi_result_get_field_name(pi->result, ui);
@@ -152,11 +152,12 @@ static int get_columns_dbi(struct ulogd_pluginstance *upi)
 		DEBUGP("field '%s' found: ", buf);
 
 		/* add it to list of input keys */
-		strncpy(upl->input.keys[ui-1].name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(upi->input_template->keys[ui-1].name, buf,
+			ULOGD_MAX_KEYLEN);
 	}
 
 	/* ID is a sequence */
-	upl->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
+	upi->input_template->keys[0].flags |= ULOGD_KEYF_INACTIVE;
 
 	dbi_result_free(pi->result);
 

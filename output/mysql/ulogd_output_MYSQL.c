@@ -97,7 +97,6 @@ static struct config_keyset kset_mysql = {
 /* find out which columns the table has */
 static int get_columns_mysql(struct ulogd_pluginstance *upi)
 {
-	struct ulogd_plugin *upl;
 	struct mysql_instance *mi = (struct mysql_instance *) upi->private;
 	MYSQL_RES *result;
 	MYSQL_FIELD *field;
@@ -127,13 +126,14 @@ static int get_columns_mysql(struct ulogd_pluginstance *upi)
 
 	ikey_num =  mysql_num_fields(result);
 	ulogd_log(ULOGD_DEBUG, "%u fields in table\n", ikey_num);
-	upl = ulogd_plugin_copy_newkeys(upi->plugin, ikey_num, 0);
-	if (upl == NULL) {
+	upi->input_template = calloc(1, sizeof(struct ulogd_keyset)
+				     + sizeof(struct ulogd_key) * ikey_num);
+	if (upi->input_template) {
 		ulogd_log(ULOGD_ERROR, "ulogd_plugin_copy_newkeys\n");
 		return -ENOMEM;
 	}
-	upi->plugin = upl;
-	
+	upi->input_template->num_keys = ikey_num;
+
 	for (i = 0; (field = mysql_fetch_field(result)); i++) {
 		char buf[ULOGD_MAX_KEYLEN+1];
 		char *underscore;
@@ -146,10 +146,11 @@ static int get_columns_mysql(struct ulogd_pluginstance *upi)
 		DEBUGP("field '%s' found\n", buf);
 
 		/* add it to list of input keys */
-		strncpy(upl->input.keys[i].name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(upi->input_template->keys[i].name, buf,
+			ULOGD_MAX_KEYLEN);
 	}
 	/* MySQL Auto increment ... ID :) */
-	upl->input.keys[0].flags |= ULOGD_KEYF_INACTIVE;
+	upi->input_template->keys[0].flags |= ULOGD_KEYF_INACTIVE;
 	
 	mysql_free_result(result);
 	return 0;
