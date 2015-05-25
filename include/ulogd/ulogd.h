@@ -250,10 +250,7 @@ struct ulogd_plugin {
 	/* followings are plugin (not source)  specific */
 	struct ulogd_keyset input;
 
-	/* returns passed instance nomally.
-	 * returns new one if update_self is true. e.g. DB
-	 * returns NULL on error */
-	struct ulogd_plugin *(*configure)(struct ulogd_pluginstance *instance);
+	int (*configure)(struct ulogd_pluginstance *instance);
 	/* function to construct a new pluginstance
 	 * input may be specific to sink plugin which use wildcard */
 	int (*start)(struct ulogd_pluginstance *pi,
@@ -265,10 +262,6 @@ struct ulogd_plugin {
 	/* function to call for each packet */
 	int (*interp)(struct ulogd_pluginstance *instance,
 		      struct ulogd_keyset *input, struct ulogd_keyset *output);
-
-	/* create new plugin at configure:
-	 * it's a mark free or not */
-	int update_self;
 
 	/* protect interp by mutex */
 	int mtsafe;

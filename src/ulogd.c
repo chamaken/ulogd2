@@ -237,19 +237,6 @@ static struct ulogd_source_plugin *find_source_plugin(const char *name)
 	return NULL;
 }
 
-static void release_updated_plugins(void)
-{
-	struct ulogd_plugin *pl, *tmp;
-
-	llist_for_each_entry_safe(pl, tmp, &ulogd_plugins, list) {
-		if (pl->update_self) {
-			/* XXX: can delete? */
-			llist_del(&pl->list);
-			free(pl);
-		}
-	}
-}
-
 char *type_to_string(int type)
 {
 	switch (type) {
@@ -769,37 +756,19 @@ static int start_pluginstances()
 
 static int configure_pluginstances()
 {
-	struct ulogd_pluginstance *pi, *tmp;
+	struct ulogd_pluginstance *pi;
 	struct ulogd_source_pluginstance *spi;
-	struct ulogd_plugin *newpl;
 	int ret;
 
-	llist_for_each_entry_safe(pi, tmp, &ulogd_pluginstances, list) {
+	/* reverse has less mean... */
+	llist_for_each_entry_reverse(pi, &ulogd_pluginstances, list) {
 		if (pi->plugin->configure) {
-			newpl = pi->plugin->configure(pi);
-			if (newpl == NULL) {
+			ret = pi->plugin->configure(pi);
+			if (ret < 0) {
 				ulogd_log(ULOGD_ERROR, "error during "
 					  "configure of plugin %s\n",
 					  pi->plugin->name);
 				return ULOGD_IRET_ERR;
-			}
-			if (pi->plugin->update_self) {
-				if (newpl == pi->plugin) {
-					ulogd_log(ULOGD_ERROR, "plugin changed "
-						  "but not update_self %s\n",
-						  pi->plugin->name);
-					return ULOGD_IRET_ERR;
-				}
-				pi->plugin = newpl;
-				llist_del(&pi->plugin->list);
-				llist_add(&newpl->list, &ulogd_plugins);
-			} else {
-				if (newpl != pi->plugin) {
-					ulogd_log(ULOGD_ERROR, "plugin has not "
-						  "changed on update_self %s\n",
-						  pi->plugin->name);
-					return ULOGD_IRET_ERR;
-				}
 			}
 		}
 	}
@@ -1294,8 +1263,6 @@ static void sigterm_handler(int signal)
 	stop_pluginstances();
 
 	signal_ufd_fini();
-
-	release_updated_plugins();
 
 #ifndef DEBUG_VALGRIND
 	unload_plugins();
