@@ -532,22 +532,36 @@ static void warn_and_exit(int daemonize)
 	exit(1);
 }
 
+static size_t ulogd_config_keysize(struct config_keyset *kset)
+{
+	if (kset != NULL)
+		return sizeof(struct config_keyset)
+			+ kset->num_ces * sizeof(struct config_entry);
+	return 0;
+}
+
+static void ulogd_copy_config_keyset(struct config_keyset *dst,
+				     struct config_keyset *src)
+{
+	dst->num_ces = src->num_ces;
+	if (src->num_ces)
+		memcpy(dst->ces, src->ces,
+		       src->num_ces * sizeof(struct config_entry));
+}
+
+static struct ulogd_pluginstance *
+pluginstance_alloc(struct ulogd_plugin *pl)
+{
+	return calloc(1, sizeof(struct ulogd_pluginstance)
+		      + ulogd_config_keysize(pl->config_kset)
+		      + pl->priv_size);
+}
+
 static struct ulogd_pluginstance *
 pluginstance_alloc_init(struct ulogd_plugin *pl, const char *pi_id)
 {
-	unsigned int size;
-	struct ulogd_pluginstance *pi;
-	void *ptr;
+	struct ulogd_pluginstance *pi = pluginstance_alloc(pl);
 
-	size = sizeof(struct ulogd_pluginstance);
-	size += pl->priv_size;
-	if (pl->config_kset) {
-		size += sizeof(struct config_keyset);
-		if (pl->config_kset->num_ces)
-			size += pl->config_kset->num_ces
-				* sizeof(struct config_entry);
-	}
-	pi = calloc(1, size);
 	if (!pi)
 		return NULL;
 
@@ -561,20 +575,10 @@ pluginstance_alloc_init(struct ulogd_plugin *pl, const char *pi_id)
 		}
 	}
 
-	ptr = (void *)pi + sizeof(*pi);
-	ptr += pl->priv_size;
 	/* copy config keys */
 	if (pl->config_kset) {
-		pi->config_kset = ptr;
-		ptr += sizeof(struct config_keyset);
-		pi->config_kset->num_ces = pl->config_kset->num_ces;
-		if (pi->config_kset->num_ces) {
-			ptr += pi->config_kset->num_ces
-				* sizeof(struct config_entry);
-			memcpy(pi->config_kset->ces, pl->config_kset->ces,
-			       pi->config_kset->num_ces
-			       * sizeof(struct config_entry));
-		}
+		pi->config_kset = (void *)pi + sizeof(*pi) + pl->priv_size;
+		ulogd_copy_config_keyset(pi->config_kset, pl->config_kset);
 	} else
 		pi->config_kset = NULL;
 
@@ -582,22 +586,19 @@ pluginstance_alloc_init(struct ulogd_plugin *pl, const char *pi_id)
 }
 
 static struct ulogd_source_pluginstance *
-source_pluginstance_alloc_init(struct ulogd_source_plugin *pl,
-				     const char *pi_id)
+source_pluginstance_alloc(struct ulogd_source_plugin *pl)
 {
-	unsigned int size;
-	struct ulogd_source_pluginstance *pi;
-	void *ptr;
+	return calloc(1, sizeof(struct ulogd_source_pluginstance)
+		      + ulogd_config_keysize(pl->config_kset)
+		      + pl->priv_size);
+}
 
-	size = sizeof(struct ulogd_source_pluginstance);
-	size += pl->priv_size;
-	if (pl->config_kset) {
-		size += sizeof(struct config_keyset);
-		if (pl->config_kset->num_ces)
-			size += pl->config_kset->num_ces
-				* sizeof(struct config_entry);
-	}
-	pi = calloc(1, size);
+static struct ulogd_source_pluginstance *
+source_pluginstance_alloc_init(struct ulogd_source_plugin *pl,
+			       const char *pi_id)
+{
+	struct ulogd_source_pluginstance *pi = source_pluginstance_alloc(pl);
+
 	if (!pi)
 		return NULL;
 
@@ -607,20 +608,10 @@ source_pluginstance_alloc_init(struct ulogd_source_plugin *pl,
 	pi->plugin = pl;
 	memcpy(pi->id, pi_id, sizeof(pi->id));
 
-	ptr = (void *)pi + sizeof(*pi);
-	ptr += pl->priv_size;
 	/* copy config keys */
 	if (pl->config_kset) {
-		pi->config_kset = ptr;
-		ptr += sizeof(struct config_keyset);
-		pi->config_kset->num_ces = pl->config_kset->num_ces;
-		if (pi->config_kset->num_ces) {
-			ptr += pi->config_kset->num_ces
-				* sizeof(struct config_entry);
-			memcpy(pi->config_kset->ces, pl->config_kset->ces,
-			       pi->config_kset->num_ces
-			       * sizeof(struct config_entry));
-		}
+		pi->config_kset = (void *)pi + sizeof(*pi) + pl->priv_size;
+		ulogd_copy_config_keyset(pi->config_kset, pl->config_kset);
 	} else
 		pi->config_kset = NULL;
 
