@@ -316,7 +316,11 @@ struct ulogd_pluginstance {
 	/* syncronize interp by BIG lock */
 	pthread_mutex_t interp_mutex;
 
-	/* represent input for wildcarded (sink) pluginstance */
+	/* in configure():
+	 *   for creating dynamic input key
+	 * at start():
+	 *   represent input for wildcarded (sink) pluginstance
+	 */
 	struct ulogd_keyset *input_template;
 
 	/* private data */
