@@ -778,13 +778,12 @@ static int start_pluginstances()
 
 static int configure_pluginstances()
 {
-	struct ulogd_pluginstance *pi;
+	struct ulogd_pluginstance *pi, *tmp;
 	struct ulogd_source_pluginstance *spi;
 	struct ulogd_plugin *newpl;
 	int ret;
 
-	/* reverse has less mean... */
-	llist_for_each_entry_reverse(pi, &ulogd_pluginstances, list) {
+	llist_for_each_entry_safe(pi, tmp, &ulogd_pluginstances, list) {
 		if (pi->plugin->configure) {
 			newpl = pi->plugin->configure(pi);
 			if (newpl == NULL) {
@@ -814,7 +813,7 @@ static int configure_pluginstances()
 		}
 	}
 
-	llist_for_each_entry_reverse(spi, &ulogd_source_pluginstances, list) {
+	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
 		if (spi->plugin->configure) {
 			ret = spi->plugin->configure(spi);
 			if (ret < 0) {
