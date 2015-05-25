@@ -81,7 +81,7 @@ static int _output_syslog(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 		
-static struct ulogd_plugin *syslog_configure(struct ulogd_pluginstance *pi)
+static int syslog_configure(struct ulogd_pluginstance *pi)
 {
 	int syslog_facility, syslog_level;
 	char *facility, *level;
@@ -89,7 +89,7 @@ static struct ulogd_plugin *syslog_configure(struct ulogd_pluginstance *pi)
 
 	/* FIXME: error handling */
 	if (config_parse_file(pi->id, pi->config_kset) < 0)
-		return NULL;
+		return -1;
 
 	facility = pi->config_kset->ces[0].u.string;
 	level = pi->config_kset->ces[1].u.string;
@@ -120,7 +120,7 @@ static struct ulogd_plugin *syslog_configure(struct ulogd_pluginstance *pi)
 		ulogd_log(ULOGD_FATAL, "unknown facility '%s'\n",
 			  facility);
 		/* errno = EINVAL; */
-		return NULL;
+		return -1;
 	}
 
 	if (!strcmp(level, "LOG_EMERG"))
@@ -143,13 +143,13 @@ static struct ulogd_plugin *syslog_configure(struct ulogd_pluginstance *pi)
 		ulogd_log(ULOGD_FATAL, "unknown level '%s'\n",
 			  level);
 		/* errno = EINVAL; */
-		return NULL;
+		return -1;
 	}
 
 	li->syslog_level = syslog_level;
 	li->syslog_facility = syslog_facility;
 
-	return pi->plugin;
+	return 0;
 }
 
 static int syslog_fini(struct ulogd_pluginstance *pi)

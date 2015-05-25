@@ -227,15 +227,9 @@ static void sighup_handler_print(struct ulogd_pluginstance *upi, int signal)
 	}
 }
 
-static struct ulogd_plugin *json_configure(struct ulogd_pluginstance *upi)
+static int json_configure(struct ulogd_pluginstance *upi)
 {
-	int ret;
-
-	ret = config_parse_file(upi->id, upi->config_kset);
-	if (ret < 0)
-		return NULL;
-
-	return upi->plugin;
+	return config_parse_file(upi->id, upi->config_kset);
 }
 
 static int json_init(struct ulogd_pluginstance *upi,

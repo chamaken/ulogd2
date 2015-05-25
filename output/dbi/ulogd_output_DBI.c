@@ -284,16 +284,13 @@ static struct db_driver db_driver_dbi = {
 	.execute	= &execute_dbi,
 };
 
-static struct ulogd_plugin *
-configure_dbi(struct ulogd_pluginstance *upi)
+static int configure_dbi(struct ulogd_pluginstance *upi)
 {
 	struct dbi_instance *pi = (struct dbi_instance *) upi->private;
 
 	pi->db_inst.driver = &db_driver_dbi;
 
-	if (ulogd_db_configure(upi) < 0)
-		return NULL;
-	return upi->plugin;
+	return ulogd_db_configure(upi);
 }
 
 static struct ulogd_plugin dbi_plugin = { 
@@ -314,7 +311,6 @@ static struct ulogd_plugin dbi_plugin = {
 	.signal		= &ulogd_db_signal,
 	.interp		= &ulogd_db_interp,
 	.version	= VERSION,
-	.update_self	= 1,
 };
 
 void __attribute__ ((constructor)) init(void);

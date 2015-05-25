@@ -250,15 +250,12 @@ static struct db_driver db_driver_mysql = {
 	.execute	= &execute_mysql,
 };
 
-static struct ulogd_plugin *
-configure_mysql(struct ulogd_pluginstance *upi)
+static int configure_mysql(struct ulogd_pluginstance *upi)
 {
 	struct db_instance *di = (struct db_instance *) &upi->private;
 	di->driver = &db_driver_mysql;
 
-	if (ulogd_db_configure(upi) < 0)
-		return NULL;
-	return upi->plugin;
+	return ulogd_db_configure(upi);
 }
 
 static struct ulogd_plugin plugin_mysql = {
@@ -279,7 +276,6 @@ static struct ulogd_plugin plugin_mysql = {
 	.signal	   = &ulogd_db_signal,
 	.interp	   = &ulogd_db_interp,
 	.version   = VERSION,
-	.update_self = 1,
 };
 
 void __attribute__ ((constructor)) init(void);

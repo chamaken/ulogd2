@@ -89,14 +89,12 @@ static int interp_mark(struct ulogd_pluginstance *pi,
 	return ULOGD_IRET_OK;	
 }
 
-static struct ulogd_plugin *configure(struct ulogd_pluginstance *upi)
+static int configure(struct ulogd_pluginstance *upi)
 {
 	ulogd_log(ULOGD_DEBUG, "parsing config file section `%s', "
 		  "plugin `%s'\n", upi->id, upi->plugin->name);
 
-	if (config_parse_file(upi->id, upi->config_kset) < 0)
-		return NULL;
-	return upi->plugin;
+	return config_parse_file(upi->id, upi->config_kset);
 }
 
 static struct ulogd_plugin mark_pluging = {

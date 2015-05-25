@@ -268,11 +268,9 @@ static void signal_pcap(struct ulogd_pluginstance *upi, int signal)
 	}
 }
 
-static struct ulogd_plugin *configure_pcap(struct ulogd_pluginstance *upi)
+static int configure_pcap(struct ulogd_pluginstance *upi)
 {
-	if (config_parse_file(upi->id, upi->config_kset) < 0)
-		return NULL;
-	return upi->plugin;
+	return config_parse_file(upi->id, upi->config_kset);
 }
 
 static int start_pcap(struct ulogd_pluginstance *upi,

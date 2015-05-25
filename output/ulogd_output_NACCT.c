@@ -198,15 +198,9 @@ sighup_handler_print(struct ulogd_pluginstance *pi, int signal)
 	}
 }
 
-static struct ulogd_plugin *
-nacct_conf(struct ulogd_pluginstance *pi)
+static int nacct_conf(struct ulogd_pluginstance *pi)
 {
-	int ret;
-
-	if ((ret = config_parse_file(pi->id, pi->config_kset)) < 0)
-		return NULL;
-
-	return pi->plugin;
+	return config_parse_file(pi->id, pi->config_kset);
 }
 
 static int

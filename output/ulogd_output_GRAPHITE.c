@@ -213,12 +213,10 @@ static int fini_graphite(struct ulogd_pluginstance *pi) {
 	return 0;
 }
 
-static struct ulogd_plugin *configure_graphite(struct ulogd_pluginstance *pi)
+static int configure_graphite(struct ulogd_pluginstance *pi)
 {
 	ulogd_log(ULOGD_DEBUG, "parsing config file section %s\n", pi->id);
-	if (config_parse_file(pi->id, pi->config_kset) < 0)
-		return NULL;
-	return pi->plugin;
+	return config_parse_file(pi->id, pi->config_kset);
 }
 
 static struct ulogd_plugin graphite_plugin = {
