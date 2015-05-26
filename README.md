@@ -61,8 +61,6 @@ TODO
 
 英語だめだわ...
 
-* investigate and supress compile warnings
-* revert db
 * would be better to make source pluginstance multi thread?
 * use epoll instead of select?
 
@@ -144,7 +142,7 @@ stack=src,pi1,pi2,...
     +------------------------------
 </pre>
 
-![to propagate](https://github.com/chamaken/could/blob/master/doc/image/propagate.png "propagate")
+![to propagate](https://github.com/chamaken/ulogd2/blob/v3.x/doc/image/propagate.png "propagate")
 
 1. prepare in main.  
    option parsing, instanciate plugin and source_plugin. configure and start those,  
