@@ -253,6 +253,7 @@ static struct ulogd_plugin gprint_plugin = {
 	.stop	= &gprint_fini,
 	.signal = &sighup_handler_print,
 	.config_kset = &gprint_kset,
+	.priv_size = sizeof(struct gprint_priv),
 	.version = VERSION,
 };
 

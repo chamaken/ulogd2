@@ -284,6 +284,7 @@ static struct ulogd_plugin json_plugin = {
 	.stop	= &json_fini,
 	.signal = &sighup_handler_print,
 	.config_kset = &json_kset,
+	.priv_size = sizeof(struct json_priv),
 	.version = VERSION,
 };
 

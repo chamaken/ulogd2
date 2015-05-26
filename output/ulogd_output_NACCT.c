@@ -243,6 +243,7 @@ static struct ulogd_plugin nacct_plugin = {
 	.stop	= &nacct_fini,
 	.signal = &sighup_handler_print,
 	.config_kset = &nacct_kset,
+	.priv_size = sizeof(struct nacct_priv),
 	.version = VERSION,
 };
 

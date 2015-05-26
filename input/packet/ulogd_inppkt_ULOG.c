@@ -324,6 +324,7 @@ struct ulogd_source_plugin libulog_plugin = {
 	.start = &init,
 	.stop = &fini,
 	.config_kset = &libulog_kset,
+	.priv_size = sizeof(struct ulog_input),
 	.version = VERSION,
 };
 
