@@ -71,6 +71,6 @@ int config_register_file(const char *file);
 int config_parse_file(const char *section, struct config_keyset *kset);
 
 /* release ressource allocated by config file handling */
-void config_stop();
+void config_stop(void);
 
 #endif /* ifndef _CONFFILE_H */
