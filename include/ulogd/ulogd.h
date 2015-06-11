@@ -416,6 +416,9 @@ void __ulogd_log(int level, char *file, int line, const char *message, ...);
 	__ulogd_log(level, __FILE__, __LINE__, format, ## args)
 /* backwards compatibility */
 #define ulogd_error(format, args...) ulogd_log(ULOGD_ERROR, format, ## args)
+/* macro for logging including filename for fork()ed process */
+#define ulogd_llog(level, line, format, args...)		\
+	__ulogd_log(level, __FILE__, line, format, ## args)
 
 #define IS_VALID(x)	((x).flags & ULOGD_RETF_VALID)
 #define SET_VALID(x)	(x.flags |= ULOGD_RETF_VALID)
