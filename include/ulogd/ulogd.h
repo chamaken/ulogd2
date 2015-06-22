@@ -101,7 +101,7 @@ struct ulogd_key {
 	} ipfix;
 
 	/* Store field name for Common Information Model */
-	char *cim_name;
+	char cim_name[ULOGD_MAX_KEYLEN+1];
 
 	/* destructor for this key */
 	void (*destruct)(void *u_value_ptr);
