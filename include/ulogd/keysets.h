@@ -9,6 +9,7 @@ struct ulogd_keysets_bundle {
 	struct ulogd_source_pluginstance *spi;
 	unsigned int num_keysets;
 	int refcnt; /* == source_pluginstance.nstacks */
+	size_t length;
 	struct ulogd_keyset keysets[0];
 };
 

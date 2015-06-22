@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 
 #include <urcu/uatomic.h>
 
@@ -102,11 +103,13 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			}
 		}
 	}
-	ksb = calloc(1, ksize);
-	if (ksb == NULL) {
-		ulogd_log(ULOGD_FATAL, "calloc: %s\n", _sys_errlist[errno]);
+	ksb = mmap(NULL, ksize, PROT_READ | PROT_WRITE,
+		   MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (ksb == MAP_FAILED) {
+		ulogd_log(ULOGD_FATAL, "mmap: %s\n", _sys_errlist[errno]);
 		return NULL;
 	}
+	ksb->length = ksize;
 	ulogd_log(ULOGD_INFO, "source pluginstance [%s:%s], data size: %d [%p:%p]\n",
 		  spi->id, spi->plugin->name, ksize, ksb, (void *)ksb + ksize);
 
@@ -228,9 +231,11 @@ ulogd_keysets_bundle_copy(struct ulogd_keysets_bundle *src)
 			size += skeyset[i].keys[j].len;
 		}
 	}
-	dst = calloc(1, size);
+	dst = mmap(NULL, size, PROT_READ | PROT_WRITE,
+		   MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	if (dst == NULL)
 		return NULL;
+	dst->length = size;
 
 	ulogd_log(ULOGD_INFO, "copy - data size: %d [%p:%p]\n",
 		  size, dst, (void *)dst + size);
@@ -340,7 +345,8 @@ int ulogd_keysets_bundles_destroy(struct ulogd_source_pluginstance *spi)
 	}
 	llist_for_each_entry_safe(ksb, tmp, &spi->keysets_bundles, list) {
 		llist_del(&ksb->list);
-		free(ksb);
+		munmap(ksb, ksb->length);
+		ksb = NULL;
 	}
 	ret = pthread_mutex_unlock(&spi->keysets_bundles_mutex);
 	if (ret != 0) {
