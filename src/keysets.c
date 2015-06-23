@@ -443,8 +443,7 @@ void printf_source_pluginstance(FILE *out, struct ulogd_source_pluginstance *spi
 	}
 }
 
-/* push back keysets bundle
- * caller: thread.c */
+/* push back keysets bundle */
 int ulogd_put_keysets_bundle(struct ulogd_keysets_bundle *ksb)
 {
 	struct ulogd_source_pluginstance *spi = ksb->spi;
@@ -489,6 +488,7 @@ int ulogd_clean_results(struct ulogd_keysets_bundle *ksb)
 				continue;
 
 			if (key->flags & ULOGD_RETF_FREE) {
+				/* can be a NULL */
 				free(key->u.value.ptr);
 				key->u.value.ptr = NULL;
 			} else if (key->flags & ULOGD_RETF_DESTRUCT
@@ -541,4 +541,14 @@ ulogd_get_output_keyset(struct ulogd_source_pluginstance *spi)
 	}
 
 	return ksb->keysets;
+}
+
+int ulogd_put_output_keyset(struct ulogd_keyset *okeys)
+{
+	struct ulogd_keysets_bundle *ksb
+		= (void *)okeys - offsetof(struct ulogd_keysets_bundle, keysets);
+		/* = container_of(okeys, struct ulogd_keysets_bundle, keysets); */
+
+	ulogd_clean_results(ksb);
+	return ulogd_put_keysets_bundle(ksb);
 }

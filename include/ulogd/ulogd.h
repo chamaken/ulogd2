@@ -403,6 +403,7 @@ void ulogd_register_source_plugin(struct ulogd_source_plugin *me);
 /* keysets.c */
 struct ulogd_keyset *
 ulogd_get_output_keyset(struct ulogd_source_pluginstance *spi);
+int ulogd_put_output_keyset(struct ulogd_keyset *okeys);
 
 /* allocate new ulogd_plugin with specified key size, and copy */
 struct ulogd_plugin *ulogd_plugin_copy_newkeys(struct ulogd_plugin *src,
