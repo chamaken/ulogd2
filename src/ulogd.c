@@ -341,7 +341,7 @@ void get_plugin_infos(struct ulogd_plugin *me, int has_input)
 		printf("\tInput plugin, No keys\n");
 	}
 	printf("Output keys:\n");
-	if (me->output.type != ULOGD_DTYPE_SINK) {
+	if ((me->output.type & ULOGD_DTYPE_SINK) == 0) {
 		if (me->output.num_keys == 0) {
 			printf("\tNo statically defined keys\n");
 		} else {
@@ -792,7 +792,7 @@ static int create_stack(const char *option)
 {
 	struct ulogd_stack *stack;
 	struct ulogd_plugin *pl = NULL, *pl_prev;
-	struct ulogd_pluginstance *pi;
+	struct ulogd_pluginstance *pi = NULL;
 	struct ulogd_source_plugin *spl;
 	struct ulogd_source_pluginstance *spi;
 	struct ulogd_stack_element *elem, *elem2;
@@ -915,8 +915,8 @@ static int create_stack(const char *option)
 	}
 
 	/* check the last output key type */
-	if (pl != NULL && pl->output.type != ULOGD_DTYPE_SINK) {
-		ulogd_log(ULOGD_ERROR, "last plugin in stack "
+	if (pi != NULL && (pi->output_template->type & ULOGD_DTYPE_SINK) == 0) {
+		ulogd_log(ULOGD_ERROR, "last pluginstance in stack "
 			  "has to be output plugin\n");
 		ret = -EINVAL;
 		goto out_elements;
