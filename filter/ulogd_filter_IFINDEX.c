@@ -29,13 +29,13 @@ static struct ulogd_key ifindex_keys[] = {
 	{ 
 		.type = ULOGD_RET_STRING,
 		.len = IFNAMSIZ,
-		.flags = ULOGD_RETF_NONE,
+		.flags = ULOGD_RETF_EMBED,
 		.name = "oob.in", 
 	},
 	{ 
 		.type = ULOGD_RET_STRING,
 		.len = IFNAMSIZ,
-		.flags = ULOGD_RETF_NONE,
+		.flags = ULOGD_RETF_EMBED,
 		.name = "oob.out", 
 	},
 };
@@ -64,18 +64,16 @@ static int interp_ifindex(struct ulogd_pluginstance *pi,
 {
 	struct ulogd_key *ret = output->keys;
 	struct ulogd_key *inp = input->keys;
-	static char indev[IFNAMSIZ];
-	static char outdev[IFNAMSIZ];
+	char *indev = okey_get_ptr(&ret[0]);
+	char *outdev = okey_get_ptr(&ret[1]);
 
 	nlif_index2name(nlif_inst, ikey_get_u32(&inp[0]), indev);
 	if (indev[0] == '*')
 		indev[0] = 0;
-	okey_set_ptr(&ret[0], indev);
 
 	nlif_index2name(nlif_inst, ikey_get_u32(&inp[1]), outdev);
 	if (outdev[0] == '*')
 		outdev[0] = 0;
-	okey_set_ptr(&ret[1], outdev);
 
 	return ULOGD_IRET_OK;
 }
