@@ -14,40 +14,41 @@
 
 struct worklist {
 	struct llist_head list;
-	void *data;
+	struct ulogd_pluginstance *data;
 };
 
-static int wildcard_num(struct ulogd_plugin *pl, struct llist_head *head)
+/* XXX: not surely work like - id1:PL1,id2:PL2:id1:PL1 */
+static int wildcard_num(struct ulogd_pluginstance *pi, struct llist_head *head)
 {
 	struct worklist *w;
 
 	llist_for_each_entry(w, head, list) {
-		if (w->data == pl)
+		if (w->data == pi)
 			return 0;
 	}
-	return pl->output.num_keys;
+	return UPI_OUTPUT_KEYSET(pi)->num_keys;
 }
 
 static struct ulogd_keysets_bundle *
 ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 {
 	struct ulogd_keysets_bundle *ksb;
-	struct ulogd_keyset *keysets, *input, *output;
+	struct ulogd_keyset *keysets, *srcout, *input, *output;
 	struct ulogd_key *keys;
 	struct ulogd_stack *stack;
 	struct ulogd_stack_element *element;
-	struct ulogd_plugin *pl, *p2;
 	unsigned int ksize, kindex = 0, i, s;
 	unsigned int wildnum, nkeys;
 	void *raw;
-	LLIST_HEAD(plugins);
+	LLIST_HEAD(pluginstances);
 	struct worklist *tmp;
 
-	wildnum = spi->plugin->output.num_keys;
+	srcout = UPI_OUTPUT_KEYSET(spi);
+	wildnum = srcout->num_keys;
 	/* calc source pluginstance wide number of wildcard key: 1st */
 	llist_for_each_entry(stack, &spi->stacks, list) {
 		llist_for_each_entry(element, &stack->elements, list) {
-			s = wildcard_num(element->pi->plugin, &plugins);
+			s = wildcard_num(element->pi, &pluginstances);
 			if (s) {
 				tmp = alloca(sizeof(*tmp));
 				if (tmp == NULL) {
@@ -55,8 +56,8 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 						  _sys_errlist[errno]);
 					return NULL;
 				}
-				tmp->data = element->pi->plugin;
-				llist_add(&tmp->list, &plugins);
+				tmp->data = element->pi;
+				llist_add(&tmp->list, &pluginstances);
 			}
 			wildnum += s;
 		}
@@ -65,24 +66,18 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 	/* XXX: lengthed type input key? */
 	/* calc whole size: 2nd */
 	ksize = sizeof(struct ulogd_keysets_bundle);
-	if (spi->plugin->output.num_keys > 0) {
+	if (srcout->num_keys > 0) {
 		ksize += sizeof(struct ulogd_keyset);
-		for (i = 0; i < spi->plugin->output.num_keys; i++) {
-			struct ulogd_key *k = &spi->plugin->output.keys[i];
+		for (i = 0; i < srcout->num_keys; i++) {
 			ksize += sizeof(struct ulogd_key);
-			ksize += k->len;
+			ksize += srcout->keys[i].len;
 		}
 		kindex++;
 	}
-	nkeys = spi->plugin->output.num_keys;
+	nkeys = srcout->num_keys;
 	llist_for_each_entry(stack, &spi->stacks, list) {
 		llist_for_each_entry(element, &stack->elements, list) {
-			pl = element->pi->plugin;
-			if (element->pi->input_template != NULL)
-				/* configure() created input keyset */
-				input = element->pi->input_template;
-			else
-				input = &pl->input;
+			input = UPI_INPUT_KEYSET(element->pi);
 			element->iksbi = kindex++;
 			ksize += sizeof(struct ulogd_keyset);
 			if (input->type & ULOGD_KEYF_WILDCARD) {
@@ -97,10 +92,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			element->oksbi = kindex++;
 			ksize += sizeof(struct ulogd_keyset);
 
-			if (element->pi->output_template != NULL)
-				output = element->pi->output_template;
-			else
-				output = &pl->output;
+			output = UPI_OUTPUT_KEYSET(element->pi);
 			for (i = 0; i < output->num_keys; i++) {
 				ksize += sizeof(struct ulogd_key);
 				ksize += output->keys[i].len;
@@ -128,14 +120,14 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 	raw = &keys[nkeys];
 
 	/* init ulogd_keyset for source output */
-	if (spi->plugin->output.num_keys) {
-		keysets->num_keys = spi->plugin->output.num_keys;
-		keysets->type = spi->plugin->output.type;
+	if (srcout->num_keys) {
+		keysets->num_keys = srcout->num_keys;
+		keysets->type = srcout->type;
 		keysets->keys = keys;
 
 		ksize = keysets->num_keys * sizeof(struct ulogd_key);
-		memcpy(keys, spi->plugin->output.keys, ksize);
-		for (i = 0; i < spi->plugin->output.num_keys; i++) {
+		memcpy(keys, srcout->keys, ksize);
+		for (i = 0; i < srcout->num_keys; i++) {
 			if (keys[i].len != 0) {
 				keys[i].u.value.ptr = raw;
 				raw += keys[i].len;
@@ -148,27 +140,22 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 	/* walk through 3 times... */
 	llist_for_each_entry(stack, &spi->stacks, list) {
 		llist_for_each_entry(element, &stack->elements, list) {
-			pl = element->pi->plugin;
-			if (element->pi->input_template != NULL)
-				/* configure() created input keyset */
-				input = element->pi->input_template;
-			else
-				input = &pl->input;
+			input = UPI_INPUT_KEYSET(element->pi);
 			if (input->type & ULOGD_KEYF_WILDCARD) {
 				keysets->num_keys = wildnum;
 				/* and type should be ULOGD_KEYF_OPTIONAL ? */
 				keysets->keys = keys;
 
 				/* oh my... sorry for deep nest */
-				if (spi->plugin->output.num_keys) {
-					memcpy(keys, spi->plugin->output.keys,
-					       spi->plugin->output.num_keys
+				if (srcout->num_keys) {
+					memcpy(keys, srcout->keys,
+					       srcout->num_keys
 					       * sizeof(struct ulogd_key));
-					keys += spi->plugin->output.num_keys;
+					keys += srcout->num_keys;
 				}
-				llist_for_each_entry(tmp, &plugins, list) {
-					p2 = tmp->data;
-					struct ulogd_keyset *ok	= &p2->output;
+				llist_for_each_entry(tmp, &pluginstances, list) {
+					struct ulogd_keyset *ok
+						= UPI_OUTPUT_KEYSET(tmp->data);
 					unsigned int n = ok->num_keys;
 					ksize = n * sizeof(struct ulogd_key);
 					if (n) {
@@ -188,10 +175,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			}
 			keysets++;
 
-			if (element->pi->output_template != NULL)
-				output = element->pi->output_template;
-			else
-				output = &pl->output;
+			output = UPI_OUTPUT_KEYSET(element->pi);
 			if (output->num_keys) {
 				keysets->num_keys = output->num_keys;
 				keysets->type = output->type;

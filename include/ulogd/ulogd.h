@@ -298,6 +298,7 @@ struct ulogd_pluginstance {
 	char id[ULOGD_MAX_KEYLEN + 1];
 	/* per-instance config parameters (array) */
 	struct config_keyset *config_kset;
+	struct ulogd_keyset *output_template;
 
 	/* followings are specific pluginstance */
 
@@ -315,7 +316,6 @@ struct ulogd_pluginstance {
 	 *   represent input for wildcarded (sink) pluginstance
 	 */
 	struct ulogd_keyset *input_template;
-	struct ulogd_keyset *output_template;
 
 	/* private data */
 	char private[0];
@@ -328,6 +328,7 @@ struct ulogd_source_pluginstance {
 	char id[ULOGD_MAX_KEYLEN + 1];
 	/* per-instance config parameters (array) */
 	struct config_keyset *config_kset;
+	struct ulogd_keyset *output_template;
 
 	/* followings are specific source_pluginstance */
 
@@ -354,6 +355,14 @@ struct ulogd_source_pluginstance {
 	/* private data */
 	char private[0];
 };
+
+#define UPI_OUTPUT_KEYSET(upi) (upi->output_template != NULL \
+	 ? upi->output_template	      \
+	 : &upi->plugin->output)
+#define UPI_INPUT_KEYSET(upi) (upi->input_template != NULL \
+	 ? upi->input_template	      \
+	 : &upi->plugin->input)
+
 
 struct ulogd_stack {
 	struct llist_head list;

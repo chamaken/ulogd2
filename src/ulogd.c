@@ -791,8 +791,8 @@ static int configure_pluginstances()
 static int create_stack(const char *option)
 {
 	struct ulogd_stack *stack;
-	struct ulogd_plugin *pl = NULL, *pl_prev;
-	struct ulogd_pluginstance *pi = NULL;
+	struct ulogd_plugin *pl = NULL;
+	struct ulogd_pluginstance *pi = NULL, *pi_prev;
 	struct ulogd_source_plugin *spl;
 	struct ulogd_source_pluginstance *spi;
 	struct ulogd_stack_element *elem, *elem2;
@@ -856,7 +856,7 @@ static int create_stack(const char *option)
 	}
 
 	/* access source plugin as normal plugin for key consistency check */
-	pl_prev = (struct ulogd_plugin *)spi;
+	pi_prev = (struct ulogd_pluginstance *)spi;
 
 	/* PASS 2: find and instanciate plugins of stack, link them together */
 	tok = strtok(NULL, ",\n");
@@ -883,15 +883,6 @@ static int create_stack(const char *option)
 			ret = -ENODEV;
 			goto out_name;
 		}
-
-		/* check input/output key consistency */
-		if (pl->input.type & pl_prev->output.type) {
-			ulogd_log(ULOGD_ERROR, "type mismatch between "
-				  "%s and %s in stack\n",
-				  pl->name,
-				  pl_prev->name);
-		}
-
 		pi = lookup_pluginstance(pl, pi_id);
 		if (!pi) {
 			ulogd_log(ULOGD_ERROR,
@@ -899,6 +890,15 @@ static int create_stack(const char *option)
 				  pi_id);
 			ret = -ENOMEM;
 			goto out_name;
+		}
+
+		/* check input/output key consistency */
+		if (UPI_INPUT_KEYSET(pi)->type
+		    & UPI_OUTPUT_KEYSET(pi_prev)->type) {
+			ulogd_log(ULOGD_ERROR, "type mismatch between "
+				  "%s:%s and %s:%s in stack\n",
+				  pi->id, pi->plugin->name,
+				  pi_prev->id, pi_prev->plugin->name);
 		}
 
 		ulogd_log(ULOGD_DEBUG, "pushing `%s' on stack\n", pl->name);
