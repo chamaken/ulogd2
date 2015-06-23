@@ -503,22 +503,6 @@ void __ulogd_log(int level, char *file, int line, const char *format, ...)
 	}
 }
 
-static void warn_and_exit(int daemonize)
-{
-	cleanup_pidfile();
-
-	if (!daemonize) {
-		if (logfile && !verbose) {
-			fprintf(stderr, "Fatal error, check logfile \"%s\""
-				" or use '-v' flag.\n",
-				ulogd_logfile);
-
-		} else
-			fprintf(stderr, "Fatal error.\n");
-	}
-	exit(1);
-}
-
 static size_t ulogd_config_keysize(struct config_keyset *kset)
 {
 	if (kset != NULL)
@@ -723,8 +707,8 @@ static int ulogd_stacks_destroy(struct ulogd_source_pluginstance *spi)
 
 static int start_pluginstances()
 {
-	struct ulogd_pluginstance *pi;
-	struct ulogd_source_pluginstance *spi;
+	struct ulogd_pluginstance *pi, *err_pi = NULL;
+	struct ulogd_source_pluginstance *spi, *err_spi = NULL;
 	int ret;
 
 	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
@@ -734,10 +718,12 @@ static int start_pluginstances()
 				ulogd_log(ULOGD_ERROR, "error during "
 					  "start of plugin %s\n",
 					  spi->plugin->name);
-				return ret;
+				err_spi = spi;
+				goto call_stop;
 			}
 		}
 	}
+	err_spi = NULL;
 
 	llist_for_each_entry(pi, &ulogd_pluginstances, list) {
 		if (pi->plugin->start) {
@@ -746,12 +732,34 @@ static int start_pluginstances()
 				ulogd_log(ULOGD_ERROR, "error during "
 					  "start of plugin %s\n",
 					  pi->plugin->name);
-				return ret;
+				err_pi = pi;
+				goto call_stop;
 			}
 		}
 	}
 
 	return 0;
+
+call_stop:
+	if (err_spi != NULL) {
+		llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
+			if (spi == err_spi)
+				break;
+			if (spi->plugin->stop) {
+				spi->plugin->stop(spi);
+			}
+		}
+	}
+	if (err_pi != NULL) {
+		llist_for_each_entry(pi, &ulogd_pluginstances, list) {
+			if (pi == err_pi)
+				break;
+			if (pi->plugin->stop) {
+				pi->plugin->stop(pi);
+			}
+		}
+	}
+	return -1;
 }
 
 static int configure_pluginstances()
@@ -1233,6 +1241,22 @@ static void stop_pluginstances(void)
 	}
 }
 
+static void warn_and_exit(int daemonize)
+{
+	cleanup_pidfile();
+
+	if (!daemonize) {
+		if (logfile && !verbose) {
+			fprintf(stderr, "Fatal error, check logfile \"%s\""
+				" or use '-v' flag.\n",
+				ulogd_logfile);
+
+		} else
+			fprintf(stderr, "Fatal error.\n");
+	}
+	exit(1);
+}
+
 #ifndef DEBUG_VALGRIND
 static void unload_plugins(void)
 {
@@ -1558,10 +1582,13 @@ int main(int argc, char* argv[])
 	}
 	if (signal_ufd_init()) {
 		ulogd_log(ULOGD_FATAL, "prepare_signal\n");
+		stop_pluginstances();
 		warn_and_exit(daemonize);
 	}
 	if (ulogd_start_workers(ULOGD_N_INTERP_THREAD) < 0) {
 		ulogd_log(ULOGD_FATAL, "ulogd_start_worker\n");
+		ulogd_stop_workers();
+		stop_pluginstances();
 		warn_and_exit(daemonize);
 	}
 

@@ -484,6 +484,9 @@ int ulogd_stop_workers(void)
 			      struct ulogd_interp_thread, list);
 	int ret, *retval;
 
+	if (llist_empty(&ulogd_interp_workers))
+		return 0;
+
 	llist_for_each_entry(cur, &ulogd_interp_workers, list) {
 		ret = pthread_mutex_lock(&cur->mutex);
 		if (ret != 0) {
