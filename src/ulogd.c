@@ -1223,8 +1223,9 @@ static void stop_pluginstances(void)
 			ulogd_log(ULOGD_DEBUG, "calling stop for %s:%s\n",
 				  spi->id, spi->plugin->name);
 			spi->plugin->stop(spi);
-			spi->private[0] = 0;
 		}
+		if (spi->plugin->priv_size > 0)
+			spi->private[0] = 0;
 		ulogd_stacks_destroy(spi);
 		ulogd_keysets_bundles_destroy(spi);
 		free(spi);
@@ -1235,8 +1236,9 @@ static void stop_pluginstances(void)
 			ulogd_log(ULOGD_DEBUG, "calling stop for %s:%s\n",
 				  pi->id, pi->plugin->name);
 			pi->plugin->stop(pi);
-			pi->private[0] = 0;
 		}
+		if (pi->plugin->priv_size > 0)
+			pi->private[0] = 0;
 		free(pi);
 	}
 }
