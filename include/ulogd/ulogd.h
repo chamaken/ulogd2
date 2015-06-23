@@ -310,11 +310,12 @@ struct ulogd_pluginstance {
 	pthread_mutex_t interp_mutex;
 
 	/* in configure():
-	 *   for creating dynamic input key
+	 *   for creating dynamic input/output key
 	 * at start():
 	 *   represent input for wildcarded (sink) pluginstance
 	 */
 	struct ulogd_keyset *input_template;
+	struct ulogd_keyset *output_template;
 
 	/* private data */
 	char private[0];

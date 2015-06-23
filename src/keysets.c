@@ -32,7 +32,7 @@ static struct ulogd_keysets_bundle *
 ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 {
 	struct ulogd_keysets_bundle *ksb;
-	struct ulogd_keyset *keysets, *input;
+	struct ulogd_keyset *keysets, *input, *output;
 	struct ulogd_key *keys;
 	struct ulogd_stack *stack;
 	struct ulogd_stack_element *element;
@@ -79,6 +79,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 		llist_for_each_entry(element, &stack->elements, list) {
 			pl = element->pi->plugin;
 			if (element->pi->input_template != NULL)
+				/* configure() created input keyset */
 				input = element->pi->input_template;
 			else
 				input = &pl->input;
@@ -95,10 +96,14 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 
 			element->oksbi = kindex++;
 			ksize += sizeof(struct ulogd_keyset);
-			for (i = 0; i < pl->output.num_keys; i++) {
-				struct ulogd_key *k = &pl->output.keys[i];
+
+			if (element->pi->output_template != NULL)
+				output = element->pi->output_template;
+			else
+				output = &pl->output;
+			for (i = 0; i < output->num_keys; i++) {
 				ksize += sizeof(struct ulogd_key);
-				ksize += k->len;
+				ksize += output->keys[i].len;
 				nkeys++;
 			}
 		}
@@ -145,6 +150,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 		llist_for_each_entry(element, &stack->elements, list) {
 			pl = element->pi->plugin;
 			if (element->pi->input_template != NULL)
+				/* configure() created input keyset */
 				input = element->pi->input_template;
 			else
 				input = &pl->input;
@@ -181,13 +187,18 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 				keys += keysets->num_keys;
 			}
 			keysets++;
-			if (pl->output.num_keys) {
-				keysets->num_keys = pl->output.num_keys;
-				keysets->type = pl->output.type;
+
+			if (element->pi->output_template != NULL)
+				output = element->pi->output_template;
+			else
+				output = &pl->output;
+			if (output->num_keys) {
+				keysets->num_keys = output->num_keys;
+				keysets->type = output->type;
 
 				ksize = keysets->num_keys
 					* sizeof(struct ulogd_key);
-				memcpy(keys, pl->output.keys, ksize);
+				memcpy(keys, output->keys, ksize);
 				for (i = 0; i < keysets->num_keys; i++) {
 					if (keys[i].len != 0) {
 						keys[i].u.value.ptr = raw;
@@ -199,11 +210,15 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			}
 			keysets++;
 
-			/* NOTE: set input_template here */
+			/* NOTE: (re)set input/output template here */
 			if (element->pi->input_template != NULL)
 				free(element->pi->input_template);
 			element->pi->input_template
 				= &ksb->keysets[element->iksbi];
+			if (element->pi->output_template != NULL)
+				free(element->pi->output_template);
+			element->pi->output_template
+				= &ksb->keysets[element->oksbi];
 		}
 	}
 	return ksb;
