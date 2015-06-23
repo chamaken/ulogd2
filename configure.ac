@@ -162,6 +162,29 @@ fi
 dnl Check for urcu lib (uatomic only now)
 AC_CHECK_HEADER(urcu/uatomic.h,[],[AC_MSG_ERROR(requires urcu).])
 
+AC_ARG_ENABLE(python,
+       AS_HELP_STRING([--enable-python], [Enable python module [default=yes]]),[enable_python=$enableval],[enable_python=yes])
+AS_IF([test "x$enable_python" = "xyes"], [
+    AM_PATH_PYTHON([3.2], [
+        PKG_CHECK_MODULES([LIBPYTHON], [python-$PYTHON_VERSION], [
+	    AC_PATH_PROG(PYTHON_CONFIG, python$PYTHON_VERSION-config, no)
+	    AS_IF([test "$PYTHON_CONFIG" = no],
+	        [AC_MSG_ERROR([cannot find python-config for $PYTHON])
+	         enable_python="no"],
+	        [AC_MSG_CHECKING([python cflags])
+	         python_CFLAGS=`$PYTHON_CONFIG --cflags`
+	         AC_SUBST([python_CFLAGS])
+	         AC_MSG_RESULT([$python_CFLAGS])
+	         AC_MSG_CHECKING([python ldflags])
+	         python_LDFLAGS=`$PYTHON_CONFIG --ldflags`
+	         AC_SUBST([python_LDFLAGS])
+	         AC_MSG_RESULT([$python_LDFLAGS])
+	        ])
+            ], enable_python="no")
+    ], enable_python="no")
+])
+AM_CONDITIONAL([HAVE_PYTHON], [test "x$enable_python" = "xyes"])
+
 dnl AC_SUBST(DATABASE_DIR)
 dnl AC_SUBST(DATABASE_LIB)
 dnl AC_SUBST(DATABASE_LIB_DIR)
@@ -181,7 +204,7 @@ AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile include/libipulog/Makefi
 	  input/sum/Makefile \
 	  filter/Makefile filter/raw2packet/Makefile filter/packet2flow/Makefile \
 	  output/Makefile output/pcap/Makefile output/mysql/Makefile output/pgsql/Makefile output/sqlite3/Makefile \
-	  output/dbi/Makefile \
+	  output/dbi/Makefile python/Makefile \
 	  src/Makefile Makefile Rules.make)
 AC_OUTPUT
 
@@ -199,5 +222,6 @@ Ulogd configuration:
     SQLITE3 plugin:			${enable_sqlite3}
     DBI plugin:				${enable_dbi}
     JSON plugin:			${enable_jansson}
+  PYTHON plugin:			${enable_python}
 "
 echo "You can now run 'make' and 'make install'"
