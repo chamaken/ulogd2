@@ -146,6 +146,7 @@ static int nfacct_cb(const struct nlmsghdr *nlh, void *data)
 
 	if (nfacct_nlmsg_parse_payload(nlh, nfacct) < 0) {
 		ulogd_log(ULOGD_ERROR, "Error parsing nfacct message");
+		ulogd_put_output_keyset(output);
 		goto err;
 	}
 
