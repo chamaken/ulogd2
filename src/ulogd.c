@@ -1538,6 +1538,11 @@ int main(int argc, char* argv[])
 		warn_and_exit(daemonize);
 	}
 
+	if (signal_ufd_init()) {
+		ulogd_log(ULOGD_FATAL, "prepare_signal\n");
+		warn_and_exit(daemonize);
+	}
+
 	/* parse config file */
 	if (parse_conffile("global", &ulogd_kset)) {
 		ulogd_log(ULOGD_FATAL, "unable to parse config file\n");
@@ -1598,11 +1603,6 @@ int main(int argc, char* argv[])
 	}
 	if (start_pluginstances()) {
 		ulogd_log(ULOGD_FATAL, "start_pluginstances\n");
-		warn_and_exit(daemonize);
-	}
-	if (signal_ufd_init()) {
-		ulogd_log(ULOGD_FATAL, "prepare_signal\n");
-		stop_pluginstances();
 		warn_and_exit(daemonize);
 	}
 	if (ulogd_start_workers(ULOGD_N_INTERP_THREAD) < 0) {
