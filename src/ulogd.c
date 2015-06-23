@@ -705,6 +705,28 @@ static int ulogd_stacks_destroy(struct ulogd_source_pluginstance *spi)
 	return 0;
 }
 
+static int check_last_output()
+{
+	struct ulogd_source_pluginstance *spi;
+	struct ulogd_stack *stack;
+	struct ulogd_stack_element *elem;
+
+	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
+		llist_for_each_entry(stack, &spi->stacks, list) {
+			elem = llist_entry(stack->elements.prev,
+					   struct ulogd_stack_element, list);
+			/* check the last output key type */
+			if ((elem->pi->output_template->type
+			     & ULOGD_DTYPE_SINK) == 0) {
+				ulogd_log(ULOGD_ERROR, "last pluginstance in stack "
+					  "has to be output plugin\n");
+				return -EINVAL;
+			}
+		}
+	}
+	return 0;
+}
+
 static int start_pluginstances()
 {
 	struct ulogd_pluginstance *pi, *err_pi = NULL;
@@ -920,14 +942,6 @@ static int create_stack(const char *option)
 		}
 		elem->pi = pi;
 		llist_add_tail(&elem->list, &stack->elements);
-	}
-
-	/* check the last output key type */
-	if (pi != NULL && (pi->output_template->type & ULOGD_DTYPE_SINK) == 0) {
-		ulogd_log(ULOGD_ERROR, "last pluginstance in stack "
-			  "has to be output plugin\n");
-		ret = -EINVAL;
-		goto out_elements;
 	}
 
 	llist_add(&stack->list, &spi->stacks);
@@ -1576,6 +1590,10 @@ int main(int argc, char* argv[])
 	if (ulogd_keysets_bundles_alloc_init(&ulogd_source_pluginstances,
 					     ULOGD_N_PERSTACK_DATA)) {
 		ulogd_log(ULOGD_FATAL, "ulogd_keysets_bundles_alloc_init\n");
+		warn_and_exit(daemonize);
+	}
+	if (check_last_output()) {
+		ulogd_log(ULOGD_FATAL, "check_last_output\n");
 		warn_and_exit(daemonize);
 	}
 	if (start_pluginstances()) {
