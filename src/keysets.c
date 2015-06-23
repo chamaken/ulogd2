@@ -143,6 +143,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 	llist_for_each_entry(stack, &spi->stacks, list) {
 		llist_for_each_entry(element, &stack->elements, list) {
 			input = UPI_INPUT_KEYSET(element->pi);
+			keysets->type = input->type;
 			if (input->type & ULOGD_KEYF_WILDCARD) {
 				keysets->num_keys = wildnum;
 				/* and type should be ULOGD_KEYF_OPTIONAL ? */
@@ -167,7 +168,6 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 				}
 			} else if (input->num_keys) {
 				keysets->num_keys = input->num_keys;
-				keysets->type = input->type;
 				keysets->keys = keys;
 
 				ksize = keysets->num_keys
@@ -178,9 +178,9 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			keysets++;
 
 			output = UPI_OUTPUT_KEYSET(element->pi);
+			keysets->type = output->type;
 			if (output->num_keys) {
 				keysets->num_keys = output->num_keys;
-				keysets->type = output->type;
 
 				ksize = keysets->num_keys
 					* sizeof(struct ulogd_key);
