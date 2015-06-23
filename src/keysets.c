@@ -70,7 +70,8 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 		ksize += sizeof(struct ulogd_keyset);
 		for (i = 0; i < srcout->num_keys; i++) {
 			ksize += sizeof(struct ulogd_key);
-			ksize += srcout->keys[i].len;
+			if (srcout->keys[i].flags & ULOGD_RETF_EMBED)
+				ksize += srcout->keys[i].len;
 		}
 		kindex++;
 	}
@@ -95,7 +96,8 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			output = UPI_OUTPUT_KEYSET(element->pi);
 			for (i = 0; i < output->num_keys; i++) {
 				ksize += sizeof(struct ulogd_key);
-				ksize += output->keys[i].len;
+				if (output->keys[i].flags & ULOGD_RETF_EMBED)
+					ksize += output->keys[i].len;
 				nkeys++;
 			}
 		}
@@ -128,7 +130,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 		ksize = keysets->num_keys * sizeof(struct ulogd_key);
 		memcpy(keys, srcout->keys, ksize);
 		for (i = 0; i < srcout->num_keys; i++) {
-			if (keys[i].len != 0) {
+			if (keys[i].flags & ULOGD_RETF_EMBED) {
 				keys[i].u.value.ptr = raw;
 				raw += keys[i].len;
 			}
@@ -184,7 +186,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 					* sizeof(struct ulogd_key);
 				memcpy(keys, output->keys, ksize);
 				for (i = 0; i < keysets->num_keys; i++) {
-					if (keys[i].len != 0) {
+					if (keys[i].flags & ULOGD_RETF_EMBED) {
 						keys[i].u.value.ptr = raw;
 						raw += keys[i].len;
 					}
@@ -227,7 +229,8 @@ ulogd_keysets_bundle_copy(struct ulogd_keysets_bundle *src)
 	for (i = 0, skeyset = src->keysets; i < src->num_keysets; i++) {
 		for (j = 0; j < skeyset[i].num_keys; j++) {
 			size += sizeof(struct ulogd_key);
-			size += skeyset[i].keys[j].len;
+			if (skeyset[i].keys[j].flags & ULOGD_RETF_EMBED)
+				size += skeyset[i].keys[j].len;
 		}
 	}
 	dst = mmap(NULL, size, PROT_READ | PROT_WRITE,
@@ -476,7 +479,6 @@ int ulogd_clean_results(struct ulogd_keysets_bundle *ksb)
 {
 	struct ulogd_keyset *kset;
 	struct ulogd_key *key;
-	void *raw;
 	unsigned int i, j;
 
 	for (i = 0; i < ksb->num_keysets; i++) {
@@ -486,13 +488,6 @@ int ulogd_clean_results(struct ulogd_keysets_bundle *ksb)
 			if (!(key->flags & ULOGD_RETF_VALID))
 				continue;
 
-			if (key->len != 0) { /* ptr to obj in bundle */
-				key->flags &= ~ULOGD_RETF_VALID;
-				raw = okey_get_ptr(key);
-				memset(raw, 0, key->len);
-				continue;
-			}
-
 			if (key->flags & ULOGD_RETF_FREE) {
 				free(key->u.value.ptr);
 				key->u.value.ptr = NULL;
@@ -501,7 +496,10 @@ int ulogd_clean_results(struct ulogd_keysets_bundle *ksb)
 				   && key->u.value.ptr != NULL) {
 				key->destruct(key->u.value.ptr);
 			}
-			memset(&key->u.value, 0, sizeof(key->u.value));
+			if (key->flags & ULOGD_RETF_EMBED)
+				memset(okey_get_ptr(key), 0, key->len);
+			else
+				memset(&key->u.value, 0, sizeof(key->u.value));
 			key->flags &= ~ULOGD_RETF_VALID;
 		}
 	}

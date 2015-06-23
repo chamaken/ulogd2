@@ -58,6 +58,7 @@
 #define ULOGD_RETF_NEEDED	0x0004	/* this parameter is actually needed
 					 * by some downstream plugin */
 #define ULOGD_RETF_DESTRUCT	0x0008	/* call destructor */
+#define ULOGD_RETF_EMBED	0x0010	/* length field embedded in keys area */
 
 #define ULOGD_KEYF_OPTIONAL	0x0100	/* this key is optional */
 #define ULOGD_KEYF_INACTIVE	0x0200	/* marked as inactive (i.e. totally
