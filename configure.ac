@@ -91,6 +91,17 @@ if [! test "x$enable_nfacct" = "xyes"]; then
 	enable_nfacct="no"
 fi
 
+AC_ARG_ENABLE(nfq,
+       AS_HELP_STRING([--enable-nfq], [Enable nfq module [default=yes]]),[enable_nfq=$enableval],[enable_nfq=yes])
+AS_IF([test "x$enable_nfq" = "xyes"], [
+    PKG_CHECK_MODULES([LIBNETFILTER_QUEUE], [libnetfilter_queue >= 1.0.2])
+    AC_DEFINE([BUILD_NFQ], [1], [Building nfq module])
+])
+AM_CONDITIONAL([BUILD_NFQ], [test "x$enable_nfq" = "xyes"])
+if [! test "x$enable_nfq" = "xyes"]; then
+	enable_nfq="no"
+fi
+
 AC_ARG_WITH([pgsql], AS_HELP_STRING([--without-pgsql], [Build without postgresql output plugin [default=test]]))
 AS_IF([test "x$with_pgsql" != "xno"], [
 	CT_CHECK_POSTGRES_DB()
@@ -201,7 +212,7 @@ AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile include/libipulog/Makefi
 	  include/linux/Makefile include/linux/netfilter/Makefile \
 	  include/linux/netfilter_ipv4/Makefile libipulog/Makefile \
 	  input/Makefile input/packet/Makefile input/flow/Makefile \
-	  input/sum/Makefile \
+	  input/sum/Makefile input/queue/Makefile \
 	  filter/Makefile filter/raw2packet/Makefile filter/packet2flow/Makefile \
 	  output/Makefile output/pcap/Makefile output/mysql/Makefile output/pgsql/Makefile output/sqlite3/Makefile \
 	  output/dbi/Makefile python/Makefile \
@@ -215,6 +226,7 @@ Ulogd configuration:
     NFCT plugin:			${enable_nfct}
     NFACCT plugin:			${enable_nfacct}
     ULOG plugin:			${enable_ulog}
+    NFQ plugin:				${enable_nfq}
   Output plugins:
     PCAP plugin:			${enable_pcap}
     PGSQL plugin:			${enable_pgsql}
