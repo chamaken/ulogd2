@@ -332,6 +332,8 @@ py_ulogd_key_getvalue(struct py_ulogd_key *self, PyObject *args)
 		return Py_BuildValue("K", ikey_get_u64(key));
 	case ULOGD_RET_IP6ADDR:
 		return Py_BuildValue("y#", ikey_get_u128(key), 16);
+	case ULOGD_RET_RAW:
+		return Py_BuildValue("L", ikey_get_u64(key));
 	case ULOGD_RET_STRING:
 	case ULOGD_RET_RAWSTR:
 		return Py_BuildValue("s", ikey_get_ptr(key));
