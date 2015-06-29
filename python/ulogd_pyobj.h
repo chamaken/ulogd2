@@ -44,9 +44,9 @@ struct py_ulogd_keyset {
 	long n;
 };
 
-struct py_ulogd_pluginstance {
+struct py_ulogd_source_pluginstance {
 	PyObject_HEAD
-	struct ulogd_pluginstance *raw;
+	struct ulogd_source_pluginstance *raw;
 };
 
 struct py_ulogd_fd {

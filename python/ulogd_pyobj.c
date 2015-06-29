@@ -833,6 +833,98 @@ static PyTypeObject py_ulogd_output_keyset_type = {
 	.tp_iternext	= py_ulogd_okeyset_iternext,
 };
 
+static PyObject *
+py_ulogd_source_okeyset_propagate_results(struct py_ulogd_key *self,
+					  PyObject *args)
+{
+	struct py_ulogd_keyset *okset = (struct py_ulogd_keyset *)self;
+
+	py_child_sendargs(ULOGD_PY_CALL_PROPAGATE_RESULTS, 0, "p", okset->raw);
+	if (py_child_session(ULOGD_PY_RETURN_PROPAGATE_RESULTS) != 0) {
+		PyErr_SetString(PyExc_RuntimeError, "child session error");
+		return NULL;
+	}
+
+	Py_RETURN_NONE;
+}
+
+static PyMethodDef py_ulogd_source_okeyset_methods[] = {
+	{"propagate_results", (PyCFunction)
+	 py_ulogd_source_okeyset_propagate_results,
+	 METH_NOARGS, "call ulogd_propagate_results()"
+	},
+	{NULL},
+};
+
+static PyTypeObject py_ulogd_source_output_keyset_type = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name	= "ulogd.SourceOKeyset",
+	.tp_basicsize	= sizeof(struct py_ulogd_keyset),
+	.tp_dealloc	= (destructor)py_ulogd_keyset_dealloc,
+	.tp_flags	= Py_TPFLAGS_DEFAULT,
+	.tp_doc		= "struct ulogd_keyset for source output",
+	.tp_new		= PyType_GenericNew,
+	.tp_methods	= py_ulogd_source_okeyset_methods,
+	.tp_as_mapping	= &py_ulogd_okeyset_as_mapping,
+	.tp_iter	= PyObject_SelfIter,
+	.tp_iternext	= py_ulogd_okeyset_iternext,
+};
+
+/****
+ * struct ulogd_source_pluginstance
+ */
+static void
+py_ulogd_source_pluginstance_dealloc(struct py_ulogd_source_pluginstance *self)
+{
+	Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static PyObject *
+py_ulogd_source_pluginstance_get_okeyset(PyObject *self, PyObject *args)
+{
+	struct py_ulogd_source_pluginstance *upi
+		= (struct py_ulogd_source_pluginstance *)self;
+	char buf[MNL_SOCKET_BUFFER_SIZE];
+	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
+	struct nlattr *nla = mnl_nlmsg_get_payload(nlh);
+	struct ulogd_keyset *raw;
+	struct py_ulogd_keyset *output;
+
+	py_child_sendargs(ULOGD_PY_CALL_GET_OUTPUT_KEYSET, 0, "p", upi->raw);
+	py_child_recv(buf, sizeof(buf), NULL);
+	if (nlh->nlmsg_type != ULOGD_PY_RETURN_GET_OUTPUT_KEYSET) {
+		child_log(ULOGD_INFO,
+			  "child expecting: RETURN_GET_OUTPUT_KEYSET,"
+			  "but got: %d\n", nlh->nlmsg_type);
+		return NULL;
+	}
+	raw = (struct ulogd_keyset *)*(void **)mnl_attr_get_payload(nla);
+	output = (struct py_ulogd_keyset *)
+		PyObject_CallObject((PyObject *)
+				    &py_ulogd_source_output_keyset_type,
+				    NULL);
+	output->raw = raw;
+
+	return (PyObject *)output;
+}
+
+static PyMethodDef py_ulogd_source_pluginstance_methods[] = {
+	{"get_output_keyset", py_ulogd_source_pluginstance_get_okeyset,
+	 METH_NOARGS, "get output keyset for propagation"},
+	{NULL, NULL, 0, NULL},
+};
+
+static PyTypeObject py_ulogd_source_pluginstance_type = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name	= "ulogd.SourcePluginstance",
+	.tp_basicsize	= sizeof(struct py_ulogd_source_pluginstance),
+	.tp_dealloc	= (destructor)py_ulogd_source_pluginstance_dealloc,
+	.tp_flags	= Py_TPFLAGS_DEFAULT,
+	.tp_doc		= "struct ulogd_source_pluginstance",
+	.tp_new		= PyType_GenericNew,
+	.tp_methods	= py_ulogd_source_pluginstance_methods,
+};
+
 /****
  * struct ulogd_fd
  */
@@ -1043,6 +1135,10 @@ PyInit_ulogd(void)
 		return NULL;
 	if (PyType_Ready(&py_ulogd_output_keyset_type) < 0)
 		return NULL;
+	if (PyType_Ready(&py_ulogd_source_output_keyset_type) < 0)
+		return NULL;
+	if (PyType_Ready(&py_ulogd_source_pluginstance_type) < 0)
+		return NULL;
 	if (PyType_Ready(&py_ulogd_fd_type) < 0)
 		return NULL;
 	if (PyType_Ready(&py_ulogd_timer_type) < 0)
@@ -1071,6 +1167,12 @@ PyInit_ulogd(void)
 	Py_INCREF(&py_ulogd_output_keyset_type);
 	PyModule_AddObject(m, "OKeyset",
 			   (PyObject *)&py_ulogd_output_keyset_type);
+	Py_INCREF(&py_ulogd_source_output_keyset_type);
+	PyModule_AddObject(m, "SourceOKeyset",
+			   (PyObject *)&py_ulogd_source_output_keyset_type);
+	Py_INCREF(&py_ulogd_source_pluginstance_type);
+	PyModule_AddObject(m, "SourcePluginstance",
+			   (PyObject *)&py_ulogd_source_pluginstance_type);
 	Py_INCREF(&py_ulogd_fd_type);
 	PyModule_AddObject(m, "Fd",
 			   (PyObject *)&py_ulogd_fd_type);

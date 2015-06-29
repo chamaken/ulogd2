@@ -39,12 +39,21 @@ struct py_priv {
 	int sockfd;
 	pid_t childpid;
 };
+
+enum ulogd_pluginstance_type {
+	ULOGD_PLUGINSTANCE_SOURCE,
+	ULOGD_PLUGINSTANCE_FILTER,
+	ULOGD_PLUGINSTANCE_SINK,
+};
+
 /* no need to put in priv since these are process specific */
 static PyObject *user_mod;
 static struct py_ulogd_keyset *ikeyset, *okeyset;
 static struct py_ulogd_keylist *ikeylist, *okeylist;
 static PyObject *configure_func, *start_func, *interp_func,
 	*signal_func, *stop_func;
+/* flag to check this is a source or not in child */
+static struct py_ulogd_source_pluginstance *source_pluginstance;
 extern int childfd;
 extern char *_pyulogd_nl_typestr[];
 
@@ -174,10 +183,11 @@ static PyObject *load_module(char *modname)
 	return module;
 }
 
-static int prepare_pyobj(char *modname)
+static int prepare_pyobj(char *modname, int pitype)
 {
 	PyObject *ulogd_mod, *xcfunc, *value;
 	PyObject *keylist, *keyset;
+	PyObject *spiclass;
 	char ebuf[ERRBUF_SIZE + 1];
 	int ret = ULOGD_IRET_ERR;
 
@@ -195,12 +205,14 @@ static int prepare_pyobj(char *modname)
 			  py_strerror(ebuf, ERRBUF_SIZE));
 		return ULOGD_IRET_ERR;
 	}
-	ikeylist = (struct py_ulogd_keylist *)
-		PyObject_CallObject(keylist, NULL);
-	if (ikeylist == NULL) {
-		child_log(ULOGD_ERROR, "call Keylist.init: %s\n",
-			  py_strerror(ebuf, ERRBUF_SIZE));
-		goto dec_keylist;
+	if (pitype != ULOGD_PLUGINSTANCE_SOURCE) {
+		ikeylist = (struct py_ulogd_keylist *)
+			PyObject_CallObject(keylist, NULL);
+		if (ikeylist == NULL) {
+			child_log(ULOGD_ERROR, "call Keylist.init: %s\n",
+				  py_strerror(ebuf, ERRBUF_SIZE));
+			goto dec_keylist;
+		}
 	}
 	okeylist = (struct py_ulogd_keylist *)
 		PyObject_CallObject(keylist, NULL);
@@ -211,18 +223,20 @@ static int prepare_pyobj(char *modname)
 	}
 
 	/* create keysets for start() and interp() */
-	keyset = PyObject_GetAttrString(ulogd_mod, "IKeyset");
-	if (keyset == NULL) {
-		child_log(ULOGD_ERROR, "could not get ulogd.IKeyset: %s\n",
-			  py_strerror(ebuf, ERRBUF_SIZE));
-		goto dec_okeylist;
-	}
-	ikeyset = (struct py_ulogd_keyset *)PyObject_CallObject(keyset, NULL);
-	Py_DECREF(keyset);
-	if (ikeyset == NULL) {
-		child_log(ULOGD_ERROR, "call Keylist.init: %s\n",
-			  py_strerror(ebuf, ERRBUF_SIZE));
-		goto dec_okeylist;
+	if (pitype != ULOGD_PLUGINSTANCE_SOURCE) {
+		keyset = PyObject_GetAttrString(ulogd_mod, "IKeyset");
+		if (keyset == NULL) {
+			child_log(ULOGD_ERROR, "could not get ulogd.IKeyset: %s\n",
+				  py_strerror(ebuf, ERRBUF_SIZE));
+			goto dec_okeylist;
+		}
+		ikeyset = (struct py_ulogd_keyset *)PyObject_CallObject(keyset, NULL);
+		Py_DECREF(keyset);
+		if (ikeyset == NULL) {
+			child_log(ULOGD_ERROR, "call Keylist.init: %s\n",
+				  py_strerror(ebuf, ERRBUF_SIZE));
+			goto dec_okeylist;
+		}
 	}
 	keyset = PyObject_GetAttrString(ulogd_mod, "OKeyset");
 	if (keyset == NULL) {
@@ -232,18 +246,37 @@ static int prepare_pyobj(char *modname)
 	}
 	okeyset = (struct py_ulogd_keyset *)PyObject_CallObject(keyset, NULL);
 	Py_DECREF(keyset);
-	if (ikeyset == NULL) {
+	if (okeyset == NULL) {
 		child_log(ULOGD_ERROR, "call Keylist.init: %s\n",
 			  py_strerror(ebuf, ERRBUF_SIZE));
 		goto dec_ikeyset;
 	}
 
+	if (pitype == ULOGD_PLUGINSTANCE_SOURCE) {
+		/* create source pluginstance holder */
+		spiclass = PyObject_GetAttrString(ulogd_mod,
+						  "SourcePluginstance");
+		if (spiclass == NULL) {
+			child_log(ULOGD_ERROR, "could not get"
+				  "ulogd.SourcePluginstance:  %s\n",
+				  py_strerror(ebuf, ERRBUF_SIZE));
+			goto dec_okeyset;
+		}
+		source_pluginstance = (struct py_ulogd_source_pluginstance *)
+			PyObject_CallObject(spiclass, NULL);
+		Py_DECREF(spiclass);
+		if (source_pluginstance == NULL) {
+			child_log(ULOGD_ERROR, "call SourcePluginstance.init: %s\n",
+				  py_strerror(ebuf, ERRBUF_SIZE));
+			goto dec_okeyset;
+		}
+	}
 	/* load user module */
 	user_mod = load_module(modname);
 	if (user_mod == NULL) {
 		child_log(ULOGD_ERROR, "could not load module %s: %s\n",
 			  modname, py_strerror(ebuf, ERRBUF_SIZE));
-		goto dec_okeyset;
+		goto dec_source_pluginstance;
 	}
 
 	/* get functions */
@@ -259,11 +292,13 @@ static int prepare_pyobj(char *modname)
 			  modname, py_strerror(ebuf, ERRBUF_SIZE));
 		goto dec_start_func;
 	}
-	interp_func = PyObject_GetAttrString(user_mod, "interp");
-	if (interp_func == NULL || !PyCallable_Check(interp_func)) {
-		child_log(ULOGD_ERROR, "can not call %s.interp: %s\n",
-			  modname, py_strerror(ebuf, ERRBUF_SIZE));
-		goto dec_interp_func;
+	if (pitype != ULOGD_PLUGINSTANCE_SOURCE) {
+		interp_func = PyObject_GetAttrString(user_mod, "interp");
+		if (interp_func == NULL || !PyCallable_Check(interp_func)) {
+			child_log(ULOGD_ERROR, "can not call %s.interp: %s\n",
+				  modname, py_strerror(ebuf, ERRBUF_SIZE));
+			goto dec_interp_func;
+		}
 	}
 	signal_func = PyObject_GetAttrString(user_mod, "signal");
 	if (signal_func == NULL || !PyCallable_Check(signal_func)) {
@@ -300,14 +335,16 @@ dec_start_func:
 	Py_XDECREF(start_func);
 dec_configure_func:
 	Py_XDECREF(configure_func);
+dec_source_pluginstance:
+	Py_XDECREF(source_pluginstance);
 dec_okeyset:
 	Py_DECREF(okeyset);
 dec_ikeyset:
-	Py_DECREF(ikeyset);
+	Py_XDECREF(ikeyset);
 dec_okeylist:
 	Py_DECREF(okeylist);
 dec_ikeylist:
-	Py_DECREF(ikeylist);
+	Py_XDECREF(ikeylist);
 dec_keylist:
 	Py_DECREF(keylist);
 
@@ -424,14 +461,19 @@ static int send_keylist(uint16_t msgtype, struct py_ulogd_keylist *klist)
 }
 
 /* child call - def configure(input, output) */
-static int py_child_call_configure(void)
+static int py_child_call_configure(int pitype)
 {
 	PyObject *value;
 	char ebuf[ERRBUF_SIZE + 1];
 	int ret = ULOGD_IRET_ERR;
 
-	value = PyObject_CallFunctionObjArgs(configure_func,
-					     ikeylist, okeylist, NULL);
+	if (pitype == ULOGD_PLUGINSTANCE_SOURCE ) {
+		value = PyObject_CallFunctionObjArgs(configure_func,
+						     okeylist, NULL);
+	} else {
+		value = PyObject_CallFunctionObjArgs(configure_func,
+						     ikeylist, okeylist, NULL);
+	}
 	if (PyErr_Occurred() || value == NULL) {
 		child_log(ULOGD_ERROR, "configure() returns: %p: %s\n",
 			  value, py_strerror(ebuf, ERRBUF_SIZE));
@@ -445,8 +487,11 @@ static int py_child_call_configure(void)
 	if (PyLong_AsLong(value) != 0)
 		goto dec_value;
 
-	if (send_keylist(ULOGD_PY_RETURN_CONFIGURE_IKINFO, ikeylist) != 0)
-		goto dec_value;
+	if (pitype != ULOGD_PLUGINSTANCE_SOURCE) {
+		if (send_keylist(ULOGD_PY_RETURN_CONFIGURE_IKINFO,
+				 ikeylist) != 0)
+			goto dec_value;
+	}
 	if (send_keylist(ULOGD_PY_RETURN_CONFIGURE_OKINFO, okeylist) != 0)
 		goto dec_value;
 	ret = ULOGD_IRET_OK;
@@ -457,14 +502,21 @@ dec_value:
 }
 
 /* child call - def start(input) */
-static int py_child_call_start(struct ulogd_keyset *input)
+static int py_child_call_start(struct ulogd_source_pluginstance *spi,
+			       struct ulogd_keyset *input, int pitype)
 {
 	PyObject *value;
 	char ebuf[ERRBUF_SIZE + 1];
 	int ret = ULOGD_IRET_ERR;
 
-	ikeyset->raw = input;
-	value = PyObject_CallFunctionObjArgs(start_func, ikeyset, NULL);
+	if (pitype == ULOGD_PLUGINSTANCE_SOURCE) {
+		source_pluginstance->raw = spi;
+		value = PyObject_CallFunctionObjArgs(start_func,
+						     source_pluginstance, NULL);
+	} else {
+		ikeyset->raw = input;
+		value = PyObject_CallFunctionObjArgs(start_func, ikeyset, NULL);
+	}
 	if (PyErr_Occurred() || value == NULL) {
 		child_log(ULOGD_ERROR, "start() returns %p: %s\n",
 			  value, py_strerror(ebuf, ERRBUF_SIZE));
@@ -578,18 +630,18 @@ static int py_child_call_signal(struct nlmsghdr *nlh, int *rc)
 
 /* child call python configure() and exit */
 __attribute__ ((noreturn))
-static void py_child_configure(int sockfd, char *id, char *modname)
+static void py_child_configure(int sockfd, char *id, char *modname, int pitype)
 {
 	childfd = sockfd;
 	Py_Initialize();
-	if (prepare_pyobj(modname) != 0) {
+	if (prepare_pyobj(modname, pitype) != 0) {
 		child_log(ULOGD_ERROR, "failed to %s.prepare_pyobj()\n", id);
 		py_child_sendargs(ULOGD_PY_RETURN_CONFIGURE,
 				   0, "I", ULOGD_IRET_ERR);
 		py_child_exit(EXIT_FAILURE, NULL);
 		/* NOTREACHED */
 	}
-	if (py_child_call_configure() != 0) {
+	if (py_child_call_configure(pitype) != 0) {
 		child_log(ULOGD_ERROR, "failed to child"
 			  " %s:%s.configure()\n", id, modname);
 		py_child_sendargs(ULOGD_PY_RETURN_CONFIGURE,
@@ -621,9 +673,9 @@ static struct child_func {
 
 /* child call python start() and wait message until receiving STOP */
 __attribute__ ((noreturn))
-static void py_child_start(struct ulogd_pluginstance *upi,
-			   struct ulogd_keyset *input,
-			   int sockfd, char *modname)
+static void py_child_start(char *id, struct ulogd_keyset *input,
+			   int sockfd, char *modname, int pitype,
+			   struct ulogd_source_pluginstance *spi)
 {
 	int ret = ULOGD_IRET_ERR, rc = ULOGD_IRET_ERR;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
@@ -632,18 +684,17 @@ static void py_child_start(struct ulogd_pluginstance *upi,
 
 	childfd = sockfd;
 	Py_Initialize();
-	if (prepare_pyobj(modname) != 0) {
-		child_log(ULOGD_ERROR, "failed to %s.prepare_pyobj()\n",
-			  upi->id);
+	if (prepare_pyobj(modname, pitype) != 0) {
+		child_log(ULOGD_ERROR, "failed to %s.prepare_pyobj()\n", id);
 		py_child_sendargs(ULOGD_PY_RETURN_START,
 				   0, "I", ULOGD_IRET_ERR);
 		py_child_exit(EXIT_FAILURE, NULL);
 		/* NOTREACHED */
 	}
-	ret = py_child_call_start(input);
+	ret = py_child_call_start(spi, input, pitype);
 	if (ret != 0) {
 		child_log(ULOGD_ERROR, "failed to child %s:%s.start()\n",
-			  upi->id, modname);
+			  id, modname);
 		py_child_sendargs(ULOGD_PY_RETURN_START,
 				  0, "I", ULOGD_IRET_ERR);
 		py_child_exit(EXIT_FAILURE, NULL);
@@ -852,6 +903,43 @@ static int py_parent_del_timer(struct py_priv *priv,
 	return ret;
 }
 
+static int py_parent_propagate_results(struct py_priv *priv,
+				       struct nlmsghdr *nlh, int fd)
+{
+	struct nlattr *nla = mnl_nlmsg_get_payload(nlh);
+	struct ulogd_keyset *okeyset;
+	int ret;
+
+	okeyset = (struct ulogd_keyset *)*(void **)mnl_attr_get_payload(nla);
+	ret = ulogd_propagate_results(okeyset);
+	if (py_parent_sendargs(priv, ULOGD_PY_RETURN_PROPAGATE_RESULTS,
+			       0, "I", ret) != 0) {
+		ulogd_log(ULOGD_ERROR, "parent_propagate_results sendmsg\n");
+		return ULOGD_IRET_ERR;
+	}
+
+	return ULOGD_IRET_OK;
+}
+
+static int py_parent_get_output_keyset(struct py_priv *priv,
+				       struct nlmsghdr *nlh, int fd)
+{
+	struct nlattr *nla = mnl_nlmsg_get_payload(nlh);
+	struct ulogd_source_pluginstance *spi;
+	struct ulogd_keyset *output;
+
+	spi = (struct ulogd_source_pluginstance *)
+		*(void **)mnl_attr_get_payload(nla);
+	output = ulogd_get_output_keyset(spi);
+	if (py_parent_sendargs(priv, ULOGD_PY_RETURN_GET_OUTPUT_KEYSET,
+			       0, "p", output) != 0) {
+		ulogd_log(ULOGD_ERROR, "parent_get_output_keyset sendmsg\n");
+		return ULOGD_IRET_ERR;
+	}
+
+	return ULOGD_IRET_OK;
+}
+
 typedef int (*parent_fn)(struct py_priv *, struct nlmsghdr *, int);
 static parent_fn parent_session_ftbl[] = {
 	[ULOGD_PY_CALL_LOG]			= py_parent_log,
@@ -860,6 +948,8 @@ static parent_fn parent_session_ftbl[] = {
 	[ULOGD_PY_CALL_INIT_TIMER]		= py_parent_init_timer,
 	[ULOGD_PY_CALL_ADD_TIMER]		= py_parent_add_timer,
 	[ULOGD_PY_CALL_DEL_TIMER]		= py_parent_del_timer,
+	[ULOGD_PY_CALL_PROPAGATE_RESULTS]	= py_parent_propagate_results,
+	[ULOGD_PY_CALL_GET_OUTPUT_KEYSET]	= py_parent_get_output_keyset,
 };
 
 /* handle message until receiving specified by fin_type */
@@ -883,13 +973,16 @@ static int py_parent_session(struct py_priv *priv, uint16_t fin_type)
 				  _pyulogd_nl_typestr[nlh->nlmsg_type]);
 			return ULOGD_IRET_ERR;
 		}
-		if (nlh->nlmsg_type > ULOGD_PY_CALL_DEL_TIMER
+		if (nlh->nlmsg_type > ULOGD_PY_CALL_GET_OUTPUT_KEYSET
 		    || (fn = parent_session_ftbl[nlh->nlmsg_type]) == NULL) {
 			ulogd_log(ULOGD_ERROR,
 				  "parent receive unknown msgtype: %d\n",
 				  nlh->nlmsg_type);
 			return ULOGD_IRET_ERR;
 		}
+		/* XXX: non-source pluginstance can call...?
+		 * if (source_pluginstance == NULL
+		 *     && nlh->nlmsg_type > ULOGD_PY_CALL_DEL_TIMER) */
 		if (fn(priv, nlh, fd) != 0) {
 			ulogd_log(ULOGD_ERROR, "parent %s returns error\n",
 				  _pyulogd_nl_typestr[nlh->nlmsg_type]);
@@ -938,9 +1031,10 @@ static struct ulogd_keyset *alloc_keyset(struct ulogd_keyset **keyset)
 	return *keyset;
 }
 
-static int py_parent_configure(struct ulogd_pluginstance *upi)
+static int py_parent_configure(struct py_priv *priv,
+			       struct ulogd_keyset **input_template,
+			       struct ulogd_keyset **output_template)
 {
-	struct py_priv *priv = (struct py_priv *)&upi->private;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
 	struct nlattr *nla;
@@ -963,19 +1057,23 @@ static int py_parent_configure(struct ulogd_pluginstance *upi)
 			}
 			return py_parent_waitpid(priv, 0);
 		case ULOGD_PY_RETURN_CONFIGURE_IKINFO:
-			rcvkset = alloc_keyset(&upi->input_template);
+			if (input_template == NULL) {
+				/* source pluginstance */
+				ulogd_log(ULOGD_ERROR, "source pluginstance"
+					  "has no input keyset template\n");
+				return ULOGD_IRET_ERR;
+			}
+			rcvkset = alloc_keyset(input_template);
 			if (rcvkset == NULL)
 				return ULOGD_IRET_ERR;
-			rcvkset = upi->input_template;
 			rcvkset->type = (unsigned int)mnl_attr_get_u32(nla);
 			nla = mnl_attr_next(nla);
 			rcvkset->num_keys = (unsigned int)mnl_attr_get_u32(nla);
 			break;
 		case ULOGD_PY_RETURN_CONFIGURE_OKINFO:
-			rcvkset = alloc_keyset(&upi->output_template);
+			rcvkset = alloc_keyset(output_template);
 			if (rcvkset == NULL)
 				return ULOGD_IRET_ERR;
-			rcvkset = upi->output_template;
 			rcvkset->type = (unsigned int)mnl_attr_get_u32(nla);
 			nla = mnl_attr_next(nla);
 			rcvkset->num_keys = (unsigned int)mnl_attr_get_u32(nla);
@@ -1001,15 +1099,17 @@ static int py_parent_configure(struct ulogd_pluginstance *upi)
 	return ULOGD_IRET_ERR;
 }
 
-static int py_configure(struct ulogd_pluginstance *upi)
+static int py_configure(struct py_priv *priv, char *id, int pitype,
+			struct config_keyset *config_kset,
+			struct ulogd_keyset **input_template,
+			struct ulogd_keyset **output_template)
 {
-	struct py_priv *priv = (struct py_priv *)&upi->private;
 	char *modname;
 	int sv[2], ret = ULOGD_IRET_ERR;
 
-	if (config_parse_file(upi->id, upi->config_kset) < 0)
+	if (config_parse_file(id, config_kset) < 0)
 		return ret;
-	modname = upi->config_kset->ces[PY_CONF_MODNAME].u.string;
+	modname = config_kset->ces[PY_CONF_MODNAME].u.string;
 	if (modname == NULL) {
 		ulogd_log(ULOGD_ERROR, "no py_module specified\n");
 		return ret;
@@ -1027,27 +1127,43 @@ static int py_configure(struct ulogd_pluginstance *upi)
 		ulogd_log(ULOGD_ERROR, "fork: %s\n", strerror(errno));
 		return ret;
 	case 0:
-		py_child_configure(sv[1], upi->id, modname);
+		py_child_configure(sv[1], id, modname, pitype);
 		/* NOTREACHED */
 		break;
 	default:
-		ret = py_parent_configure(upi);
+		ret = py_parent_configure(priv,
+					  input_template, output_template);
 		break;
 	}
 
 	return ret;
 }
 
-/* static int py_start(struct ulogd_pluginstance *upi,
- *		    struct ulogd_keyset *input)
- */
-static int py_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
+static int py_source_configure(struct ulogd_source_pluginstance *spi)
+{
+	struct py_priv *priv = (struct py_priv *)&spi->private;
+
+	return py_configure(priv, spi->id, ULOGD_PLUGINSTANCE_SOURCE,
+			    spi->config_kset, NULL, &spi->output_template);
+}
+
+static int py_flow_configure(struct ulogd_pluginstance *upi)
 {
 	struct py_priv *priv = (struct py_priv *)&upi->private;
+
+	return py_configure(priv, upi->id, ULOGD_PLUGINSTANCE_FILTER,
+			    upi->config_kset,
+			    &upi->input_template, &upi->output_template);
+}
+
+static int py_start(struct py_priv *priv, char *id, struct ulogd_keyset *input,
+		    struct config_keyset *config_kset, int pitype,
+		    struct ulogd_source_pluginstance *spi)
+{
 	char *modname;
 	int sv[2], ret = ULOGD_IRET_ERR;
 
-	modname = upi->config_kset->ces[PY_CONF_MODNAME].u.string;
+	modname = config_kset->ces[PY_CONF_MODNAME].u.string;
 	if (modname == NULL) {
 		ulogd_log(ULOGD_ERROR, "no py_module specified\n");
 		return ret;
@@ -1065,7 +1181,7 @@ static int py_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 		ulogd_log(ULOGD_ERROR, "fork: %s\n", strerror(errno));
 		return ret;
 	case 0:
-		py_child_start(upi, input, sv[1], modname);
+		py_child_start(id, input, sv[1], modname, pitype, spi);
 		/* NOTREACHED */
 		break;
 	default:
@@ -1073,7 +1189,7 @@ static int py_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 			py_parent_waitpid(priv, 0);
 		} else {
 			ulogd_log(ULOGD_INFO, "%s(%s) started pid: %d\n",
-				  upi->id, modname, priv->childpid);
+				  id, modname, priv->childpid);
 			ret = ULOGD_IRET_OK;
 		}
 		break;
@@ -1081,13 +1197,30 @@ static int py_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 	return ret;
 }
 
-static int py_stop(struct ulogd_pluginstance *upi)
+static int py_flow_start(struct ulogd_pluginstance *pi,
+			 struct ulogd_keyset *input)
 {
-	struct py_priv *priv = (struct py_priv *)&upi->private;
+	struct py_priv *priv = (struct py_priv *)&pi->private;
+
+	return py_start(priv, pi->id, input, pi->config_kset,
+			ULOGD_PLUGINSTANCE_FILTER, NULL);
+}
+
+static int py_source_start(struct ulogd_source_pluginstance *spi)
+{
+	struct py_priv *priv = (struct py_priv *)&spi->private;
+
+	return py_start(priv, spi->id, NULL, spi->config_kset,
+			ULOGD_PLUGINSTANCE_SOURCE, spi);
+}
+
+
+static int py_stop(char *id, struct py_priv *priv)
+{
 	int ret;
 
 	if (priv->childpid == 0) {
-		ulogd_log(ULOGD_ERROR, "%s no child running\n", upi->id);
+		ulogd_log(ULOGD_ERROR, "%s no child running\n", id);
 		return ULOGD_IRET_ERR;
 	}
 
@@ -1101,8 +1234,22 @@ static int py_stop(struct ulogd_pluginstance *upi)
 	return ret;
 }
 
-static int py_interp(struct ulogd_pluginstance *upi,
-		     struct ulogd_keyset *input, struct ulogd_keyset *output)
+static int py_flow_stop(struct ulogd_pluginstance *upi)
+{
+	struct py_priv *priv = (struct py_priv *)&upi->private;
+	return py_stop(upi->id, priv);
+}
+
+static int py_source_stop(struct ulogd_source_pluginstance *spi)
+{
+	struct py_priv *priv = (struct py_priv *)&spi->private;
+	return py_stop(spi->id, priv);
+}
+
+
+static int py_flow_interp(struct ulogd_pluginstance *upi,
+			  struct ulogd_keyset *input,
+			  struct ulogd_keyset *output)
 {
 	struct py_priv *priv = (struct py_priv *)&upi->private;
 
@@ -1120,12 +1267,10 @@ static int py_interp(struct ulogd_pluginstance *upi,
 	return py_parent_session(priv, ULOGD_PY_RETURN_INTERP);
 }
 
-static void py_signal(struct ulogd_pluginstance *upi, int signal)
+static void py_signal(struct py_priv *priv, char *id, int signal)
 {
-	struct py_priv *priv = (struct py_priv *)&upi->private;
-
 	if (priv->childpid == 0) {
-		ulogd_log(ULOGD_ERROR, "%s no child running\n", upi->id);
+		ulogd_log(ULOGD_ERROR, "%s no child running\n", id);
 	}
 
 	if (py_parent_sendargs(priv, ULOGD_PY_CALL_SIGNAL,
@@ -1137,14 +1282,39 @@ static void py_signal(struct ulogd_pluginstance *upi, int signal)
 	py_parent_session(priv, ULOGD_PY_RETURN_SIGNAL);
 }
 
+static void py_flow_signal(struct ulogd_pluginstance *upi, int signal)
+{
+	struct py_priv *priv = (struct py_priv *)&upi->private;
+	return py_signal(priv, upi->id, signal);
+}
+
+static void py_source_signal(struct ulogd_source_pluginstance *spi, int signal)
+{
+	struct py_priv *priv = (struct py_priv *)&spi->private;
+	return py_signal(priv, spi->id, signal);
+}
+
+
 static struct ulogd_plugin py_plugin = {
 	.name = "PYTHON",
 	/* .input and .output should be specified by configure() */
-	.configure	= &py_configure,
-	.interp		= &py_interp,
-	.start		= &py_start,
-	.stop		= &py_stop,
-	.signal		= &py_signal,
+	.configure	= &py_flow_configure,
+	.interp		= &py_flow_interp,
+	.start		= &py_flow_start,
+	.stop		= &py_flow_stop,
+	.signal		= &py_flow_signal,
+	.config_kset	= &py_kset,
+	.priv_size	= sizeof(struct py_priv),
+	.version	= VERSION,
+};
+
+static struct ulogd_source_plugin py_source_plugin = {
+	.name = "PYTHON",
+	/* .input and .output should be specified by configure() */
+	.configure	= &py_source_configure,
+	.start		= &py_source_start,
+	.stop		= &py_source_stop,
+	.signal		= &py_source_signal,
 	.config_kset	= &py_kset,
 	.priv_size	= sizeof(struct py_priv),
 	.version	= VERSION,
@@ -1155,4 +1325,5 @@ void __attribute__ ((constructor)) init(void);
 void init(void)
 {
 	ulogd_register_plugin(&py_plugin);
+	ulogd_register_source_plugin(&py_source_plugin);
 }
