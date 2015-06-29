@@ -76,6 +76,20 @@ AC_ARG_ENABLE(nfct,
 AS_IF([test "x$enable_nfct" = "xyes"], [
     PKG_CHECK_MODULES([LIBNETFILTER_CONNTRACK], [libnetfilter_conntrack >= 1.0.2])
     AC_DEFINE([BUILD_NFCT], [1], [Building nfct module])
+
+    AC_MSG_CHECKING([does nfct_bitmask have clear and equal])
+    AC_CACHE_VAL(ac_cv_nfct_bitmask_20140910,
+        SAVE_LIBS=$LIBS
+        LIBS="$LIBS -lnetfilter_conntrack"
+        AC_TRY_LINK(
+	    [ #include <libnetfilter_conntrack/libnetfilter_conntrack.h> ],
+            [ struct nfct_bitmask *b = nfct_bitmask_new(8);
+              nfct_bitmask_clear(b); nfct_bitmask_equal(b, b); ],
+            ac_cv_nfct_bitmask_20140910=yes,
+            ac_cv_nfct_bitmask_20140910=no)
+	LIBS=$SAVE_LIBS)
+    AC_MSG_RESULT($ac_cv_nfct_bitmask_20140910)
+    AM_CONDITIONAL([BUILD_NFLOW9], [test "x$ac_cv_nfct_bitmask_20140910" = "xyes"])
 ])
 AM_CONDITIONAL([BUILD_NFCT], [test "x$enable_nfct" = "xyes"])
 if [! test "x$enable_nfct" = "xyes"]; then
@@ -255,6 +269,7 @@ Ulogd configuration:
     SQLITE3 plugin:			${enable_sqlite3}
     DBI plugin:				${enable_dbi}
     JSON plugin:			${enable_jansson}
+    NetFlow v9 plugin:			${ac_cv_nfct_bitmask_20140910}
   PYTHON plugin:			${enable_python}
 "
 echo "You can now run 'make' and 'make install'"

@@ -13,6 +13,10 @@ if HAVE_JANSSON
 pkglib_LTLIBRARIES += ulogd_output_JSON.la
 endif
 
+if BUILD_NFLOW9
+pkglib_LTLIBRARIES += ulogd_output_NFLOW9.la
+endif
+
 ulogd_output_GPRINT_la_SOURCES = ulogd_output_GPRINT.c
 ulogd_output_GPRINT_la_LDFLAGS = -avoid-version -module
 
@@ -41,4 +45,10 @@ if HAVE_JANSSON
 ulogd_output_JSON_la_SOURCES = ulogd_output_JSON.c
 ulogd_output_JSON_la_LIBADD  = ${libjansson_LIBS}
 ulogd_output_JSON_la_LDFLAGS = -avoid-version -module
+endif
+
+if BUILD_NFLOW9
+ulogd_output_NFLOW9_la_SOURCES = ulogd_output_NFLOW9.c ../util/ipfix.c
+ulogd_output_NFLOW9_la_LDFLAGS = -avoid-version -module
+ulogd_output_NFLOW9_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS}
 endif
