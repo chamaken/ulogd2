@@ -154,6 +154,7 @@ static int ipfix_fprintf_header(FILE *fd, const struct ipfix_instance *ii);
 
 struct ulogd_ipfix_template *
 alloc_ulogd_ipfix_template(struct ulogd_pluginstance *upi,
+			   struct ulogd_keyset *input,
 			   struct nfct_bitmask *bm)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *)&upi->private;
@@ -161,8 +162,8 @@ alloc_ulogd_ipfix_template(struct ulogd_pluginstance *upi,
 	unsigned int i;
 	int tmpl_len = 0, data_len = 0;
 
-	for (i = 0; i < upi->input.num_keys; i++) {
-		struct ulogd_key *key = &upi->input.keys[i];
+	for (i = 0; i < input->num_keys; i++) {
+		struct ulogd_key *key = &input->keys[i];
 		int length = ulogd_key_size(key);
 
 		if (!nfct_bitmask_test_bit(bm, i))
@@ -224,6 +225,7 @@ static void reset_counters(struct ipfix_instance *ii)
 /* Build the IPFIX template from the input keys */
 struct ulogd_ipfix_template *
 build_template_for_bitmask(struct ulogd_pluginstance *upi,
+			   struct ulogd_keyset *input,
 			   struct nfct_bitmask *bm)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
@@ -233,7 +235,7 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 	unsigned int i, field_count;
 	void *ptr;
 
-	tmpl = alloc_ulogd_ipfix_template(upi, bm);
+	tmpl = alloc_ulogd_ipfix_template(upi, input, bm);
 	if (tmpl == NULL)
 		return NULL;
 
@@ -241,8 +243,8 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 	ptr = (void *)tmpl->template
 		+ sizeof(struct ipfix_set_hdr)
 		+ sizeof(struct ipfix_templ_rec_hdr);
-	for (i = 0, field_count = 0; i < upi->input.num_keys; i++) {
-		struct ulogd_key *key = &upi->input.keys[i];
+	for (i = 0, field_count = 0; i < input->num_keys; i++) {
+		struct ulogd_key *key = &input->keys[i];
 		int length = ulogd_key_size(key);
 
 		if (!nfct_bitmask_test_bit(tmpl->bitmask, i))
@@ -300,6 +302,7 @@ find_template_for_bitmask(struct ulogd_pluginstance *upi,
 }
 
 static int put_data_records(struct ulogd_pluginstance *upi,
+			    struct ulogd_keyset *input,
 			    struct ulogd_ipfix_template *tmpl,
 			    void *buf, int buflen)
 {
@@ -307,10 +310,10 @@ static int put_data_records(struct ulogd_pluginstance *upi,
 	int ret;
 	unsigned int i, len = 0;
 
-	for (i = 0; i < upi->input.num_keys; i++) {
+	for (i = 0; i < input->num_keys; i++) {
 		if (!nfct_bitmask_test_bit(tmpl->bitmask, i))
 			continue;
-		ret = ulogd_key_putn(&upi->input.keys[i], buf + len, buflen);
+		ret = ulogd_key_putn(&input->keys[i], buf + len, buflen);
 		if (ret < 0)
 			return ret;
 		len += ret;
@@ -357,13 +360,14 @@ static int put_template(struct ulogd_pluginstance *upi,
 }
 
 static int build_ipfix_msg(struct ulogd_pluginstance *upi,
+			   struct ulogd_keyset *input,
 			   struct ulogd_ipfix_template *tmpl)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
 	int ret;
 
 	put_template(upi, tmpl);
-	ret = put_data_records(upi, tmpl, data_record(ii, tmpl),
+	ret = put_data_records(upi, input, tmpl, data_record(ii, tmpl),
 			       tmpl->dataset_len);
 	if (ret < 0) {
 		ulogd_log(ULOGD_ERROR, "could not build ipfix dataset");
@@ -398,7 +402,9 @@ static ssize_t send_ipfix(struct ipfix_instance *ii)
 	return nsent;
 }
 
-static int output_ipfix(struct ulogd_pluginstance *upi)
+static int output_ipfix(struct ulogd_pluginstance *upi,
+			   struct ulogd_keyset *input,
+			   struct ulogd_keyset *output)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &upi->private;
 	struct ulogd_ipfix_template *template;
@@ -412,8 +418,8 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 
 	nfct_bitmask_clear(ii->valid_bitmask);
 
-	for (i = 0; i < upi->input.num_keys; i++) {
-		struct ulogd_key *key = &upi->input.keys[i];
+	for (i = 0; i < input->num_keys; i++) {
+		struct ulogd_key *key = &input->keys[i];
 		int length = ulogd_key_size(key);
 
 		if (length < 0 || length > 0xfffe)
@@ -430,7 +436,8 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 	template = find_template_for_bitmask(upi, ii->valid_bitmask);
 	if (!template) {
 		ulogd_log(ULOGD_INFO, "building new template\n");
-		template = build_template_for_bitmask(upi, ii->valid_bitmask);
+		template = build_template_for_bitmask(upi, input,
+						      ii->valid_bitmask);
 		if (!template) {
 			ulogd_log(ULOGD_ERROR, "can't build new template!\n");
 			return ULOGD_IRET_ERR;
@@ -438,7 +445,7 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 		llist_add(&template->list, &ii->template_list);
 	}
 
-	ret = build_ipfix_msg(upi, template);
+	ret = build_ipfix_msg(upi, input, template);
 	if (ret == -1) {
 		ulogd_log(ULOGD_ERROR, "can't build message\n");
 		reset_counters(ii);
@@ -465,7 +472,8 @@ static int output_ipfix(struct ulogd_pluginstance *upi)
 	return ULOGD_IRET_OK;
 }
 
-static int start_ipfix(struct ulogd_pluginstance *pi)
+static int start_ipfix(struct ulogd_pluginstance *pi,
+		       struct ulogd_keyset *input)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *) &pi->private;
 	int ret = -ENOMEM;
@@ -477,7 +485,7 @@ static int start_ipfix(struct ulogd_pluginstance *pi)
 	if (ii->iovecs == NULL)
 		return ret;
 
-	ii->valid_bitmask = nfct_bitmask_new(pi->input.num_keys);
+	ii->valid_bitmask = nfct_bitmask_new(input->num_keys);
 	if (!ii->valid_bitmask)
 		goto out_iovecs_free;
 
@@ -547,18 +555,13 @@ static int stop_ipfix(struct ulogd_pluginstance *pi)
 static void signal_handler_ipfix(struct ulogd_pluginstance *pi, int signal)
 {
 	switch (signal) {
-	case SIGHUP:
-		ulogd_log(ULOGD_NOTICE, "ipfix: reopening connection\n");
-		stop_ipfix(pi);
-		start_ipfix(pi);
-		break;
 	default:
+		ulogd_log(ULOGD_DEBUG, "receive signal: %d\n", signal);
 		break;
 	}
 }
 
-static int configure_ipfix(struct ulogd_pluginstance *pi,
-			    struct ulogd_pluginstance_stack *stack)
+static int configure_ipfix(struct ulogd_pluginstance *pi)
 {
 	struct ipfix_instance *ii = (struct ipfix_instance *)&pi->private;
 	int ret;
@@ -576,16 +579,14 @@ static int configure_ipfix(struct ulogd_pluginstance *pi,
 	}
 	ii->corksets_max = (unsigned int)corksets_max_ce(pi->config_kset).u.value;
 
-	/* postpone address lookup to ->start() time, since we want to
-	 * re-lookup an address on SIGHUP */
-
-	return ulogd_wildcard_inputkeys(pi);
+	return ULOGD_IRET_OK;
 }
 
 static struct ulogd_plugin ipfix_plugin = {
 	.name = "IPFIX",
 	.input = {
-		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW,
+		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW
+			| ULOGD_KEYF_WILDCARD,
 	},
 	.output = {
 		.type = ULOGD_DTYPE_SINK,
