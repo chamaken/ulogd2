@@ -90,6 +90,7 @@ AS_IF([test "x$enable_nfct" = "xyes"], [
 	LIBS=$SAVE_LIBS)
     AC_MSG_RESULT($ac_cv_nfct_bitmask_20140910)
     AM_CONDITIONAL([BUILD_NFLOW9], [test "x$ac_cv_nfct_bitmask_20140910" = "xyes"])
+    AM_CONDITIONAL([BUILD_IPFIX], [test "x$ac_cv_nfct_bitmask_20140910" = "xyes"])
 ])
 AM_CONDITIONAL([BUILD_NFCT], [test "x$enable_nfct" = "xyes"])
 if [! test "x$enable_nfct" = "xyes"]; then
@@ -285,6 +286,7 @@ Ulogd configuration:
     DBI plugin:				${enable_dbi}
     JSON plugin:			${enable_jansson}
     NetFlow v9 plugin:			${ac_cv_nfct_bitmask_20140910}
+    IPFIX plugin:			${ac_cv_nfct_bitmask_20140910}
   PYTHON plugin:			${enable_python}
 "
 echo "You can now run 'make' and 'make install'"

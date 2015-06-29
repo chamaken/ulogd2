@@ -70,7 +70,7 @@ struct sctp_sndrcvinfo {
 #include <ulogd/ipfix_protocol.h>
 #include <ulogd/ipfix_util.h>
 
-#define DEBUG_TMMAP
+/* #define DEBUG_TMMAP */
 #ifdef DEBUG_TMMAP
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -150,7 +150,9 @@ struct ipfix_instance {
 	unsigned int msglen;
 };
 
+#ifdef DEBUG_TMMAP
 static int ipfix_fprintf_header(FILE *fd, const struct ipfix_instance *ii);
+#endif
 
 struct ulogd_ipfix_template *
 alloc_ulogd_ipfix_template(struct ulogd_pluginstance *upi,
@@ -610,6 +612,7 @@ void init(void)
 	ulogd_register_plugin(&ipfix_plugin);
 }
 
+#ifdef DEBUG_TMMAP
 static int ipfix_fprintf_ietf_field(FILE *fd, const struct ipfix_ietf_field *field, int len);
 static int ipfix_fprintf_vendor_field(FILE *fd, const struct ipfix_vendor_field *field, int len);
 
@@ -829,3 +832,4 @@ static int ipfix_fprintf_header(FILE *fd, const struct ipfix_instance *ii)
 	writev(mmfd, ii->iovecs, ii->iovcnt);
 	return _ipfix_fprintf_header(fd, (struct ipfix_msg_hdr *)mmaddr);
 }
+#endif
