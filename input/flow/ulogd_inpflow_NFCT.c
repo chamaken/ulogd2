@@ -191,10 +191,14 @@ enum nfct_keys {
 	NFCT_OOB_PROTOCOL,
 	NFCT_CT,
 	NFCT_DESTROY_CT,
+	NFCT_ORIG_IP6_SADDR,
+	NFCT_ORIG_IP6_DADDR,
+	NFCT_REPLY_IP6_SADDR,
+	NFCT_REPLY_IP6_DADDR,
 };
 
 static struct ulogd_key nfct_okeys[] = {
-	{
+	[NFCT_ORIG_IP_SADDR]	= {
 		.type 	= ULOGD_RET_IPADDR,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "orig.ip.saddr",
@@ -203,7 +207,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id = IPFIX_sourceIPv4Address,
 		},
 	},
-	{
+	[NFCT_ORIG_IP_DADDR]	= {
 		.type	= ULOGD_RET_IPADDR,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "orig.ip.daddr",
@@ -212,7 +216,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id = IPFIX_destinationIPv4Address,
 		},
 	},
-	{
+	[NFCT_ORIG_IP_PROTOCOL]	= {
 		.type	= ULOGD_RET_UINT8,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "orig.ip.protocol",
@@ -221,7 +225,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id = IPFIX_protocolIdentifier,
 		},
 	},
-	{
+	[NFCT_ORIG_L4_SPORT]	= {
 		.type	= ULOGD_RET_UINT16,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "orig.l4.sport",
@@ -230,7 +234,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id 	= IPFIX_sourceTransportPort,
 		},
 	},
-	{
+	[NFCT_ORIG_L4_DPORT]	= {
 		.type	= ULOGD_RET_UINT16,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "orig.l4.dport",
@@ -239,7 +243,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id 	= IPFIX_destinationTransportPort,
 		},
 	},
-	{
+	[NFCT_ORIG_RAW_PKTLEN]	= {
 		.type	= ULOGD_RET_UINT64,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "orig.raw.pktlen",
@@ -249,7 +253,7 @@ static struct ulogd_key nfct_okeys[] = {
 			/* FIXME: this could also be octetDeltaCount */
 		},
 	},
-	{
+	[NFCT_ORIG_RAW_PKTCOUNT]	= {
 		.type	= ULOGD_RET_UINT64,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "orig.raw.pktcount",
@@ -259,7 +263,7 @@ static struct ulogd_key nfct_okeys[] = {
 			/* FIXME: this could also be packetDeltaCount */
 		},
 	},
-	{
+	[NFCT_REPLY_IP_SADDR]	= {
 		.type 	= ULOGD_RET_IPADDR,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "reply.ip.saddr",
@@ -268,7 +272,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id = IPFIX_sourceIPv4Address,
 		},
 	},
-	{
+	[NFCT_REPLY_IP_DADDR]	= {
 		.type	= ULOGD_RET_IPADDR,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "reply.ip.daddr",
@@ -277,7 +281,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id = IPFIX_destinationIPv4Address,
 		},
 	},
-	{
+	[NFCT_REPLY_IP_PROTOCOL]	= {
 		.type	= ULOGD_RET_UINT8,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "reply.ip.protocol",
@@ -286,7 +290,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id = IPFIX_protocolIdentifier,
 		},
 	},
-	{
+	[NFCT_REPLY_L4_SPORT]	= {
 		.type	= ULOGD_RET_UINT16,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "reply.l4.sport",
@@ -295,7 +299,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id 	= IPFIX_sourceTransportPort,
 		},
 	},
-	{
+	[NFCT_REPLY_L4_DPORT]	= {
 		.type	= ULOGD_RET_UINT16,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "reply.l4.dport",
@@ -304,7 +308,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id 	= IPFIX_destinationTransportPort,
 		},
 	},
-	{
+	[NFCT_REPLY_RAW_PKTLEN]	= {
 		.type	= ULOGD_RET_UINT64,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "reply.raw.pktlen",
@@ -314,7 +318,7 @@ static struct ulogd_key nfct_okeys[] = {
 			/* FIXME: this could also be octetDeltaCount */
 		},
 	},
-	{
+	[NFCT_REPLY_RAW_PKTCOUNT]	= {
 		.type	= ULOGD_RET_UINT64,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "reply.raw.pktcount",
@@ -324,7 +328,7 @@ static struct ulogd_key nfct_okeys[] = {
 			/* FIXME: this could also be packetDeltaCount */
 		},
 	},
-	{
+	[NFCT_ICMP_CODE]	= {
 		.type	= ULOGD_RET_UINT8,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "icmp.code",
@@ -333,7 +337,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_icmpCodeIPv4,
 		},
 	},
-	{
+	[NFCT_ICMP_TYPE]	= {
 		.type	= ULOGD_RET_UINT8,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "icmp.type",
@@ -342,7 +346,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_icmpTypeIPv4,
 		},
 	},
-	{
+	[NFCT_CT_MARK]	= {
 		.type	= ULOGD_RET_UINT32,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "ct.mark",
@@ -351,7 +355,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_NF_mark,
 		},
 	},
-	{
+	[NFCT_CT_ID]	= {
 		.type	= ULOGD_RET_UINT32,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "ct.id",
@@ -360,13 +364,12 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_NF_conntrack_id,
 		},
 	},
-	{
+	[NFCT_CT_EVENT]	= {
 		.type	= ULOGD_RET_UINT32,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "ct.event",
 	},
-
-	{
+	[NFCT_FLOW_START_SEC]	= {
 		.type 	= ULOGD_RET_UINT32,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "flow.start.sec",
@@ -375,7 +378,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_flowStartSeconds,
 		},
 	},
-	{
+	[NFCT_FLOW_START_USEC]	= {
 		.type 	= ULOGD_RET_UINT32,
 		.flags 	= ULOGD_RETF_NONE,
 		.name	= "flow.start.usec",
@@ -384,7 +387,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_flowStartMicroSeconds,
 		},
 	},
-	{
+	[NFCT_FLOW_END_SEC]	= {
 		.type	= ULOGD_RET_UINT32,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "flow.end.sec",
@@ -393,7 +396,7 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_flowEndSeconds,
 		},
 	},
-	{
+	[NFCT_FLOW_END_USEC]	= {
 		.type	= ULOGD_RET_UINT32,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "flow.end.usec",
@@ -402,26 +405,62 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_flowEndMicroSeconds,
 		},
 	},
-	{
+	[NFCT_OOB_FAMILY]	= {
 		.type	= ULOGD_RET_UINT8,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "oob.family",
 	},
-	{
+	[NFCT_OOB_PROTOCOL]	= {
 		.type	= ULOGD_RET_UINT8,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "oob.protocol",
 	},
-	{
+	[NFCT_CT]	= {
 		.type	= ULOGD_RET_RAW,
 		.flags	= ULOGD_RETF_NONE,
 		.name	= "ct",
 	},
-	{
+	[NFCT_DESTROY_CT] = {
 		.type	= ULOGD_RET_RAW,
 		.flags	= ULOGD_RETF_DESTRUCT,
 		.name	= "ct.destroy",
 		.destruct = (void (*)(void *))nfct_destroy,
+	},
+	[NFCT_ORIG_IP6_SADDR]	= {
+		.type 	= ULOGD_RET_IP6ADDR,
+		.flags 	= ULOGD_RETF_NONE,
+		.name	= "orig.ip6.saddr",
+		.ipfix	= {
+			.vendor = IPFIX_VENDOR_IETF,
+			.field_id = IPFIX_sourceIPv6Address,
+		},
+	},
+	[NFCT_ORIG_IP6_DADDR]	= {
+		.type	= ULOGD_RET_IP6ADDR,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "orig.ip6.daddr",
+		.ipfix	= {
+			.vendor = IPFIX_VENDOR_IETF,
+			.field_id = IPFIX_destinationIPv6Address,
+		},
+	},
+	[NFCT_REPLY_IP6_SADDR]	= {
+		.type 	= ULOGD_RET_IP6ADDR,
+		.flags 	= ULOGD_RETF_NONE,
+		.name	= "reply.ip6.saddr",
+		.ipfix	= {
+			.vendor = IPFIX_VENDOR_IETF,
+			.field_id = IPFIX_sourceIPv6Address,
+		},
+	},
+	[NFCT_REPLY_IP6_DADDR]	= {
+		.type	= ULOGD_RET_IP6ADDR,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "reply.ip6.daddr",
+		.ipfix	= {
+			.vendor = IPFIX_VENDOR_IETF,
+			.field_id = IPFIX_destinationIPv6Address,
+		},
 	},
 };
 
@@ -517,13 +556,13 @@ static int propagate_ct(struct ulogd_source_pluginstance *upi,
 			     nfct_get_attr_u32(ct, ATTR_REPL_IPV4_DST));
 		break;
 	case AF_INET6:
-		okey_set_u128(&ret[NFCT_ORIG_IP_SADDR],
+		okey_set_u128(&ret[NFCT_ORIG_IP6_SADDR],
 			      nfct_get_attr(ct, ATTR_ORIG_IPV6_SRC));
-		okey_set_u128(&ret[NFCT_ORIG_IP_DADDR],
+		okey_set_u128(&ret[NFCT_ORIG_IP6_DADDR],
 			      nfct_get_attr(ct, ATTR_ORIG_IPV6_DST));
-		okey_set_u128(&ret[NFCT_REPLY_IP_SADDR],
+		okey_set_u128(&ret[NFCT_REPLY_IP6_SADDR],
 			      nfct_get_attr(ct, ATTR_REPL_IPV6_SRC));
-		okey_set_u128(&ret[NFCT_REPLY_IP_DADDR],
+		okey_set_u128(&ret[NFCT_REPLY_IP6_DADDR],
 			      nfct_get_attr(ct, ATTR_REPL_IPV6_DST));
 		break;
 	default:
