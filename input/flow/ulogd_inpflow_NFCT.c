@@ -71,6 +71,7 @@ struct nfct_pluginstance {
 	struct ulogd_timer ov_timer;	/* overrun retry timer */
 	struct hashtable *ct_active;
 	int nlbufsiz;			/* current netlink buffer size */
+	struct nfct_filter_dump *filter_dump;
 };
 
 #define HTABLE_SIZE	(8192)
@@ -1021,8 +1022,9 @@ dump_reset_handler(enum nf_conntrack_msg_type type,
 
 static void get_ctr_zero(struct ulogd_source_pluginstance *upi)
 {
+	struct nfct_pluginstance *cpi =
+			(struct nfct_pluginstance *)upi->private;
 	struct nfct_handle *h;
-	int family = AF_UNSPEC;
 
 	h = nfct_open(CONNTRACK, 0);
 	if (h == NULL) {
@@ -1030,7 +1032,7 @@ static void get_ctr_zero(struct ulogd_source_pluginstance *upi)
 		return;
 	}
 	nfct_callback_register(h, NFCT_T_ALL, &dump_reset_handler, upi);
-	if (nfct_query(h, NFCT_Q_DUMP_RESET, &family) == -1)
+	if (nfct_query(h, NFCT_Q_DUMP_FILTER_RESET, cpi->filter_dump) == -1)
 		ulogd_log(ULOGD_FATAL, "Cannot dump and reset counters\n");
 
 	nfct_close(h);
@@ -1041,9 +1043,8 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
-	int family = AF_UNSPEC;
 
-	nfct_query(cpi->pgh, NFCT_Q_DUMP, &family);
+	nfct_query(cpi->pgh, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
 	hashtable_iterate(cpi->ct_active, upi, do_purge);
 	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
 }
@@ -1055,12 +1056,11 @@ static int configure_nfct(struct ulogd_source_pluginstance *upi)
 
 static void overrun_timeout(struct ulogd_timer *a, void *data)
 {
-	int family = AF_UNSPEC;
 	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
 
-	nfct_send(cpi->ovh, NFCT_Q_DUMP, &family);
+	nfct_send(cpi->ovh, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
 }
 
 
@@ -1239,8 +1239,8 @@ static int build_nfct_filter_proto(struct nfct_filter *filter, char* filter_stri
 	return 0;
 }
 
-#if defined HAVE_NFCT_FILTER_MARK
-static int build_nfct_filter_mark(struct nfct_filter *filter, char* filter_string)
+static int build_nfct_filter_mark(struct nfct_filter *filter, char* filter_string,
+				struct nfct_filter_dump *filter_dump)
 {
 	char *p, *endptr;
 	uintmax_t v;
@@ -1275,24 +1275,27 @@ static int build_nfct_filter_mark(struct nfct_filter *filter, char* filter_strin
 		filter_mark.mask = UINT32_MAX;
 	}
 
-	ulogd_log(ULOGD_NOTICE, "adding mark to filter: \"%u/%u\"\n",
+	if (filter != NULL) {
+#if defined HAVE_NFCT_FILTER_MARK
+		nfct_filter_add_attr(filter, NFCT_FILTER_MARK, &filter_mark);
+		ulogd_log(ULOGD_NOTICE, "adding mark to event filter: \"%u/%u\"\n",
+			  filter_mark.val, filter_mark.mask);
+#else
+		ulogd_log(ULOGD_FATAL, "mark event filter is not supported\n");
+		return -1;
+#endif
+	}
+	nfct_filter_dump_set_attr(filter_dump, NFCT_FILTER_DUMP_MARK,
+					&filter_mark);
+	ulogd_log(ULOGD_NOTICE, "adding mark to dump filter: \"%u/%u\"\n",
 		  filter_mark.val, filter_mark.mask);
-	nfct_filter_add_attr(filter, NFCT_FILTER_MARK, &filter_mark);
 
 	return 0;
 
 invalid_error:
 	ulogd_log(ULOGD_FATAL, "invalid val/mask %s\n", filter_string);
 	return -1;
-
 }
-#else
-static int build_nfct_filter_mark(struct nfct_filter *filter, char* filter_string)
-{
-	ulogd_log(ULOGD_FATAL, "mark filter is not supported\n");
-	return -1;
-}
-#endif /* HAVE_NFCT_FILTER_MARK */
 
 static int build_nfct_filter(struct ulogd_source_pluginstance *upi)
 {
@@ -1338,7 +1341,7 @@ static int build_nfct_filter(struct ulogd_source_pluginstance *upi)
 
 	if (strlen(mark_filter_ce(upi->config_kset).u.string) != 0) {
 		char *filter_string = mark_filter_ce(upi->config_kset).u.string;
-		if (build_nfct_filter_mark(filter, filter_string) != 0) {
+		if (build_nfct_filter_mark(filter, filter_string, cpi->filter_dump) != 0) {
 			ulogd_log(ULOGD_FATAL,
 					"Unable to create mark filter\n");
 			goto err_filter;
@@ -1419,7 +1422,6 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 	ulogd_register_fd(&cpi->nfct_fd);
 
 	if (usehash_ce(upi->config_kset).u.value != 0) {
-		int family = AF_UNSPEC;
 		struct nfct_handle *h;
 
 		/* we use a hashtable to cache entries in userspace. */
@@ -1443,7 +1445,7 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 		}
 		nfct_callback_register(h, NFCT_T_ALL,
 				       &event_handler_hashtable, upi);
-		nfct_query(h, NFCT_Q_DUMP, &family);
+		nfct_query(h, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
 		nfct_close(h);
 
 		/* the overrun handler only make sense with the hashtable,
@@ -1505,6 +1507,14 @@ static int constructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
 		goto err;
 	}
+	if (strlen(mark_filter_ce(upi->config_kset).u.string) != 0) {
+		char *filter_string = mark_filter_ce(upi->config_kset).u.string;
+		if (build_nfct_filter_mark(NULL, filter_string,
+					   cpi->filter_dump) != 0) {
+			ulogd_log(ULOGD_FATAL, "error creating NFCT mark filter\n");
+			goto err_hashtable;
+		}
+	}
 	nfct_callback_register(cpi->pgh, NFCT_T_ALL, &polling_handler, upi);
 
 	cpi->ct_active =
@@ -1533,6 +1543,15 @@ err:
 
 static int constructor_nfct(struct ulogd_source_pluginstance *upi)
 {
+	struct nfct_pluginstance *cpi =
+			(struct nfct_pluginstance *) upi->private;
+
+	cpi->filter_dump = nfct_filter_dump_create();
+	if (cpi->filter_dump == NULL) {
+		ulogd_log(ULOGD_FATAL, "could not create filter_dump\n");
+		return -1;
+	}
+
 	if (pollint_ce(upi->config_kset).u.value == 0) {
 		/* listen to ctnetlink events. */
 		return constructor_nfct_events(upi);
@@ -1596,14 +1615,18 @@ static int destructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 
 static int destructor_nfct(struct ulogd_source_pluginstance *upi)
 {
+	struct nfct_pluginstance *cpi =
+			(struct nfct_pluginstance *) upi->private;
+	int ret = -1;
+
 	if (pollint_ce(upi->config_kset).u.value == 0) {
-		return destructor_nfct_events(upi);
+		ret = destructor_nfct_events(upi);
 	} else {
-		return destructor_nfct_polling(upi);
+		ret = destructor_nfct_polling(upi);
 	}
-	/* should not ever happen. */
-	ulogd_log(ULOGD_FATAL, "invalid NFCT configuration\n");
-	return -1;
+	nfct_filter_dump_destroy(cpi->filter_dump);
+
+	return ret;
 }
 
 static void signal_nfct(struct ulogd_source_pluginstance *pi, int signal)
