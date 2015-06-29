@@ -3,7 +3,7 @@
  * (C) 2000-2005 by Harald Welte <laforge@gnumonks.org>
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 
+ *  it under the terms of the GNU General Public License version 2
  *  as published by the Free Software Foundation
  *
  *  This program is distributed in the hope that it will be useful,
@@ -16,17 +16,39 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <fcntl.h>
-#include <ulogd/ulogd.h>
-#include <ulogd/linuxlist.h>
+#define _GNU_SOURCE
 
-static int maxfd = 0;
-static fd_set readset, writeset, exceptset;
-static LLIST_HEAD(ulogd_fds);
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/epoll.h>
+#include <ulogd/ulogd.h>
+
+#define UFD_MAX_EVENTS 16
+
+static int epollfd = -1;
+
+int ulogd_init_fd(void)
+{
+	epollfd = epoll_create1(0);
+	if (epollfd == -1)
+		return -1;
+	return 0;
+}
+
+int ulogd_fini_fd(void)
+{
+	int ret;
+
+	ret = close(epollfd);
+	epollfd = -1;
+	return ret;
+}
 
 int ulogd_register_fd(struct ulogd_fd *fd)
 {
 	int flags;
+	struct epoll_event ev;
 
 	/* make FD nonblocking */
 	flags = fcntl(fd->fd, F_GETFL);
@@ -38,72 +60,64 @@ int ulogd_register_fd(struct ulogd_fd *fd)
 		return -1;
 
 	if (fd->when & ULOGD_FD_READ)
-		FD_SET(fd->fd, &readset);
+		ev.events = EPOLLIN;
 
 	if (fd->when & ULOGD_FD_WRITE)
-		FD_SET(fd->fd, &writeset);
+		ev.events = EPOLLOUT;
 
-	if (fd->when & ULOGD_FD_EXCEPT)
-		FD_SET(fd->fd, &exceptset);
+	if (fd->when & ULOGD_FD_EXCEPT) {
+		/* XXX: intend to be a fd_set *exceptfds, right? */
+		ev.events = EPOLLRDHUP | EPOLLPRI | EPOLLERR;
+	}
 
-	/* Register FD */
-	if (fd->fd > maxfd)
-		maxfd = fd->fd;
-
-	llist_add_tail(&fd->list, &ulogd_fds);
-
-	return 0;
+	ev.data.ptr = fd;
+	return epoll_ctl(epollfd, EPOLL_CTL_ADD, fd->fd, &ev);
 }
 
-void ulogd_unregister_fd(struct ulogd_fd *fd)
+int ulogd_unregister_fd(struct ulogd_fd *fd)
 {
+	struct epoll_event ev;
+
 	if (fd->when & ULOGD_FD_READ)
-		FD_CLR(fd->fd, &readset);
+		ev.events = EPOLLIN;
 
 	if (fd->when & ULOGD_FD_WRITE)
-		FD_CLR(fd->fd, &writeset);
+		ev.events = EPOLLOUT;
 
 	if (fd->when & ULOGD_FD_EXCEPT)
-		FD_CLR(fd->fd, &exceptset);
+		ev.events = EPOLLRDHUP | EPOLLPRI | EPOLLERR;
 
-	llist_del(&fd->list);
-
-	/* Improvement: recalculate maxfd iif fd->fd == maxfd */
-	maxfd = -1;
-	llist_for_each_entry(fd, &ulogd_fds, list) {
-		if (fd->fd > maxfd)
-			maxfd = fd->fd;
-	}
+	ev.data.ptr = fd;
+	return epoll_ctl(epollfd, EPOLL_CTL_DEL, fd->fd, &ev);
 }
 
-int ulogd_select_main(struct timeval *tv)
+int ulogd_select_main(void)
 {
-	struct ulogd_fd *ufd, *tmp;
-	fd_set rds_tmp, wrs_tmp, exs_tmp;
-	int i;
+	struct ulogd_fd *ufd;
+	struct epoll_event events[UFD_MAX_EVENTS];
+	int nfds, i, flags = 0;
 
-	rds_tmp = readset;
-	wrs_tmp = writeset;
-	exs_tmp = exceptset;
-
-	i = select(maxfd+1, &rds_tmp, &wrs_tmp, &exs_tmp, tv);
-	if (i > 0) {
-		/* call registered callback functions */
-                llist_for_each_entry_safe(ufd, tmp, &ulogd_fds, list) {
-			int flags = 0;
-
-			if (FD_ISSET(ufd->fd, &rds_tmp))
-				flags |= ULOGD_FD_READ;
-
-			if (FD_ISSET(ufd->fd, &wrs_tmp))
-				flags |= ULOGD_FD_WRITE;
-
-			if (FD_ISSET(ufd->fd, &exs_tmp))
-				flags |= ULOGD_FD_EXCEPT;
-
-			if (flags)
-				ufd->cb(ufd->fd, flags, ufd->data);
-		}
+	nfds = epoll_wait(epollfd, events, UFD_MAX_EVENTS, -1);
+	if (nfds == -1) {
+		ulogd_log(ULOGD_ERROR, "epoll_wait: %s\n", _sys_errlist[errno]);
+		return -1;
 	}
-	return i;
+
+	for (i = 0; i < nfds; i++) {
+		ufd = events[i].data.ptr;
+		if (events[i].events & EPOLLIN)
+			flags |= ULOGD_FD_READ;
+
+		if (events[i].events & EPOLLOUT)
+			flags |= ULOGD_FD_WRITE;
+
+		if (events[i].events
+		    & (EPOLLRDHUP | EPOLLPRI | EPOLLERR))
+			flags |= ULOGD_FD_EXCEPT;
+
+		if (flags)
+			ufd->cb(ufd->fd, flags, ufd->data);
+	}
+
+	return nfds;
 }

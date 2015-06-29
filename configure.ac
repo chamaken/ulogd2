@@ -48,6 +48,9 @@ AC_CHECK_HEADER(sys/timerfd.h,[],[AC_MSG_ERROR(unable to find timerfd header)])
 dnl Check for signalfd header.
 AC_CHECK_HEADER(sys/signalfd.h,[],[AC_MSG_ERROR(unable to find signalfd header)])
 
+dnl Check for epoll header.
+AC_CHECK_HEADER(sys/epoll.h,[],[AC_MSG_ERROR(unable to find epoll header)])
+
 AC_ARG_ENABLE(ulog,
        AS_HELP_STRING([--enable-ulog], [Enable ulog module [default=yes]]),[enable_ulog=$enableval],[enable_ulog=yes])
 AM_CONDITIONAL([BUILD_ULOG], [test "x$enable_ulog" = "xyes"])

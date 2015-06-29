@@ -448,9 +448,11 @@ struct ulogd_fd {
 	void *data;			/* void * to pass to callback */
 };
 
+int ulogd_init_fd(void);
+int ulogd_fini_fd(void);
 int ulogd_register_fd(struct ulogd_fd *ufd);
-void ulogd_unregister_fd(struct ulogd_fd *ufd);
-int ulogd_select_main(struct timeval *tv);
+int ulogd_unregister_fd(struct ulogd_fd *ufd);
+int ulogd_select_main(void);
 
 /***********************************************************************
  * timer handling

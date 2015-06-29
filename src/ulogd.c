@@ -970,7 +970,7 @@ static void ulogd_main_loop(void)
 
 	while (1) {
 		/* XXX: signal blocking? */
-		ret = ulogd_select_main(NULL);
+		ret = ulogd_select_main();
 		if (ret < 0 && errno != EINTR)
 			ulogd_log(ULOGD_ERROR, "select says %s\n",
 				  strerror(errno));
@@ -1538,8 +1538,15 @@ int main(int argc, char* argv[])
 		warn_and_exit(daemonize);
 	}
 
+	if (ulogd_init_fd()) {
+		ulogd_log(ULOGD_FATAL, "ulogd_init_fd\n");
+		warn_and_exit(daemonize);
+		/* XXX: ulogd_fini_fd() after all on error? */
+	}
+
 	if (signal_ufd_init()) {
-		ulogd_log(ULOGD_FATAL, "prepare_signal\n");
+		ulogd_log(ULOGD_FATAL, "prepare_signal: %s\n",
+			  _sys_errlist[errno]);
 		warn_and_exit(daemonize);
 	}
 
