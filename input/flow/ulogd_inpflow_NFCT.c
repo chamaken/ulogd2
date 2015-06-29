@@ -737,8 +737,10 @@ event_handler_hashtable(enum nf_conntrack_msg_type type,
 				.ct = ct,
 			};
 			set_timestamp_from_ct(&tmp, ct, STOP);
-			tmp.time[START].tv_sec = 0;
-			tmp.time[START].tv_usec = 0;
+			if (!set_timestamp_from_ct_try(&tmp, ct, START)) {
+				tmp.time[START].tv_sec = 0;
+				tmp.time[START].tv_usec = 0;
+			}
 			do_propagate_ct(upi, ct, NULL, type, &tmp);
 		}
 		break;
