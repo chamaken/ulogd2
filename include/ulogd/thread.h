@@ -23,8 +23,8 @@ struct ulogd_interp_thread {
 	struct llist_head list;
 	struct llist_head runnable_list;
 	pthread_t tid;
-	pthread_mutex_t mutex; /* for stacks and runnable */
-	pthread_cond_t condv;
+	pthread_mutex_t mutex;	/* stacks, runnable and bundle */
+	pthread_cond_t condv;	/* runnable and bundle update */
 	bool runnable;
 	int retval;	/* errno in thread */
 

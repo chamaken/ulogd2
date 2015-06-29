@@ -209,6 +209,14 @@ static void *interp_bundle(void *arg)
 			goto failure;
 		}
 		th->bundle = NULL;
+		/* notify th->bundle == NULL to ulogd_sync_workers() */
+		ret = pthread_cond_signal(&th->condv);
+		if (ret != 0) {
+			ulogd_log(ULOGD_FATAL,
+				  "pthread_cond_signal: %s\n",
+				  _sys_errlist[ret]);
+			goto failure_unlock_th;
+		}
 		ret = pthread_mutex_unlock(&th->mutex);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
@@ -556,12 +564,21 @@ int ulogd_sync_workers(void)
 		ret = pthread_mutex_lock(&th->mutex);
 		if (ret != 0)
 			return -ret;
+		while (th->bundle != NULL) {
+			ret = pthread_cond_wait(&th->condv, &th->mutex);
+			if (ret != 0)
+				goto failure_unlock;
+		}
 		ret = pthread_mutex_unlock(&th->mutex);
 		if (ret != 0)
-			return -ret;
+			goto failure_unlock;
 	}
 
 	return 0;
+
+failure_unlock:
+	pthread_mutex_unlock(&th->mutex);
+	return -ret;
 }
 
 /* public interface in ulogd.h
