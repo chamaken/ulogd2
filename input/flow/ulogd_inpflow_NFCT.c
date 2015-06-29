@@ -35,6 +35,7 @@
 
 #include <sys/time.h>
 #include <time.h>
+#include <ctype.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <ulogd/linuxlist.h>
@@ -77,7 +78,7 @@ struct nfct_pluginstance {
 #define EVENT_MASK	NF_NETLINK_CONNTRACK_NEW | NF_NETLINK_CONNTRACK_DESTROY
 
 static struct config_keyset nfct_kset = {
-	.num_ces = 12,
+	.num_ces = 13,
 	.ces = {
 		{
 			.key	 = "pollinterval",
@@ -148,6 +149,11 @@ static struct config_keyset nfct_kset = {
 			.type	 = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 		},
+		{
+			.key	 = "accept_mark_filter",
+			.type	 = CONFIG_TYPE_STRING,
+			.options = CONFIG_OPT_NONE,
+		},
 	},
 };
 #define pollint_ce(x)	(x->ces[0])
@@ -162,6 +168,7 @@ static struct config_keyset nfct_kset = {
 #define src_filter_ce(x)	((x)->ces[9])
 #define dst_filter_ce(x)	((x)->ces[10])
 #define proto_filter_ce(x)	((x)->ces[11])
+#define mark_filter_ce(x)	((x)->ces[12])
 
 enum nfct_keys {
 	NFCT_ORIG_IP_SADDR = 0,
@@ -1232,6 +1239,60 @@ static int build_nfct_filter_proto(struct nfct_filter *filter, char* filter_stri
 	return 0;
 }
 
+#if defined HAVE_NFCT_FILTER_MARK
+static int build_nfct_filter_mark(struct nfct_filter *filter, char* filter_string)
+{
+	char *p, *endptr;
+	uintmax_t v;
+	struct nfct_filter_dump_mark filter_mark;
+	errno = 0;
+
+	for (p = filter_string; isspace(*p); ++p)
+		;
+	v = strtoumax(p, &endptr, 0);
+	if (endptr == p)
+		goto invalid_error;
+	if ((errno == ERANGE && v == UINTMAX_MAX) || errno != 0)
+		goto invalid_error;
+	filter_mark.val = (uint32_t)v;
+
+	if (*endptr != '\0') {
+		for (p = endptr; isspace(*p); ++p)
+			;
+		if (*p++ != '/')
+			goto invalid_error;
+		for (; isspace(*p); ++p)
+			;
+		v = strtoumax(p, &endptr, 0);
+		if (endptr == p)
+			goto invalid_error;
+		if ((errno == ERANGE && v == UINTMAX_MAX) || errno != 0)
+			goto invalid_error;
+		filter_mark.mask = (uint32_t)v;
+		if (*endptr != '\0')
+			goto invalid_error;
+	} else {
+		filter_mark.mask = UINT32_MAX;
+	}
+
+	ulogd_log(ULOGD_NOTICE, "adding mark to filter: \"%u/%u\"\n",
+		  filter_mark.val, filter_mark.mask);
+	nfct_filter_add_attr(filter, NFCT_FILTER_MARK, &filter_mark);
+
+	return 0;
+
+invalid_error:
+	ulogd_log(ULOGD_FATAL, "invalid val/mask %s\n", filter_string);
+	return -1;
+
+}
+#else
+static int build_nfct_filter_mark(struct nfct_filter *filter, char* filter_string)
+{
+	ulogd_log(ULOGD_FATAL, "mark filter is not supported\n");
+	return -1;
+}
+#endif /* HAVE_NFCT_FILTER_MARK */
 
 static int build_nfct_filter(struct ulogd_source_pluginstance *upi)
 {
@@ -1275,6 +1336,15 @@ static int build_nfct_filter(struct ulogd_source_pluginstance *upi)
 		}
 	}
 
+	if (strlen(mark_filter_ce(upi->config_kset).u.string) != 0) {
+		char *filter_string = mark_filter_ce(upi->config_kset).u.string;
+		if (build_nfct_filter_mark(filter, filter_string) != 0) {
+			ulogd_log(ULOGD_FATAL,
+					"Unable to create mark filter\n");
+			goto err_filter;
+		}
+	}
+
 	if (filter) {
 		if (nfct_filter_attach(nfct_fd(cpi->cth), filter) == -1) {
 			ulogd_log(ULOGD_FATAL, "nfct_filter_attach");
@@ -1307,7 +1377,8 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 
 	if ((strlen(src_filter_ce(upi->config_kset).u.string) != 0) ||
 		(strlen(dst_filter_ce(upi->config_kset).u.string) != 0) ||
-		(strlen(proto_filter_ce(upi->config_kset).u.string) != 0)
+		(strlen(proto_filter_ce(upi->config_kset).u.string) != 0) ||
+		(strlen(mark_filter_ce(upi->config_kset).u.string) != 0)
 	   ) {
 		if (build_nfct_filter(upi) != 0) {
 			ulogd_log(ULOGD_FATAL, "error creating NFCT filter\n");
