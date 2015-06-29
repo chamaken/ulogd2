@@ -763,13 +763,11 @@ static int start_pluginstances()
 	return 0;
 
 call_stop:
-	if (err_spi != NULL) {
-		llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
-			if (spi == err_spi)
-				break;
-			if (spi->plugin->stop) {
-				spi->plugin->stop(spi);
-			}
+	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
+		if (spi == err_spi)
+			break;
+		if (spi->plugin->stop) {
+			spi->plugin->stop(spi);
 		}
 	}
 	if (err_pi != NULL) {
