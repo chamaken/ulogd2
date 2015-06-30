@@ -12,21 +12,24 @@
 #include <ulogd/thread.h>
 #include <ulogd/keysets.h>
 
-struct worklist {
-	struct llist_head list;
-	struct ulogd_pluginstance *data;
-};
-
-/* XXX: not surely work like - id1:PL1,id2:PL2:id1:PL1 */
-static int wildcard_num(struct ulogd_pluginstance *pi, struct llist_head *head)
+static int wildcard_num(struct ulogd_source_pluginstance *spi,
+			struct ulogd_stack *stack,
+			struct ulogd_stack_element *wildpos)
 {
-	struct worklist *w;
+	struct ulogd_stack *s;
+	struct ulogd_stack_element *e;
+	int num_keys = UPI_OUTPUT_KEYSET(spi)->num_keys;
 
-	llist_for_each_entry(w, head, list) {
-		if (w->data == pi)
-			return 0;
+	llist_for_each_entry(s, &spi->stacks, list) {
+		if (s != stack)
+			continue;
+		llist_for_each_entry(e, &s->elements, list) {
+			if (e == wildpos)
+				return num_keys;
+			num_keys += UPI_OUTPUT_KEYSET(e->pi)->num_keys;
+		}
 	}
-	return UPI_OUTPUT_KEYSET(pi)->num_keys;
+	return -1;
 }
 
 static struct ulogd_keysets_bundle *
@@ -36,72 +39,52 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 	struct ulogd_keyset *keysets, *srcout, *input, *output;
 	struct ulogd_key *keys;
 	struct ulogd_stack *stack;
-	struct ulogd_stack_element *element;
-	unsigned int ksize, kindex = 0, i, s;
-	unsigned int wildnum, nkeys;
+	struct ulogd_stack_element *element, *e;
+	unsigned int ksize, kindex = 0, i;
+	unsigned int nkeys;
 	void *raw;
-	LLIST_HEAD(pluginstances);
-	struct worklist *tmp;
 
 	srcout = UPI_OUTPUT_KEYSET(spi);
-	wildnum = srcout->num_keys;
-	/* calc source pluginstance wide number of wildcard key: 1st */
-	llist_for_each_entry(stack, &spi->stacks, list) {
-		llist_for_each_entry(element, &stack->elements, list) {
-			s = wildcard_num(element->pi, &pluginstances);
-			if (s) {
-				tmp = alloca(sizeof(*tmp));
-				if (tmp == NULL) {
-					ulogd_log(ULOGD_ERROR, "alloca: %s\n",
-						  _sys_errlist[errno]);
-					return NULL;
-				}
-				tmp->data = element->pi;
-				llist_add(&tmp->list, &pluginstances);
-			}
-			wildnum += s;
-		}
-	}
+	nkeys = srcout->num_keys;
 
-	/* XXX: lengthed type input key? */
-	/* calc whole size: 2nd */
+	/* calc whole size: 1st */
 	ksize = sizeof(struct ulogd_keysets_bundle);
 	if (srcout->num_keys > 0) {
 		ksize += sizeof(struct ulogd_keyset);
 		for (i = 0; i < srcout->num_keys; i++) {
-			ksize += sizeof(struct ulogd_key);
 			if (srcout->keys[i].flags & ULOGD_RETF_EMBED)
 				ksize += srcout->keys[i].len;
 		}
 		kindex++;
 	}
-	nkeys = srcout->num_keys;
 	llist_for_each_entry(stack, &spi->stacks, list) {
 		llist_for_each_entry(element, &stack->elements, list) {
 			input = UPI_INPUT_KEYSET(element->pi);
 			element->iksbi = kindex++;
 			ksize += sizeof(struct ulogd_keyset);
 			if (input->type & ULOGD_KEYF_WILDCARD) {
-				ksize += wildnum * sizeof(struct ulogd_key);
-				nkeys += wildnum;
+				if (element->list.next != &stack->elements) {
+					ulogd_log(ULOGD_ERROR, "wildcard is only"
+						  " allowed at the end\n");
+					return NULL;
+				}
+				nkeys += wildcard_num(spi, stack, element);
 			} else {
-				ksize += input->num_keys
-					* sizeof(struct ulogd_key);
 				nkeys += input->num_keys;
 			}
 
+			output = UPI_OUTPUT_KEYSET(element->pi);
 			element->oksbi = kindex++;
 			ksize += sizeof(struct ulogd_keyset);
-
-			output = UPI_OUTPUT_KEYSET(element->pi);
 			for (i = 0; i < output->num_keys; i++) {
-				ksize += sizeof(struct ulogd_key);
 				if (output->keys[i].flags & ULOGD_RETF_EMBED)
 					ksize += output->keys[i].len;
-				nkeys++;
 			}
+			nkeys += output->num_keys;
 		}
 	}
+	ksize += nkeys * sizeof(struct ulogd_key);
+
 	ksb = mmap(NULL, ksize, PROT_READ | PROT_WRITE,
 		   MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	if (ksb == MAP_FAILED) {
@@ -139,13 +122,14 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 		keys = (void *)keys + ksize;
 	}
 
-	/* walk through 3 times... */
+	/* walk through 2nd */
 	llist_for_each_entry(stack, &spi->stacks, list) {
 		llist_for_each_entry(element, &stack->elements, list) {
 			input = UPI_INPUT_KEYSET(element->pi);
 			keysets->type = input->type;
 			if (input->type & ULOGD_KEYF_WILDCARD) {
-				keysets->num_keys = wildnum;
+				keysets->num_keys = wildcard_num(spi, stack,
+								 element);
 				/* and type should be ULOGD_KEYF_OPTIONAL ? */
 				keysets->keys = keys;
 
@@ -156,9 +140,12 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 					       * sizeof(struct ulogd_key));
 					keys += srcout->num_keys;
 				}
-				llist_for_each_entry(tmp, &pluginstances, list) {
+				llist_for_each_entry(e, &stack->elements, list) {
+					if (e == element)
+						break;
+
 					struct ulogd_keyset *ok
-						= UPI_OUTPUT_KEYSET(tmp->data);
+						= UPI_OUTPUT_KEYSET(e->pi);
 					unsigned int n = ok->num_keys;
 					ksize = n * sizeof(struct ulogd_key);
 					if (n) {
@@ -197,8 +184,9 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			keysets++;
 
 			/* NOTE: (re)set input/output template here */
-			if (element->pi->input_template != NULL)
+			if (element->pi->input_template != NULL) {
 				free(element->pi->input_template);
+			}
 			element->pi->input_template
 				= &ksb->keysets[element->iksbi];
 			if (element->pi->output_template != NULL)
@@ -321,8 +309,10 @@ static int resolve_keysets_bundle(struct ulogd_source_pluginstance *spi)
 				if (!okey) {
 					if (ikey->flags & ULOGD_KEYF_OPTIONAL)
 						continue;
-					ulogd_log(ULOGD_ERROR, "cannot find "
-						  "key `%s' in stack\n",
+					ulogd_log(ULOGD_ERROR, "%s:%s cannot "
+						  "find key `%s' in stack\n",
+						  elem->pi->id,
+						  elem->pi->plugin->name,
 						  ikey->name);
 					return -EINVAL;
 				}
