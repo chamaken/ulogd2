@@ -22,6 +22,7 @@
 
 #define _GNU_SOURCE	/* for memmem() */
 
+#include <errno.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
@@ -238,25 +239,40 @@ static int start_timeconv(struct ulogd_pluginstance *upi,
 	struct timeconv_priv *priv =
 			(struct timeconv_priv *)upi->private;
 	int fd;
-	ssize_t nread;
-	char buf[4096] = {0}; /* XXX: MAGIC NUMBER */
+	ssize_t nread, n;
+	char buf[4096]; /* XXX: MAGIC NUMBER */
 	char *s = "ktime_get_real\n  .offset: ";
 	void *p;
 	size_t slen = strlen(s);
 
 	/* get rt offset */
 	fd = open(PROC_TIMER_LIST, O_RDONLY);
-	if (fd == -1)
+	if (fd == -1) {
+		ulogd_log(ULOGD_ERROR, "open: %s\n", _sys_errlist[errno]);
 		return -1;
-	nread = read(fd, buf, sizeof(buf));
+	}
+
+	nread = 0;
+	do {
+		n = read(fd, buf + nread, 4096 - nread);
+		nread += n;
+	} while (n > 0 && nread < 4096);
+	if (n == -1) {
+		ulogd_log(ULOGD_ERROR, "read: %s\n", _sys_errlist[errno]);
+		return -1;
+	}
 	close(fd);
-	if (nread == -1)
-		return -1;
+
 	p = memmem(buf, nread, s, slen);
-	if (p == NULL)
+	if (p == NULL) {
+		ulogd_log(ULOGD_ERROR, "no ktime_get_real entry in %s\n",
+			  PROC_TIMER_LIST);
 		return -1;
-	if (sscanf(p + slen, " %"PRIu64, &priv->rtoffset) == EOF)
+	}
+	if (sscanf(p + slen, " %"PRIu64, &priv->rtoffset) == EOF) {
+		ulogd_log(ULOGD_ERROR, "sscanf: %s\n", _sys_errlist[errno]);
 		return -1;
+	}
 
 	/* select set function */
 	if (usec64_ce(upi->config_kset).u.value)
@@ -289,6 +305,7 @@ static struct ulogd_plugin timeconv_plugin = {
 	.configure	= &configure_timeconv,
 	.start		= &start_timeconv,
 	.priv_size	= sizeof(struct timeconv_priv),
+	.mtsafe		= 1,
 	.version = VERSION,
 };
 
