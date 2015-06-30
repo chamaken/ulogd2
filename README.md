@@ -5,68 +5,45 @@ one of a Child Of ULogD.
 
 feature
 -------
+
+compared with original ulogd:
+
+* unstable
+* partial multi-thread
+* python plugin
+* (working) IPFIX and NetFlow v9 plugin
+
+
+implementation note
+-------------------
+
 ### introduce ulogd_source_pluginstance
-  スタックの先頭を既存の ulogd_pluginstance ではなく、別構造体 ulogd_source_pluginstance として
-  管理。この source pluginstance が、同じ source pluginstance を先頭とする (複数の) stack を持つ。
-
-  introdice ulogd_source_pluginstance instead of ulogd_pluginstance at head of stack.
-  ulogd_source_pluginstance hold all stacks which head is this instance.
-
+  introduce struct ulogd_source_pluginstance at the head of stack.
+  it holds all stacks which head is this instance.
 
 ### verbose data
-  同じ source pluginstance を持つ keysets の集まりとして構造体 ulogd_keysets_bundle を導入。
-  例えば
-
-  introduce struct ulogd_keysets_bundle for which head is the same source pluginstance.
-  for example:
-
-    stack=spi1:src1,pi1:pl1,pi2:pl2,pi3:pl3
-    stack=spi1:src1,pi1:pl1,pi4:pl4,pi5:pl5
-
-  とのスタック設定の場合、source pluginstance の spi1 は ulogd_keysets_bundle として
-  spi1, pi1, pi2, pi3, pi4, pi5 全ての keysets を含む keysets bundle を作成、保有する。
-
-  in this case, source pluginstance spi1 creates keysets which contains keyset of
-  spi1, pi1, pi2, pi3, pi4, pi5. and the source pluginstance holds the keyset.
-
+  introduce struct ulogd_keysets_bundle for which head is the same
+  source pluginstance.
 
 ### multi thread
-  今のところ一部のみ。きっかけの source_pluginstance は pthread_create() で作られたスレッド
-  ではなく、メインスレッドから呼び出す。source_pluginstance に続くスタックを pthread_create()
-  で作られたスレッド上で実行する。
+  source pluginstance is not run in a thread created by
+  pthread_create(), but in main thread. stacks which is subsequent
+  of source pluginstance will run in thread created by
+  pthread_create().
 
-  source pluginstance is not run in thread created by pthread_create(), but in main thread.
-  stack which is subsequent of source pluginstance will run in thread created by pthread_create().
-
-### sharing instance
-  一つの ID に対してインスタンスを一つだけ作成して共有。
-  結果? stack のリストをグローバルに持つのではなく、source_pluginstance が stack を持つ。
-
-  create only one instance per ID and share it.
-  so that stack list is not kept in global list but source pluginstance.
-
-    stack=spi1:src1,pi1:pl1,pi2:pl2,pi3:pl3
-    stack=spi1:src1,pi1:pl1,pi4:pl4,pi5:pl5
-    stack=spi2:src1,pi1:pl1,pi4:pl4,pi5:pl5
-
-  spi1, spi2, pi1, pi2, pi3, pi4, pi5 を一つだけ作成。spi1 は [pi1 pi2 pi3] と [pi1 pi4 pi5]
-  二つのスタックを持ち、spi2 は [pi1, pi4, pi5] のスタックを持つ。
-
-  create spi1, spi2, pi1, pi2, pi3, pi4, pi5 only one instance.
-  spi1 holds two stack - [pi1 pi2 pi3] and [pi1 pi4 pi5]. spi2 holds [pi1, pi4, pi5]
-
+### share instances
+  create only one instance per ID from plugin and share it.
+  
 
 TODO
 ----
 
-英語だめだわ...
-
-* would be better to make source pluginstance multi thread?
-* use epoll instead of select?
+* would it be better to make source pluginstance to multi-thread?
 
 
 struct memo
 -----------
+
 <pre>
 source_pluginstance
   .keysets_bundles
@@ -145,25 +122,24 @@ stack=src,pi1,pi2,...
 ![to propagate](https://github.com/chamaken/ulogd2/blob/v3.x/doc/image/propagate.png "propagate")
 
 1. prepare in main.  
-   option parsing, instanciate plugin and source_plugin. configure and start those,  
-   create keysets_bundle pool for each source pluginstance traversing stack which the  
-   source pluginstance has, create interp_threads.  
-   source pluginstance may register fd which they will read.  
+   source pluginstance may register fd which they will read.
 
 2. main thread get into ulogd_main_loop().  
-   now it is just select() with no timeout.
+   wait fd by epoll.
 
 3. callback.  
    call registered callback if related fd is readable.
 
 4. create output - ulogd_keyset.  
-   read data and put it ulogd_keyset which is acquired by ulogd_get_output_keyset()
+   read data from fd and put it to ulogd_keyset which is acquired by
+   ulogd_get_output_keyset()
 
 5. propagate ulogd_keyset.  
-   in ulogd_propagate_results() get interp_thread and pass ulogd_keysets_bundle and
+   ulogd_propagate_results() gets interp_thread and pass
+   ulogd_keysets_bundle to it (by condv)
 
 6. thread routine.  
-   notified ulogd_keysets_bundle prepared by condv. get source pluginstance and  
-   traverse each stack which the source pluginstance hold.  
-   after execute stack, put ulogd_keysets_bundle back to pool (global list) and  
+   get source pluginstance from ulogd_keyset_bundle and traverse
+   each stack which the source pluginstance hold. After executing
+   stack, put ulogd_keysets_bundle back to pool (global list) and
    put self back to pool too.
