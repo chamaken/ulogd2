@@ -921,8 +921,8 @@ static int create_stack(const char *option)
 		}
 
 		/* check input/output key consistency */
-		if (UPI_INPUT_KEYSET(pi)->type
-		    & UPI_OUTPUT_KEYSET(pi_prev)->type) {
+		if (!(UPI_INPUT_KEYSET(pi)->type
+		      & UPI_OUTPUT_KEYSET(pi_prev)->type)) {
 			ulogd_log(ULOGD_ERROR, "type mismatch between "
 				  "%s:%s and %s:%s in stack\n",
 				  pi->id, pi->plugin->name,
