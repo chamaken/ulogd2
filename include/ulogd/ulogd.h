@@ -299,7 +299,7 @@ struct ulogd_pluginstance {
 	char id[ULOGD_MAX_KEYLEN + 1];
 	/* per-instance config parameters (array) */
 	struct config_keyset *config_kset;
-	struct ulogd_keyset *output_template;
+	struct ulogd_keyset *output_config;
 
 	/* followings are specific pluginstance */
 
@@ -311,11 +311,10 @@ struct ulogd_pluginstance {
 	/* syncronize interp by BIG lock */
 	pthread_mutex_t interp_mutex;
 
-	/* in configure():
-	 *   for creating dynamic input/output key
-	 * at start():
-	 *   represent input for wildcarded (sink) pluginstance
-	 */
+	/* creating dynamic input/output key in configure() */
+	struct ulogd_keyset *input_config;
+
+	 /* for wildcarded (sink) input at start() */
 	struct ulogd_keyset *input_template;
 
 	/* private data */
@@ -329,7 +328,7 @@ struct ulogd_source_pluginstance {
 	char id[ULOGD_MAX_KEYLEN + 1];
 	/* per-instance config parameters (array) */
 	struct config_keyset *config_kset;
-	struct ulogd_keyset *output_template;
+	struct ulogd_keyset *output_config;
 
 	/* followings are specific source_pluginstance */
 
@@ -357,11 +356,11 @@ struct ulogd_source_pluginstance {
 	char private[0];
 };
 
-#define UPI_OUTPUT_KEYSET(upi) (upi->output_template != NULL \
-	 ? upi->output_template	      \
+#define UPI_OUTPUT_KEYSET(upi) (upi->output_config != NULL \
+	 ? upi->output_config	      \
 	 : &upi->plugin->output)
-#define UPI_INPUT_KEYSET(upi) (upi->input_template != NULL \
-	 ? upi->input_template	      \
+#define UPI_INPUT_KEYSET(upi) (upi->input_config != NULL \
+	 ? upi->input_config	      \
 	 : &upi->plugin->input)
 
 

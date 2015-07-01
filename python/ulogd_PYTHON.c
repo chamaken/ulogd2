@@ -1032,15 +1032,15 @@ static struct ulogd_keyset *alloc_keyset(struct ulogd_keyset **keyset)
 }
 
 static int py_parent_configure(struct py_priv *priv,
-			       struct ulogd_keyset **input_template,
-			       struct ulogd_keyset **output_template)
+			       struct ulogd_keyset **input_config,
+			       struct ulogd_keyset **output_config)
 {
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
 	struct nlattr *nla;
 	struct ulogd_keyset *rcvkset = NULL;
 
-	/* XXX: not free input/output template on error */
+	/* XXX: not free input/output config on error */
 	while (1) {
 		if (py_parent_recv(priv, buf, sizeof(buf), NULL) < 0)
 			return ULOGD_IRET_ERR;
@@ -1057,13 +1057,13 @@ static int py_parent_configure(struct py_priv *priv,
 			}
 			return py_parent_waitpid(priv, 0);
 		case ULOGD_PY_RETURN_CONFIGURE_IKINFO:
-			if (input_template == NULL) {
+			if (input_config == NULL) {
 				/* source pluginstance */
 				ulogd_log(ULOGD_ERROR, "source pluginstance"
-					  "has no input keyset template\n");
+					  "has no input keyset\n");
 				return ULOGD_IRET_ERR;
 			}
-			rcvkset = alloc_keyset(input_template);
+			rcvkset = alloc_keyset(input_config);
 			if (rcvkset == NULL)
 				return ULOGD_IRET_ERR;
 			rcvkset->type = (unsigned int)mnl_attr_get_u32(nla);
@@ -1071,7 +1071,7 @@ static int py_parent_configure(struct py_priv *priv,
 			rcvkset->num_keys = (unsigned int)mnl_attr_get_u32(nla);
 			break;
 		case ULOGD_PY_RETURN_CONFIGURE_OKINFO:
-			rcvkset = alloc_keyset(output_template);
+			rcvkset = alloc_keyset(output_config);
 			if (rcvkset == NULL)
 				return ULOGD_IRET_ERR;
 			rcvkset->type = (unsigned int)mnl_attr_get_u32(nla);
@@ -1101,8 +1101,8 @@ static int py_parent_configure(struct py_priv *priv,
 
 static int py_configure(struct py_priv *priv, char *id, int pitype,
 			struct config_keyset *config_kset,
-			struct ulogd_keyset **input_template,
-			struct ulogd_keyset **output_template)
+			struct ulogd_keyset **input_config,
+			struct ulogd_keyset **output_config)
 {
 	char *modname;
 	int sv[2], ret = ULOGD_IRET_ERR;
@@ -1132,7 +1132,7 @@ static int py_configure(struct py_priv *priv, char *id, int pitype,
 		break;
 	default:
 		ret = py_parent_configure(priv,
-					  input_template, output_template);
+					  input_config, output_config);
 		break;
 	}
 
@@ -1144,7 +1144,7 @@ static int py_source_configure(struct ulogd_source_pluginstance *spi)
 	struct py_priv *priv = (struct py_priv *)&spi->private;
 
 	return py_configure(priv, spi->id, ULOGD_PLUGINSTANCE_SOURCE,
-			    spi->config_kset, NULL, &spi->output_template);
+			    spi->config_kset, NULL, &spi->output_config);
 }
 
 static int py_flow_configure(struct ulogd_pluginstance *upi)
@@ -1153,7 +1153,7 @@ static int py_flow_configure(struct ulogd_pluginstance *upi)
 
 	return py_configure(priv, upi->id, ULOGD_PLUGINSTANCE_FILTER,
 			    upi->config_kset,
-			    &upi->input_template, &upi->output_template);
+			    &upi->input_config, &upi->output_config);
 }
 
 static int py_start(struct py_priv *priv, char *id, struct ulogd_keyset *input,

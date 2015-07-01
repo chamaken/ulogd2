@@ -716,7 +716,7 @@ static int check_last_output()
 			elem = llist_entry(stack->elements.prev,
 					   struct ulogd_stack_element, list);
 			/* check the last output key type */
-			if ((elem->pi->output_template->type
+			if ((UPI_OUTPUT_KEYSET(elem->pi)->type
 			     & ULOGD_DTYPE_SINK) == 0) {
 				ulogd_log(ULOGD_ERROR, "last pluginstance in stack "
 					  "has to be output plugin\n");
@@ -1597,13 +1597,13 @@ int main(int argc, char* argv[])
 		ulogd_log(ULOGD_FATAL, "configure_pluginstances\n");
 		warn_and_exit(daemonize);
 	}
+	if (check_last_output()) {
+		ulogd_log(ULOGD_FATAL, "check_last_output\n");
+		warn_and_exit(daemonize);
+	}
 	if (ulogd_keysets_bundles_alloc_init(&ulogd_source_pluginstances,
 					     ULOGD_N_PERSTACK_DATA)) {
 		ulogd_log(ULOGD_FATAL, "ulogd_keysets_bundles_alloc_init\n");
-		warn_and_exit(daemonize);
-	}
-	if (check_last_output()) {
-		ulogd_log(ULOGD_FATAL, "check_last_output\n");
 		warn_and_exit(daemonize);
 	}
 	if (start_pluginstances()) {

@@ -32,6 +32,21 @@ static int wildcard_num(struct ulogd_source_pluginstance *spi,
 	return -1;
 }
 
+static int keyset_cmp(struct ulogd_keyset *ks1, struct ulogd_keyset *ks2)
+{
+	size_t size = sizeof(struct ulogd_key) - offsetof(struct ulogd_key, u);
+	unsigned int i;
+
+	if (ks1->num_keys != ks2->num_keys || ks1->type != ks2->type)
+		return -1;
+
+	for (i = 0; i < ks1->num_keys; i++)
+		if (memcmp(&ks1->keys[i], &ks2->keys[i], size))
+			return -1;
+
+	return 0;
+}
+
 static struct ulogd_keysets_bundle *
 ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 {
@@ -183,19 +198,29 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			}
 			keysets++;
 
+			free(element->pi->input_config);
+			element->pi->input_config = NULL;
+			free(element->pi->output_config);
+			element->pi->output_config = NULL;
+
 			/* NOTE: (re)set input/output template here */
 			if (element->pi->input_template != NULL) {
-				free(element->pi->input_template);
+				if (keyset_cmp(element->pi->input_template,
+					       &ksb->keysets[element->iksbi])) {
+					ulogd_log(ULOGD_ERROR, "instances with"
+						  " different input key is not"
+						  " supported, sorry\n");
+					goto fail_unmap;
+				}
 			}
 			element->pi->input_template
 				= &ksb->keysets[element->iksbi];
-			if (element->pi->output_template != NULL)
-				free(element->pi->output_template);
-			element->pi->output_template
-				= &ksb->keysets[element->oksbi];
 		}
 	}
 	return ksb;
+fail_unmap:
+	munmap(ksb, ksb->length);
+	return NULL;
 }
 
 /* based on src is just after resolved, all zero but
