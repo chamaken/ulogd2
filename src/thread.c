@@ -69,8 +69,6 @@ static int exec_stack(struct ulogd_stack *stack,
 		ret = elem->pi->plugin->interp(elem->pi,
 					       &keyset[elem->iksbi],
 					       &keyset[elem->oksbi]);
-		ulogd_log(ULOGD_DEBUG, "instance -  %s:%s returns: %d\n",
-			  elem->pi->id, elem->pi->plugin->name, ret);
 		if (!elem->pi->plugin->mtsafe) {
 			ret = pthread_mutex_unlock(&elem->pi->interp_mutex);
 			if (ret != 0) {
@@ -87,7 +85,7 @@ static int exec_stack(struct ulogd_stack *stack,
 		case ULOGD_IRET_STOP:
 			/* we shall abort further iteration of the stack */
 			ulogd_log(ULOGD_ERROR,
-				  "not OK %s:%s returns: %d\n",
+				  "not OK, interp %s:%s returns: %d\n",
 				  elem->pi->id, elem->pi->plugin->name, ret);
 			abort_stack = 1;
 			break;
@@ -140,8 +138,19 @@ static void *interp_bundle(void *arg)
 				  _sys_errlist[ret]);
 			goto failure_unlock_th;
 		}
+
+		/* break if not runnable */
 		if (!th->runnable) {
-			/* only break? */
+			if (th->bundle != NULL) {
+				ulogd_log(ULOGD_ERROR, "discard keysets: %p"
+					  " because of stop\n", th->bundle);
+				ulogd_clean_results(th->bundle);
+				ulogd_put_keysets_bundle(th->bundle);
+				th->bundle = NULL;
+				th->retval = ULOGD_IRET_ERR;
+			}
+			put_worker(th);
+			/* is above enough? */
 			break;
 		}
 
@@ -178,6 +187,7 @@ static void *interp_bundle(void *arg)
 
 		/* XXX: need to check runnable? */
 		if (usage == 0) {
+			/* notify to ulogd_wait_consume() */
 			ret = pthread_mutex_lock(&spi->refcnt_mutex);
 			if (ret != 0) {
 				ulogd_log(ULOGD_FATAL,
@@ -518,7 +528,7 @@ int ulogd_stop_workers(void)
 		}
 	}
 
-	llist_for_each_entry(cur, &ulogd_interp_workers, list) {
+	llist_for_each_entry_safe(cur, tmp, &ulogd_interp_workers, list) {
 		/* XXX: or sleep and cancel? */
 		ret = pthread_join(cur->tid, (void **)&retval);
 		if (ret != 0) {
@@ -530,9 +540,6 @@ int ulogd_stop_workers(void)
 			ulogd_log(ULOGD_ERROR, "thread [T%lu] returns: %d\n",
 				  *retval);
 		}
-	}
-
-	llist_for_each_entry_safe(cur, tmp, &ulogd_interp_workers, list) {
 		ret = pthread_mutex_destroy(&cur->mutex);
 		if (ret != 0) {
 			ulogd_log(ULOGD_ERROR, "pthread_mutex_destroy: %s\n",
@@ -548,8 +555,8 @@ int ulogd_stop_workers(void)
 		if (cur < head)
 			head = cur;
 	}
-
 	free(head);
+
 	return 0;
 }
 
@@ -618,8 +625,6 @@ int ulogd_propagate_results(struct ulogd_keyset *okeys)
 			_sys_errlist[ret]);
 		return ULOGD_IRET_ERR;
 	}
-	ulogd_log(ULOGD_DEBUG, "notify - worker: T%lu, keysets bundle: %p\n",
-		  worker->tid, ksb);
 	ret = pthread_mutex_unlock(&worker->mutex);
 	if (ret != 0) {
 		ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
