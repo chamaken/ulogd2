@@ -88,17 +88,17 @@ enum ulogd_dtype {
 /* structure describing an input  / output parameter of a plugin */
 struct ulogd_key {
 	/* length of the returned value (only for lengthed types */
-	u_int32_t len;
+	uint32_t len;
 	/* type of the returned value (ULOGD_DTYPE_...) */
-	u_int16_t type;
+	uint16_t type;
 	/* flags (i.e. free, ...) */
-	u_int16_t flags;
+	uint16_t flags;
 	/* name of this key */
 	char name[ULOGD_MAX_KEYLEN+1];
 	/* IETF IPFIX attribute ID */
 	struct {
-		u_int32_t	vendor;
-		u_int16_t	field_id;
+		uint32_t	vendor;
+		uint16_t	field_id;
 	} ipfix;
 
 	/* Store field name for Common Information Model */
@@ -110,12 +110,12 @@ struct ulogd_key {
 	union {
 		/* and finally the returned value */
 		union {
-			u_int8_t	b;
-			u_int8_t	ui8;
-			u_int16_t	ui16;
-			u_int32_t	ui32;
-			u_int64_t	ui64;
-			u_int32_t	ui128[4];
+			uint8_t	b;
+			uint8_t	ui8;
+			uint16_t	ui16;
+			uint32_t	ui32;
+			uint64_t	ui64;
+			uint32_t	ui128[4];
 			int8_t		i8;
 			int16_t		i16;
 			int32_t		i32;
@@ -136,31 +136,31 @@ struct ulogd_keyset {
 	unsigned int type;
 };
 
-static inline void okey_set_b(struct ulogd_key *key, u_int8_t value)
+static inline void okey_set_b(struct ulogd_key *key, uint8_t value)
 {
 	key->u.value.b = value;
 	key->flags |= ULOGD_RETF_VALID;
 }
 
-static inline void okey_set_u8(struct ulogd_key *key, u_int8_t value)
+static inline void okey_set_u8(struct ulogd_key *key, uint8_t value)
 {
 	key->u.value.ui8 = value;
 	key->flags |= ULOGD_RETF_VALID;
 }
 
-static inline void okey_set_u16(struct ulogd_key *key, u_int16_t value)
+static inline void okey_set_u16(struct ulogd_key *key, uint16_t value)
 {
 	key->u.value.ui16 = value;
 	key->flags |= ULOGD_RETF_VALID;
 }
 
-static inline void okey_set_u32(struct ulogd_key *key, u_int32_t value)
+static inline void okey_set_u32(struct ulogd_key *key, uint32_t value)
 {
 	key->u.value.ui32 = value;
 	key->flags |= ULOGD_RETF_VALID;
 }
 
-static inline void okey_set_u64(struct ulogd_key *key, u_int64_t value)
+static inline void okey_set_u64(struct ulogd_key *key, uint64_t value)
 {
 	key->u.value.ui64 = value;
 	key->flags |= ULOGD_RETF_VALID;
@@ -187,22 +187,22 @@ static inline void okey_set_valid(struct ulogd_key *key)
 	key->flags |= ULOGD_RETF_VALID;
 }
 
-static inline u_int8_t ikey_get_u8(struct ulogd_key *key)
+static inline uint8_t ikey_get_u8(struct ulogd_key *key)
 {
 	return key->u.source->u.value.ui8;
 }
 
-static inline u_int16_t ikey_get_u16(struct ulogd_key *key)
+static inline uint16_t ikey_get_u16(struct ulogd_key *key)
 {
 	return key->u.source->u.value.ui16;
 }
 
-static inline u_int32_t ikey_get_u32(struct ulogd_key *key)
+static inline uint32_t ikey_get_u32(struct ulogd_key *key)
 {
 	return key->u.source->u.value.ui32;
 }
 
-static inline u_int64_t ikey_get_u64(struct ulogd_key *key)
+static inline uint64_t ikey_get_u64(struct ulogd_key *key)
 {
 	return key->u.source->u.value.ui64;
 }

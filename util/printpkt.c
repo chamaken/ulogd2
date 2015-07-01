@@ -199,7 +199,7 @@ static int printpkt_ipv4(struct ulogd_key *res, char *buf)
 {
 	char *buf_cur = buf;
 	char tmp[INET_ADDRSTRLEN];
-	u_int32_t paddr;
+	uint32_t paddr;
 
 	if (pp_is_valid(res, KEY_IP_SADDR))
 		buf_cur += sprintf(buf_cur, "SRC=%s ",
@@ -363,8 +363,8 @@ static int printpkt_ipv6(struct ulogd_key *res, char *buf)
 int printpkt_arp(struct ulogd_key *res, char *buf)
 {
 	char *buf_cur = buf;
-	u_int16_t code = 0;
-	u_int8_t *mac;
+	uint16_t code = 0;
+	uint8_t *mac;
 
 	if (pp_is_valid(res, KEY_ARP_SPA))
 		buf_cur += sprintf(buf_cur, "SRC=%s ",

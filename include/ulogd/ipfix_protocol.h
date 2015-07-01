@@ -1,6 +1,8 @@
 #ifndef _IPFIX_PROTOCOL_H
 #define _IPFIX_PROTOCOL_H
 
+#include <stdint.h>
+
 /* This header file defines structures for the IPFIX protocol in accordance with
  * draft-ietf-ipfix-protocol-19.txt */
 
@@ -14,35 +16,35 @@
 
 /* Section 3.1 */
 struct ipfix_msg_hdr {
-	u_int16_t	version;
-	u_int16_t	length;
-	u_int32_t	export_time;
-	u_int32_t	seq;
-	u_int32_t	domain_id;
+	uint16_t	version;
+	uint16_t	length;
+	uint32_t	export_time;
+	uint32_t	seq;
+	uint32_t	domain_id;
 };
 
 /* Section 3.3.2 */
 struct ipfix_set_hdr {
-	u_int16_t       set_id;
-	u_int16_t       length;
+	uint16_t       set_id;
+	uint16_t       length;
 };
 
 /* Section 3.4.1 */
 struct ipfix_templ_rec_hdr {
-	u_int16_t	templ_id;
-	u_int16_t	field_count;
+	uint16_t	templ_id;
+	uint16_t	field_count;
 };
 
 /* Section 3.2 */
 struct ipfix_ietf_field {
-	u_int16_t	type;
-	u_int16_t	length;
+	uint16_t	type;
+	uint16_t	length;
 };
 
 struct ipfix_vendor_field {
-	u_int16_t	type;
-	u_int16_t	length;
-	u_int32_t	enterprise_num;
+	uint16_t	type;
+	uint16_t	length;
+	uint32_t	enterprise_num;
 };
 
 /* Information Element Identifiers as of draft-ietf-ipfix-info-11.txt */
@@ -238,13 +240,13 @@ enum {
 /* Information elements of the netfilter vendor id */
 enum {
 	IPFIX_NF_rawpacket		= 1,	/* pointer */
-	IPFIX_NF_rawpacket_length	= 2,	/* u_int32_t */
+	IPFIX_NF_rawpacket_length	= 2,	/* uint32_t */
 	IPFIX_NF_prefix			= 3,	/* string */
-	IPFIX_NF_mark			= 4,	/* u_int32_t */
-	IPFIX_NF_hook			= 5,	/* u_int8_t */
-	IPFIX_NF_conntrack_id		= 6,	/* u_int32_t */
-	IPFIX_NF_seq_local		= 7,	/* u_int32_t */
-	IPFIX_NF_seq_global		= 8,	/* u_int32_t */
+	IPFIX_NF_mark			= 4,	/* uint32_t */
+	IPFIX_NF_hook			= 5,	/* uint8_t */
+	IPFIX_NF_conntrack_id		= 6,	/* uint32_t */
+	IPFIX_NF_seq_local		= 7,	/* uint32_t */
+	IPFIX_NF_seq_global		= 8,	/* uint32_t */
 };
 
 #endif

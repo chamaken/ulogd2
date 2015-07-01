@@ -186,32 +186,32 @@ int ulogd_key_putn(struct ulogd_key *key, void *buf, int buflen)
 	case ULOGD_RET_INT8:
 	case ULOGD_RET_UINT8:
 	case ULOGD_RET_BOOL:
-		ret = sizeof(u_int8_t);
+		ret = sizeof(uint8_t);
 		if (buflen - ret >= 0)
-			*(u_int8_t *)buf = ikey_get_u8(key);
+			*(uint8_t *)buf = ikey_get_u8(key);
 		break;
 	case ULOGD_RET_INT16:
 	case ULOGD_RET_UINT16:
-		ret = sizeof(u_int16_t);
+		ret = sizeof(uint16_t);
 		if (buflen - ret >= 0)
-			*(u_int16_t *)buf = htons(ikey_get_u16(key));
+			*(uint16_t *)buf = htons(ikey_get_u16(key));
 		break;
 	case ULOGD_RET_INT32:
 	case ULOGD_RET_UINT32:
-		ret = sizeof(u_int32_t);
+		ret = sizeof(uint32_t);
 		if (buflen - ret >= 0)
-			*(u_int32_t *)buf = htonl(ikey_get_u32(key));
+			*(uint32_t *)buf = htonl(ikey_get_u32(key));
 		break;
 	case ULOGD_RET_IPADDR:
-		ret = sizeof(u_int32_t);
+		ret = sizeof(uint32_t);
 		if (buflen - ret >= 0)
-			*(u_int32_t *)buf = ikey_get_u32(key);
+			*(uint32_t *)buf = ikey_get_u32(key);
 		break;
 	case ULOGD_RET_INT64:
 	case ULOGD_RET_UINT64:
-		ret = sizeof(u_int64_t);
+		ret = sizeof(uint64_t);
 		if (buflen - ret >= 0)
-			*(u_int64_t *)buf = __be64_to_cpu(ikey_get_u64(key));
+			*(uint64_t *)buf = __be64_to_cpu(ikey_get_u64(key));
 		break;
 	case ULOGD_RET_IP6ADDR:
 		ret = 16;
@@ -244,7 +244,7 @@ int ulogd_key_putn(struct ulogd_key *key, void *buf, int buflen)
 }
 
 
-u_int8_t event_ct_to_firewall(u_int32_t ct_event)
+uint8_t event_ct_to_firewall(uint32_t ct_event)
 {
 	/* 0 - Ignore (invalid)
 	 * 1 - Flow Created

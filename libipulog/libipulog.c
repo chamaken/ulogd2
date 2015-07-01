@@ -33,7 +33,7 @@
 struct ipulog_handle
 {
 	int fd;
-	u_int8_t blocking;
+	uint8_t blocking;
 	struct sockaddr_nl local;
 	struct sockaddr_nl peer;
 	struct nlmsghdr* last_nlhdr;
@@ -112,7 +112,7 @@ char *ipulog_strerror(int errcode)
 }
 
 /* convert a netlink group (1-32) to a group_mask suitable for create_handle */
-u_int32_t ipulog_group2gmask(u_int32_t group)
+uint32_t ipulog_group2gmask(uint32_t group)
 {
 	if (group < 1 || group > 32)
 	{
@@ -123,8 +123,8 @@ u_int32_t ipulog_group2gmask(u_int32_t group)
 }
 
 /* create a ipulog handle for the reception of packets sent to gmask */
-struct ipulog_handle *ipulog_create_handle(u_int32_t gmask, 
-					   u_int32_t rcvbufsize)
+struct ipulog_handle *ipulog_create_handle(uint32_t gmask,
+					   uint32_t rcvbufsize)
 {
 	struct ipulog_handle *h;
 	int status;

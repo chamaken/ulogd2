@@ -168,7 +168,7 @@ static int ip2str(struct ulogd_key *inp, int index, int oindex)
 	}
 
 	switch (convfamily) {
-		u_int32_t ip;
+		uint32_t ip;
 	case AF_INET6:
 		inet_ntop(AF_INET6,
 			  ikey_get_u128(&inp[index]),

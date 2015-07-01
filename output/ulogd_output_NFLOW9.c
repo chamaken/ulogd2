@@ -220,30 +220,30 @@ static struct config_keyset netflow9_kset = {
 
 /* Section 5.1 */
 struct netflow9_msg_hdr {
-	u_int16_t	version;
-	u_int16_t	count;
-	u_int32_t	sys_uptime;
-	u_int32_t	unix_secs;
-	u_int32_t	sequence_number;
-	u_int32_t	source_id;
+	uint16_t	version;
+	uint16_t	count;
+	uint32_t	sys_uptime;
+	uint32_t	unix_secs;
+	uint32_t	sequence_number;
+	uint32_t	source_id;
 };
 
 /* Section 5.2, 5.3 */
 struct netflow9_set_hdr {
-	u_int16_t	set_id;
-	u_int16_t	length;
+	uint16_t	set_id;
+	uint16_t	length;
 };
 
 /* Section 5.2 */
 struct netflow9_templ_hdr {
-	u_int16_t	template_id;
-	u_int16_t	field_count;
+	uint16_t	template_id;
+	uint16_t	field_count;
 };
 
 /* Section 5.2 */
 struct netflow9_templ_rec {
-	u_int16_t	type;
-	u_int16_t	length;
+	uint16_t	type;
+	uint16_t	length;
 };
 
 /* 8.  Field Type Definitions			octet (or default)*/
@@ -659,7 +659,7 @@ static int put_data_records(struct ulogd_pluginstance *upi,
 
 static void swap(void *data, ssize_t size, int pos1, int pos2)
 {
-	u_int8_t tmp[16] = {}; /* 16: ip6 addr len */
+	uint8_t tmp[16] = {}; /* 16: ip6 addr len */
 	memcpy(tmp, data + pos1, size);
 	memcpy(data + pos1, data +pos2, size);
 	memcpy(data + pos2, tmp, size);
@@ -668,15 +668,15 @@ static void swap(void *data, ssize_t size, int pos1, int pos2)
 #define TOF(i)	tmpl->offset[(i)]
 
 static int orig_swap(struct ulogd_netflow9_template *tmpl,
-		     u_int8_t family, void *buf)
+		     uint8_t family, void *buf)
 {
 	switch (family) {
 	case AF_INET:
-		swap(buf, sizeof(u_int32_t),
+		swap(buf, sizeof(uint32_t),
 		     TOF(FOI_REPLY_IP_SADDR), TOF(FOI_REPLY_IP_DADDR));
 		break;
 	case AF_INET6:
-		swap(buf, sizeof(u_int32_t),
+		swap(buf, sizeof(uint32_t),
 		     TOF(FOI_REPLY_IP6_SADDR), TOF(FOI_REPLY_IP6_DADDR));
 		break;
 	default:
@@ -685,22 +685,22 @@ static int orig_swap(struct ulogd_netflow9_template *tmpl,
 	}
 	if (TOF(FOI_REPLY_L4_SPORT) >= 0
 	    && TOF(FOI_REPLY_L4_DPORT) >= 0)
-		swap(buf, sizeof(u_int16_t),
+		swap(buf, sizeof(uint16_t),
 		     TOF(FOI_REPLY_L4_SPORT), TOF(FOI_REPLY_L4_DPORT));
 
 	return 0;
 }
 
 static int reply_swap(struct ulogd_netflow9_template *tmpl,
-		      u_int8_t family, void *buf)
+		      uint8_t family, void *buf)
 {
 	switch (family) {
 	case AF_INET:
-		swap(buf, sizeof(u_int32_t),
+		swap(buf, sizeof(uint32_t),
 		     TOF(FOI_ORIG_IP_SADDR), TOF(FOI_ORIG_IP_DADDR));
 		break;
 	case AF_INET6:
-		swap(buf, sizeof(u_int32_t),
+		swap(buf, sizeof(uint32_t),
 		     TOF(FOI_ORIG_IP_SADDR), TOF(FOI_ORIG_IP_DADDR));
 		break;
 	default:
@@ -709,22 +709,22 @@ static int reply_swap(struct ulogd_netflow9_template *tmpl,
 	}
 	if (TOF(FOI_ORIG_L4_SPORT) >= 0
 	    && TOF(FOI_ORIG_L4_DPORT) >= 0)
-		swap(buf, sizeof(u_int16_t),
+		swap(buf, sizeof(uint16_t),
 		     TOF(FOI_ORIG_L4_SPORT), TOF(FOI_ORIG_L4_DPORT));
 	if (TOF(FOI_IF_INPUT) >= 0 && TOF(FOI_IF_OUTPUT) >= 0)
-		swap(buf, sizeof(u_int16_t),
+		swap(buf, sizeof(uint16_t),
 		     TOF(FOI_IF_INPUT), TOF(FOI_IF_OUTPUT));
 	if (TOF(FOI_FLOW_DIR) >= 0)
-		*(u_int8_t *)(buf + TOF(FOI_FLOW_DIR))
-			= !*(u_int8_t *)(buf + TOF(FOI_FLOW_DIR));
+		*(uint8_t *)(buf + TOF(FOI_FLOW_DIR))
+			= !*(uint8_t *)(buf + TOF(FOI_FLOW_DIR));
 
 	return 0;
 }
 
 static int swap_by_dir(struct ulogd_netflow9_template *tmpl,
-		       void *buf, u_int8_t family,
+		       void *buf, uint8_t family,
 		       int direction,
-		       u_int64_t bytes, u_int64_t packets)
+		       uint64_t bytes, uint64_t packets)
 {
 	switch (direction) {
 	case NFLOW9_DIR_ORIG:
@@ -742,23 +742,23 @@ static int swap_by_dir(struct ulogd_netflow9_template *tmpl,
 	}
 
 	if (TOF(FOI_IN_BYTES) >= 0)
-		*(u_int64_t *)(buf + TOF(FOI_IN_BYTES)) = __cpu_to_be64(bytes);
+		*(uint64_t *)(buf + TOF(FOI_IN_BYTES)) = __cpu_to_be64(bytes);
 	if (TOF(FOI_IN_PKTS) >= 0)
-		*(u_int64_t *)(buf + TOF(FOI_IN_PKTS)) = __cpu_to_be64(packets);
+		*(uint64_t *)(buf + TOF(FOI_IN_PKTS)) = __cpu_to_be64(packets);
 	/* XXX: will be removed if NFCT propagate delta counter */
 	if (TOF(FOI_XXX_IN_BYTES) >= 0)
-		*(u_int64_t *)(buf + TOF(FOI_XXX_IN_BYTES)) = __cpu_to_be64(bytes);
+		*(uint64_t *)(buf + TOF(FOI_XXX_IN_BYTES)) = __cpu_to_be64(bytes);
 	if (TOF(FOI_XXX_IN_PKTS) >= 0)
-		*(u_int64_t *)(buf + TOF(FOI_XXX_IN_PKTS)) = __cpu_to_be64(packets);
+		*(uint64_t *)(buf + TOF(FOI_XXX_IN_PKTS)) = __cpu_to_be64(packets);
 
 	return 0;
 }
 #undef TOF
 
 static int nflow9_direction(struct ulogd_pluginstance *upi,
-			    struct ulogd_keyset *input, u_int8_t *family,
-			    u_int64_t *orig_bytes, u_int64_t *orig_packets,
-			    u_int64_t *reply_bytes, u_int64_t *reply_packets)
+			    struct ulogd_keyset *input, uint8_t *family,
+			    uint64_t *orig_bytes, uint64_t *orig_packets,
+			    uint64_t *reply_bytes, uint64_t *reply_packets)
 {
 	struct netflow9_instance *ii = (struct netflow9_instance *)&upi->private;
 	struct ulogd_key *keys = input->keys;
@@ -862,9 +862,9 @@ static int build_netflow9_msg(struct ulogd_pluginstance *upi,
 			      struct ulogd_netflow9_template *tmpl)
 {
 	struct netflow9_instance *ii = (struct netflow9_instance *)&upi->private;
-	u_int8_t family = 0;
-	u_int64_t obytes = 0, opackets = 0;
-	u_int64_t rbytes = 0, rpackets = 0;
+	uint8_t family = 0;
+	uint64_t obytes = 0, opackets = 0;
+	uint64_t rbytes = 0, rpackets = 0;
 	int dir;
 	void *buf;
 
@@ -931,7 +931,7 @@ static uint32_t uptime_millis(int fd)
 	return (uint32_t)(up * 1000);
 }
 
-static u_int32_t get_seqnum(struct netflow9_instance *ii)
+static uint32_t get_seqnum(struct netflow9_instance *ii)
 {
 	return ii->seq++;
 }
@@ -953,8 +953,8 @@ static ssize_t send_netflow9(struct netflow9_instance *ii)
 	ssize_t nsent;
 
 	ii->nflow9_msghdr.sys_uptime
-		= htonl((u_int32_t)uptime_millis(ii->uptime_fd));
-	ii->nflow9_msghdr.unix_secs = htonl((u_int32_t)(time(NULL)));
+		= htonl((uint32_t)uptime_millis(ii->uptime_fd));
+	ii->nflow9_msghdr.unix_secs = htonl((uint32_t)(time(NULL)));
 	ii->nflow9_msghdr.count = htons(ii->iovcnt - 1);
 	ii->nflow9_msghdr.sequence_number = htonl(get_seqnum(ii));
 	ii->msglen += sizeof(struct netflow9_msg_hdr);
@@ -1323,20 +1323,20 @@ static int nflow9_fprintf_data_records(FILE *fd, const void *data, int len)
 		switch (len - i - 4) {
 		case -3:
 			fprintf(fd, "|          0x%02x                                                   |\n",
-				*(u_int8_t *)(data + i));
+				*(uint8_t *)(data + i));
 			break;
 		case -2:
 			fprintf(fd, "|          0x%02x           0x%02x                                     |\n",
-				*(u_int8_t *)(data + i), *(u_int8_t *)(data + i + 1));
+				*(uint8_t *)(data + i), *(uint8_t *)(data + i + 1));
 			break;
 		case -1:
 			fprintf(fd, "|          0x%02x           0x%02x          0x%02x                       |\n",
-				*(u_int8_t *)(data + i), *(u_int8_t *)(data + i + 1), *(u_int8_t *)(data + i + 2));
+				*(uint8_t *)(data + i), *(uint8_t *)(data + i + 1), *(uint8_t *)(data + i + 2));
 			break;
 		default:
 			fprintf(fd, "|          0x%02x           0x%02x          0x%02x           0x%02x         |\n",
-				*(u_int8_t *)(data + i), *(u_int8_t *)(data + i + 1),
-				*(u_int8_t *)(data + i + 2), *(u_int8_t *)(data + i + 3));
+				*(uint8_t *)(data + i), *(uint8_t *)(data + i + 1),
+				*(uint8_t *)(data + i + 2), *(uint8_t *)(data + i + 3));
 			break;
 		}
 	}

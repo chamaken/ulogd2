@@ -171,7 +171,7 @@ static int open_db_mysql(struct ulogd_pluginstance *upi)
 	struct mysql_instance *mi = (struct mysql_instance *) upi->private;
 	unsigned int connect_timeout = timeout_ce(upi->config_kset).u.value;
 	char *server = host_ce(upi->config_kset).u.string;
-	u_int16_t port = port_ce(upi->config_kset).u.value;
+	uint16_t port = port_ce(upi->config_kset).u.value;
 	char *user = user_ce(upi->config_kset).u.string;
 	char *pass = pass_ce(upi->config_kset).u.string;
 	char *db = db_ce(upi->config_kset).u.string;

@@ -74,14 +74,14 @@ static int interp_mark(struct ulogd_pluginstance *pi,
 	if (pp_is_valid(inp, KEY_CT_MARK)) {
 		if ((ikey_get_u32(&inp[KEY_CT_MARK]) &
 			pi->config_kset->ces[MARK_MASK].u.value) !=
-			(u_int32_t) pi->config_kset->ces[MARK_MARK].u.value
+			(uint32_t) pi->config_kset->ces[MARK_MARK].u.value
 		   ) {
 			return ULOGD_IRET_STOP;
 		}
 	} else if (pp_is_valid(inp, KEY_OOB_MARK)) {
 		if ((ikey_get_u32(&inp[KEY_OOB_MARK]) &
 			pi->config_kset->ces[MARK_MASK].u.value) !=
-			(u_int32_t) pi->config_kset->ces[MARK_MARK].u.value
+			(uint32_t) pi->config_kset->ces[MARK_MARK].u.value
 		   ) {
 			return ULOGD_IRET_STOP;
 		}

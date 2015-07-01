@@ -8,7 +8,9 @@
 #ifndef _ADDR_H
 #define _ADDR_H
 
-u_int32_t ulogd_bits2netmask(int bits);
+#include <stdint.h>
+
+uint32_t ulogd_bits2netmask(int bits);
 void ulogd_ipv6_cidr2mask_host(uint8_t cidr, uint32_t *res);
 void ulogd_ipv6_addr2addr_host(uint32_t *addr, uint32_t *res);
 

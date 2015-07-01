@@ -23,9 +23,9 @@
 #include <ulogd/ulogd.h>
 #include <ulogd/addr.h>
 
-u_int32_t ulogd_bits2netmask(int bits)
+uint32_t ulogd_bits2netmask(int bits)
 {
-	u_int32_t netmask, bm;
+	uint32_t netmask, bm;
 
 	if (bits >= 32 || bits < 0)
 		return(~0);

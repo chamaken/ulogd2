@@ -336,10 +336,10 @@ enum ulogd2_option_type {
 	ULOGD2_OPT_PREFIX,	/* log prefix (string) */
 	ULOGD2_OPT_OOB_IN,	/* input device (string) */
 	ULOGD2_OPT_OOB_OUT,	/* output device (string) */
-	ULOGD2_OPT_OOB_TIME_SEC,	/* packet arrival time (u_int32_t) */
+	ULOGD2_OPT_OOB_TIME_SEC,	/* packet arrival time (uint32_t) */
 
 	ULOGD2_OPT_USER=200,	/* user name (string) */
-	ULOGD2_OPT_USERID,	/* user id (u_int32_t) */
+	ULOGD2_OPT_USERID,	/* user id (uint32_t) */
 	ULOGD2_OPT_OSNAME,	/* OS name (string) */
 	ULOGD2_OPT_OSREL,	/* OS release (string) */
 	ULOGD2_OPT_OSVERS,	/* OS version (string) */
@@ -369,16 +369,16 @@ struct ulogd_unixsock_option_t  {
 
 static int handle_packet(struct ulogd_source_pluginstance *upi,
 			 struct ulogd_unixsock_packet_t *pkt,
-			 u_int16_t total_len)
+			 uint16_t total_len)
 {
 	char *data = NULL;
 	struct iphdr *ip;
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulogd_key *ret = output->keys;
-	u_int8_t oob_family;
-	u_int16_t payload_len;
-	u_int32_t option_number;
-	u_int32_t option_length;
+	uint8_t oob_family;
+	uint16_t payload_len;
+	uint32_t option_number;
+	uint32_t option_length;
 	char *buf;
 	struct ulogd_unixsock_option_t *option;
 	int new_offset;
@@ -401,7 +401,7 @@ static int handle_packet(struct ulogd_source_pluginstance *upi,
 	okey_set_u32(&ret[UNIXSOCK_KEY_RAW_PCKTLEN], payload_len);
 
 	/* options */
-	if (total_len > payload_len + sizeof(u_int16_t)) {
+	if (total_len > payload_len + sizeof(uint16_t)) {
 		/* option starts at the next aligned address after the payload */
 		new_offset = USOCK_ALIGN(payload_len);
 		options_start = (void*)ip + new_offset;
@@ -434,13 +434,13 @@ static int handle_packet(struct ulogd_source_pluginstance *upi,
 				okey_set_ptr(&ret[UNIXSOCK_KEY_OOB_OUT], buf);
 				break;
 			case ULOGD2_OPT_OOB_TIME_SEC:
-				okey_set_u32(&ret[UNIXSOCK_KEY_OOB_TIME_SEC], *(u_int32_t*)buf);
+				okey_set_u32(&ret[UNIXSOCK_KEY_OOB_TIME_SEC], *(uint32_t*)buf);
 				break;
 			case ULOGD2_OPT_USER:
 				okey_set_ptr(&ret[UNIXSOCK_KEY_NUFW_USER_NAME], buf);
 				break;
 			case ULOGD2_OPT_USERID:
-				okey_set_u32(&ret[UNIXSOCK_KEY_NUFW_USER_ID], *(u_int32_t*)buf);
+				okey_set_u32(&ret[UNIXSOCK_KEY_NUFW_USER_ID], *(uint32_t*)buf);
 				break;
 			case ULOGD2_OPT_OSNAME:
 				okey_set_ptr(&ret[UNIXSOCK_KEY_NUFW_OS_NAME], buf);
@@ -455,7 +455,7 @@ static int handle_packet(struct ulogd_source_pluginstance *upi,
 				okey_set_ptr(&ret[UNIXSOCK_KEY_NUFW_APP_NAME], buf);
 				break;
 			case ULOGD2_OPT_STATE:
-				okey_set_u8(&ret[UNIXSOCK_KEY_RAW_LABEL], *(u_int8_t*)buf);
+				okey_set_u8(&ret[UNIXSOCK_KEY_RAW_LABEL], *(uint8_t*)buf);
 				break;
 			default:
 				ulogd_log(ULOGD_NOTICE,
@@ -584,8 +584,8 @@ static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 	struct ulogd_source_pluginstance *upi = param;
 	struct unixsock_input *ui = (struct unixsock_input*)upi->private;
 	int len;
-	u_int16_t needed_len;
-	u_int32_t packet_sig;
+	uint16_t needed_len;
+	uint32_t packet_sig;
 	struct ulogd_unixsock_packet_t *unixsock_packet;
 
 	char buf[4096];
@@ -633,7 +633,7 @@ static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 
 		needed_len = ntohs(unixsock_packet->total_size);
 
-		if (ui->unixsock_buf_avail >= needed_len + sizeof(u_int32_t)) {
+		if (ui->unixsock_buf_avail >= needed_len + sizeof(uint32_t)) {
 			ulogd_log(ULOGD_DEBUG,
 			"  We have enough data (%d bytes required), handling packet\n",
 					needed_len);
@@ -643,11 +643,11 @@ static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 				return -1;
 			}
 			/* consume data */
-			ui->unixsock_buf_avail -= (sizeof(u_int32_t) + needed_len);
+			ui->unixsock_buf_avail -= (sizeof(uint32_t) + needed_len);
 			if (ui->unixsock_buf_avail > 0) {
 				/* we need to shift data .. */
 				memmove(ui->unixsock_buf,
-						ui->unixsock_buf + (sizeof(u_int32_t) + needed_len) ,
+						ui->unixsock_buf + (sizeof(uint32_t) + needed_len) ,
 						ui->unixsock_buf_avail);
 			} else {
 				/* input buffer is empty, do not loop */
@@ -656,7 +656,7 @@ static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 
 		} else {
 			ulogd_log(ULOGD_DEBUG, "  We have %d bytes, but need %d. Requesting more\n",
-					ui->unixsock_buf_avail, needed_len + sizeof(u_int32_t));
+					ui->unixsock_buf_avail, needed_len + sizeof(uint32_t));
 			return 0;
 		}
 

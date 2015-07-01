@@ -143,10 +143,10 @@ static void *hwhdr_get_daddr(struct ulogd_key *inp)
 	return ikey_get_ptr(&inp[KEY_RAW_MAC]);
 }
 
-static u_int16_t hwhdr_get_len(struct ulogd_key *inp)
+static uint16_t hwhdr_get_len(struct ulogd_key *inp)
 {
 	void *len = ikey_get_ptr(&inp[KEY_RAW_MAC]) + 2 * ETH_ALEN;
-	return ntohs(*(u_int16_t *) len);
+	return ntohs(*(uint16_t *) len);
 }
 static int parse_ethernet(struct ulogd_key *ret, struct ulogd_key *inp)
 {
@@ -173,7 +173,7 @@ static int interp_mac2str(struct ulogd_pluginstance *pi,
 {
 	struct ulogd_key *ret = output->keys;
 	struct ulogd_key *inp = input->keys;
-	u_int16_t type = 0;
+	uint16_t type = 0;
 
 	if (pp_is_valid(inp, KEY_OOB_PROTOCOL))
 		okey_set_u16(&ret[KEY_MAC_PROTOCOL],

@@ -7,7 +7,7 @@
 #ifndef _CONFFILE_H
 #define _CONFFILE_H
 
-#include <sys/types.h>
+#include <stdint.h>
 
 /* errors returned by config functions */
 enum {
@@ -45,10 +45,10 @@ enum {
 
 struct config_entry {
 	char key[CONFIG_KEY_LEN];	/* name of config directive */
-	u_int8_t type;			/* type; see above */
-	u_int8_t options;		/* options; see above  */
-	u_int8_t hit;			/* found? */
-	u_int8_t flag;			/* tune setup of option */
+	uint8_t type;			/* type; see above */
+	uint8_t options;		/* options; see above  */
+	uint8_t hit;			/* found? */
+	uint8_t flag;			/* tune setup of option */
 	union {
 		char string[CONFIG_VAL_STRING_LEN];
 		int value;

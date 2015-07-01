@@ -47,19 +47,19 @@
 #endif
 
 #ifdef IPPROTO_SCTP
-typedef u_int32_t sctp_assoc_t;
+typedef uint32_t sctp_assoc_t;
 
 /* glibc doesn't yet have this, as defined by
  * draft-ietf-tsvwg-sctpsocket-11.txt */
 struct sctp_sndrcvinfo {
-	u_int16_t	sinfo_stream;
-	u_int16_t	sinfo_ssn;
-	u_int16_t	sinfo_flags;
-	u_int32_t	sinfo_ppid;
-	u_int32_t	sinfo_context;
-	u_int32_t	sinfo_timetolive;
-	u_int32_t	sinfo_tsn;
-	u_int32_t	sinfo_cumtsn;
+	uint16_t	sinfo_stream;
+	uint16_t	sinfo_ssn;
+	uint16_t	sinfo_flags;
+	uint32_t	sinfo_ppid;
+	uint32_t	sinfo_context;
+	uint32_t	sinfo_timetolive;
+	uint32_t	sinfo_tsn;
+	uint32_t	sinfo_cumtsn;
 	sctp_assoc_t	sinfo_assoc_id;
 };
 #endif
@@ -139,10 +139,10 @@ struct ipfix_instance {
 
 	struct llist_head template_list;
 	struct nfct_bitmask *valid_bitmask;	/* bitmask of valid keys */
-	u_int32_t hdr_seq;
-	u_int32_t seq;
+	uint32_t hdr_seq;
+	uint32_t seq;
 #define ULOGD_IPFIX_TEMPL_BASE 1024
-	u_int16_t next_template_id;
+	uint16_t next_template_id;
 	struct ipfix_msg_hdr ipfix_msghdr;
 	struct iovec *iovecs;	/* index 0 is reserved for ipfix_msg_hdr */
 	unsigned int iovcnt;
@@ -385,7 +385,7 @@ static ssize_t send_ipfix(struct ipfix_instance *ii)
 	ssize_t nsent;
 
 	ii->msglen += sizeof(struct ipfix_msg_hdr);
-	ii->ipfix_msghdr.export_time = htonl((u_int32_t)(time(NULL)));
+	ii->ipfix_msghdr.export_time = htonl((uint32_t)(time(NULL)));
 	ii->ipfix_msghdr.length = htons(ii->msglen);
 	ii->ipfix_msghdr.seq = htonl(ii->hdr_seq);
 	ii->hdr_seq = ii->seq;
@@ -636,7 +636,7 @@ static int ipfix_fprintf_ietf_field(FILE *fd, const struct ipfix_ietf_field *fie
 		return sizeof(*field);
 
 	ptr = (void *)field + sizeof(*field);
-	if (*(u_int8_t *)ptr & 0x80)
+	if (*(uint8_t *)ptr & 0x80)
 		ret = ipfix_fprintf_vendor_field(fd, ptr, len);
 	else
 		ret = ipfix_fprintf_ietf_field(fd, ptr, len);
@@ -669,7 +669,7 @@ static int ipfix_fprintf_vendor_field(FILE *fd, const struct ipfix_vendor_field 
 		return sizeof(*field);
 
 	ptr = (void *)field + sizeof(*field);
-	if (*(u_int8_t *)ptr & 0x80) /* vendor */
+	if (*(uint8_t *)ptr & 0x80) /* vendor */
 		ret = ipfix_fprintf_vendor_field(fd, ptr, len);
 	else /* ietf */
 		ret = ipfix_fprintf_ietf_field(fd, ptr, len);
@@ -689,20 +689,20 @@ static int ipfix_fprintf_data_records(FILE *fd, const void *data, int len)
 		switch (len - i - 4) {
 		case -3:
 			fprintf(fd, "|          0x%02x                                                   |\n",
-				*(u_int8_t *)(data + i));
+				*(uint8_t *)(data + i));
 			break;
 		case -2:
 			fprintf(fd, "|          0x%02x          0x%02x                                     |\n",
-				*(u_int8_t *)(data + i), *(u_int8_t *)(data + i + 1));
+				*(uint8_t *)(data + i), *(uint8_t *)(data + i + 1));
 			break;
 		case -1:
 			fprintf(fd, "|          0x%02x          0x%02x          0x%02x                       |\n",
-				*(u_int8_t *)(data + i), *(u_int8_t *)(data + i + 1), *(u_int8_t *)(data + i + 2));
+				*(uint8_t *)(data + i), *(uint8_t *)(data + i + 1), *(uint8_t *)(data + i + 2));
 			break;
 		default:
 			fprintf(fd, "|          0x%02x          0x%02x          0x%02x          0x%02x         |\n",
-				*(u_int8_t *)(data + i), *(u_int8_t *)(data + i + 1),
-				*(u_int8_t *)(data + i + 2), *(u_int8_t *)(data + i + 3));
+				*(uint8_t *)(data + i), *(uint8_t *)(data + i + 1),
+				*(uint8_t *)(data + i + 2), *(uint8_t *)(data + i + 3));
 			break;
 		}
 	}
@@ -729,7 +729,7 @@ static int ipfix_fprintf_template_records(FILE *fd, const struct ipfix_templ_rec
 		return sizeof(*hdr);
 
 	field = (void *)hdr + sizeof(*hdr);
-	if (*(u_int8_t *)field & 0x80)
+	if (*(uint8_t *)field & 0x80)
 		ret = ipfix_fprintf_vendor_field(fd, field, len);
 	else
 		ret = ipfix_fprintf_ietf_field(fd, field, len);

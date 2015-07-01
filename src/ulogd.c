@@ -92,7 +92,7 @@ static char *ulogd_logfile = NULL;
 static const char *ulogd_configfile = ULOGD_CONFIGFILE;
 static const char *ulogd_pidfile = NULL;
 static int ulogd_pidfile_fd = -1;
-static FILE syslog_dummy;
+static FILE *syslog_dummy;
 
 static int info_mode = 0;
 
@@ -469,7 +469,7 @@ void __ulogd_log(int level, char *file, int line, const char *format, ...)
 	if (level < loglevel_ce.u.value)
 		return;
 
-	if (logfile == &syslog_dummy) {
+	if (logfile == syslog_dummy) {
 		/* FIXME: this omits the 'file' string */
 		va_start(ap, format);
 		vsyslog(ulogd2syslog_level(level), format, ap);
@@ -987,7 +987,7 @@ static int logfile_open(const char *name)
 		logfile = stdout;
 	} else if (!strcmp(name, "syslog")) {
 		openlog("ulogd", LOG_PID, LOG_DAEMON);
-		logfile = &syslog_dummy;
+		logfile = syslog_dummy = fopen("/dev/null", "w");
 	} else {
 		logfile = fopen(ulogd_logfile, "a");
 		if (!logfile) {
@@ -1306,7 +1306,7 @@ static void sigterm_handler(int signal)
 	unload_plugins();
 #endif
 
-	if (logfile != NULL  && logfile != stdout && logfile != &syslog_dummy) {
+	if (logfile != NULL  && logfile != stdout) {
 		fclose(logfile);
 		logfile = NULL;
 	}
@@ -1340,7 +1340,7 @@ static int signal_handler(int fd, unsigned int what, void *data)
 		break;
 	case SIGHUP:
 		/* reopen logfile */
-		if (logfile != stdout && logfile != &syslog_dummy) {
+		if (logfile != stdout && logfile != syslog_dummy) {
 			fclose(logfile);
 			logfile = fopen(ulogd_logfile, "a");
 			if (!logfile) {

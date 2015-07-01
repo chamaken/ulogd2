@@ -317,7 +317,7 @@ static struct ulogd_key output_keys[] = {
 
 static inline int
 interp_packet(struct ulogd_source_pluginstance *upi,
-	      u_int8_t pf_family, struct nflog_data *ldata)
+	      uint8_t pf_family, struct nflog_data *ldata)
 {
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulogd_key *ret = output->keys;
@@ -328,12 +328,12 @@ interp_packet(struct ulogd_source_pluginstance *upi,
 	int payload_len = nflog_get_payload(ldata, &payload);
 	char *prefix = nflog_get_prefix(ldata);
 	struct timeval ts;
-	u_int32_t mark = nflog_get_nfmark(ldata);
-	u_int32_t indev = nflog_get_indev(ldata);
-	u_int32_t outdev = nflog_get_outdev(ldata);
-	u_int32_t seq;
-	u_int32_t uid;
-	u_int32_t gid;
+	uint32_t mark = nflog_get_nfmark(ldata);
+	uint32_t indev = nflog_get_indev(ldata);
+	uint32_t outdev = nflog_get_outdev(ldata);
+	uint32_t seq;
+	uint32_t uid;
+	uint32_t gid;
 
 	okey_set_u8(&ret[NFLOG_KEY_OOB_FAMILY], 
 		    pf_family);
@@ -489,7 +489,7 @@ static int configure(struct ulogd_source_pluginstance *upi)
 }
 
 static int become_system_logging(struct ulogd_source_pluginstance *upi,
-				 u_int8_t pf)
+				 uint8_t pf)
 {
 	struct nflog_input *ui = (struct nflog_input *) upi->private;
 

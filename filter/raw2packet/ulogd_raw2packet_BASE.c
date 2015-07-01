@@ -35,6 +35,7 @@
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/in.h>
+#define _GNU_SOURCE
 #include <netinet/tcp.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/icmp6.h>
@@ -43,6 +44,7 @@
 #include <ulogd/ipfix_protocol.h>
 #include <netinet/if_ether.h>
 #include <string.h>
+#include <linux/types.h>
 
 enum input_keys {
 	INKEY_RAW_PCKT,
@@ -538,7 +540,7 @@ static struct ulogd_key iphdr_rets[] = {
 
 static int _interp_tcp(struct ulogd_pluginstance *pi,
 		       struct ulogd_keyset *output,
-		       struct tcphdr *tcph, u_int32_t len)
+		       struct tcphdr *tcph, uint32_t len)
 {
 	struct ulogd_key *ret = output->keys;
 
@@ -574,8 +576,7 @@ static int _interp_tcp(struct ulogd_pluginstance *pi,
 
 static int _interp_udp(struct ulogd_pluginstance *pi,
 		       struct ulogd_keyset *output,
-		       struct udphdr *udph, u_int32_t len)
-		
+		       struct udphdr *udph, uint32_t len)
 {
 	struct ulogd_key *ret = output->keys;
 
@@ -604,8 +605,7 @@ typedef struct sctphdr {
 
 static int _interp_sctp(struct ulogd_pluginstance *pi,
 			struct ulogd_keyset *output,
-			struct sctphdr *sctph, u_int32_t len)
-		
+			struct sctphdr *sctph, uint32_t len)
 {
 	struct ulogd_key *ret = output->keys;
 
@@ -628,7 +628,7 @@ static int _interp_sctp(struct ulogd_pluginstance *pi,
 
 static int _interp_icmp(struct ulogd_pluginstance *pi,
 			struct ulogd_keyset *output,
-			struct icmphdr *icmph, u_int32_t len)
+			struct icmphdr *icmph, uint32_t len)
 {
 	struct ulogd_key *ret = output->keys;
 
@@ -667,7 +667,7 @@ static int _interp_icmp(struct ulogd_pluginstance *pi,
 
 static int _interp_icmpv6(struct ulogd_pluginstance *pi,
 			  struct ulogd_keyset *output,
-			  struct icmp6_hdr *icmph, u_int32_t len)
+			  struct icmp6_hdr *icmph, uint32_t len)
 {
 	struct ulogd_key *ret = output->keys;
 
@@ -695,7 +695,7 @@ static int _interp_icmpv6(struct ulogd_pluginstance *pi,
  * 			IPSEC HEADER 
  ***********************************************************************/
 static int _interp_ahesp(struct ulogd_pluginstance *pi, void *protoh,
-			 u_int32_t len)
+			 uint32_t len)
 {
 #if 0
 	struct ulogd_key *ret = pi->output.keys;
@@ -717,14 +717,14 @@ static int _interp_ahesp(struct ulogd_pluginstance *pi, void *protoh,
 
 static int _interp_iphdr(struct ulogd_pluginstance *pi,
 			 struct ulogd_keyset *input,
-			 struct ulogd_keyset *output, u_int32_t len)
+			 struct ulogd_keyset *output, uint32_t len)
 {
 	struct ulogd_key *ret = output->keys;
 	struct iphdr *iph =
 		ikey_get_ptr(&input->keys[INKEY_RAW_PCKT]);
-	void *nexthdr = (u_int32_t *)iph + iph->ihl;
+	void *nexthdr = (uint32_t *)iph + iph->ihl;
 
-	if (len < sizeof(struct iphdr) || len <= (u_int32_t)(iph->ihl * 4))
+	if (len < sizeof(struct iphdr) || len <= (uint32_t)(iph->ihl * 4))
 		return ULOGD_IRET_OK;
 	len -= iph->ihl * 4;
 
@@ -765,7 +765,7 @@ static int _interp_iphdr(struct ulogd_pluginstance *pi,
  * 			IPv6 HEADER
  ***********************************************************************/
 
-static int ip6_ext_hdr(u_int8_t nexthdr)
+static int ip6_ext_hdr(uint8_t nexthdr)
 {
 	switch (nexthdr) {
 	case IPPROTO_HOPOPTS:
@@ -782,12 +782,12 @@ static int ip6_ext_hdr(u_int8_t nexthdr)
 
 static int _interp_ipv6hdr(struct ulogd_pluginstance *pi,
 			   struct ulogd_keyset *input,
-			   struct ulogd_keyset *output, u_int32_t len)
+			   struct ulogd_keyset *output, uint32_t len)
 {
 	struct ulogd_key *ret = output->keys;
 	struct ip6_hdr *ipv6h = ikey_get_ptr(&input->keys[INKEY_RAW_PCKT]);
 	unsigned int ptr, hdrlen = 0;
-	u_int8_t curhdr;
+	uint8_t curhdr;
 	int fragment = 0;
 
 	if (len < sizeof(struct ip6_hdr))
@@ -899,7 +899,7 @@ out:
  ***********************************************************************/
 static int _interp_arp(struct ulogd_pluginstance *pi,
 		       struct ulogd_keyset *input,
-		       struct ulogd_keyset *output, u_int32_t len)
+		       struct ulogd_keyset *output, uint32_t len)
 {
 	struct ulogd_key *ret = output->keys;
 	const struct ether_arp *arph =
@@ -926,9 +926,9 @@ static int _interp_arp(struct ulogd_pluginstance *pi,
 
 static int _interp_bridge(struct ulogd_pluginstance *pi,
 			  struct ulogd_keyset *input,
-			  struct ulogd_keyset *output, u_int32_t len)
+			  struct ulogd_keyset *output, uint32_t len)
 {
-	const u_int16_t proto =
+	const uint16_t proto =
 		ikey_get_u16(&input->keys[INKEY_OOB_PROTOCOL]);
 
 	switch (proto) {
@@ -951,8 +951,8 @@ static int _interp_bridge(struct ulogd_pluginstance *pi,
 static int _interp_pkt(struct ulogd_pluginstance *pi,
 		       struct ulogd_keyset *input, struct ulogd_keyset *output)
 {
-	u_int32_t len = ikey_get_u32(&input->keys[INKEY_RAW_PCKTLEN]);
-	u_int8_t family = ikey_get_u8(&input->keys[INKEY_OOB_FAMILY]);
+	uint32_t len = ikey_get_u32(&input->keys[INKEY_RAW_PCKTLEN]);
+	uint8_t family = ikey_get_u8(&input->keys[INKEY_OOB_FAMILY]);
 	struct ulogd_key *ret = output->keys;
 
 	okey_set_u16(&ret[KEY_OOB_PROTOCOL],

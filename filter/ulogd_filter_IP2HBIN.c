@@ -118,8 +118,8 @@ static int interp_ip2hbin(struct ulogd_pluginstance *pi,
 {
 	struct ulogd_key *ret = output->keys;
 	struct ulogd_key *inp = input->keys;
-	u_int8_t family = ikey_get_u8(&inp[KEY_OOB_FAMILY]);
-	u_int8_t convfamily = family;
+	uint8_t family = ikey_get_u8(&inp[KEY_OOB_FAMILY]);
+	uint8_t convfamily = family;
 	int i;
 
 	switch (family) {

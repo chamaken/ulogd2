@@ -361,7 +361,7 @@ static void __format_query_db(struct ulogd_pluginstance *upi, char *start)
 			sprintf(stmt_ins, "%u,", res->u.value.ui16);
 			break;
 		case ULOGD_RET_IPADDR:
-			/* fallthrough when logging IP as u_int32_t */
+			/* fallthrough when logging IP as uint32_t */
 		case ULOGD_RET_UINT32:
 			sprintf(stmt_ins, "%u,", res->u.value.ui32);
 			break;
