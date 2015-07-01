@@ -40,6 +40,13 @@ TODO
 
 * would it be better to make source pluginstance to multi-thread?
 
+* config param to specify num of threads
+* config param to specify how many keysets source pluginstance has
+* more params which is available for nfqueue
+* mmaped and propagating delta counter NFCT
+* nft output
+* delete unavailable plugins (use static variable as key ptr)
+
 
 struct memo
 -----------
