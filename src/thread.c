@@ -185,7 +185,7 @@ static void *interp_bundle(void *arg)
 			goto failure;
 		}
 
-		/* XXX: need to check runnable? */
+		/* XXX: need to check runnable here? */
 		if (usage == 0) {
 			/* notify to ulogd_wait_consume() */
 			ret = pthread_mutex_lock(&spi->refcnt_mutex);
@@ -234,7 +234,7 @@ static void *interp_bundle(void *arg)
 			goto failure_unlock_th;
 		}
 
-		/* put self back to active_workers */
+		/* put self back to runnable_workers */
 		ret = put_worker(th);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "put_worker\n");
@@ -560,8 +560,12 @@ int ulogd_stop_workers(void)
 	return 0;
 }
 
-/* this only has means when called from main thread
- * caller: ulogd.c */
+/* wait for all ulogd_inter_thread suspends.
+ * It make sense only when called from main thread. Functions which updates
+ * ulogd_interp_thread's bundle is this and another one is
+ * ulogd_propagate_results() which must be called from main thread, fd or timer
+ * callback. This means only ulogd_interp_thread self updates the bundle at the
+ * time this function is called. */
 int ulogd_sync_workers(void)
 {
 	struct ulogd_interp_thread *th;

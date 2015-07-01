@@ -28,10 +28,8 @@ struct ulogd_interp_thread {
 	bool runnable;
 	int retval;	/* errno in thread */
 
-	/* view below to message to this thread */
+	/* from source pluginstance to this thread */
 	struct ulogd_keysets_bundle *bundle;
-	/* see: interp_stack(void *arg)
-	 *      and must chage propagate function */
 	struct ulogd_stack *stack;
 };
 

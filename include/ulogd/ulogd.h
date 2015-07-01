@@ -337,6 +337,8 @@ struct ulogd_source_pluginstance {
 
 	int usage;
 	int refcnt; /* based on keysets_bundle.nstacks */
+
+	/* to notify refcnt == 0 to ulogd_wait_consume() */
 	pthread_mutex_t refcnt_mutex;
 	pthread_cond_t refcnt_condv;
 
