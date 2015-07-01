@@ -154,6 +154,12 @@ static struct config_keyset ulogd_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.value = 4,
 		},
+		{
+			.key = "keyspool",
+			.type = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 4,
+		},
 	},
 };
 
@@ -162,6 +168,7 @@ static struct config_keyset ulogd_kset = {
 #define loglevel_ce	ulogd_kset.ces[2]
 #define stack_ce	ulogd_kset.ces[3]
 #define threads_ce	ulogd_kset.ces[4]
+#define keyspool_ce	ulogd_kset.ces[5]
 
 /***********************************************************************
  * UTILITY FUNCTIONS FOR PLUGINS
@@ -1421,6 +1428,7 @@ static void print_usage(void)
 	printf("\t-u --uid\tChange UID/GID\n");
 	printf("\t-i --info\tDisplay infos about plugin\n");
 	printf("\t-t --threads\tSet number of threads\n");
+	printf("\t-k --keyspool\tSet per stack number of keys\n");
 }
 
 static struct option opts[] = {
@@ -1434,6 +1442,7 @@ static struct option opts[] = {
 	{ "loglevel", 1, NULL, 'l' },
 	{ "pidfile", 1, NULL, 'p' },
 	{ "threads", 1, NULL, 't' },
+	{ "keyspool", 1, NULL, 'k' },
 	{NULL, 0, NULL, 0}
 };
 
@@ -1448,10 +1457,11 @@ int main(int argc, char* argv[])
 	gid_t gid = 0;
 	int loglevel = 0;
 	int nthreads = 0;
+	int kpools = 0;
 
 	ulogd_logfile = strdup(ULOGD_LOGFILE_DEFAULT);
 
-	while ((argch = getopt_long(argc, argv, "c:p:dvl:h::Vu:i:t:", opts, NULL)) != -1) {
+	while ((argch = getopt_long(argc, argv, "c:p:dvl:h::Vu:i:t:k:", opts, NULL)) != -1) {
 		switch (argch) {
 		default:
 		case '?':
@@ -1509,6 +1519,9 @@ int main(int argc, char* argv[])
 		case 't':
 			nthreads = atoi(optarg);
 			break;
+		case 'k':
+			kpools = atoi(optarg);
+			break;
 		}
 	}
 
@@ -1521,6 +1534,11 @@ int main(int argc, char* argv[])
 	if (nthreads) {
 		threads_ce.u.value = nthreads;
 		threads_ce.flag |= CONFIG_FLAG_VAL_PROTECTED;
+	}
+
+	if (kpools) {
+		keyspool_ce.u.value = kpools;
+		keyspool_ce.flag |= CONFIG_FLAG_VAL_PROTECTED;
 	}
 
 	if (ulogd_pidfile) {
@@ -1620,7 +1638,7 @@ int main(int argc, char* argv[])
 		warn_and_exit(daemonize);
 	}
 	if (ulogd_keysets_bundles_alloc_init(&ulogd_source_pluginstances,
-					     ULOGD_N_PERSTACK_DATA)) {
+					     keyspool_ce.u.value)) {
 		ulogd_log(ULOGD_FATAL, "ulogd_keysets_bundles_alloc_init\n");
 		warn_and_exit(daemonize);
 	}

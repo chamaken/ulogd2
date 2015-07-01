@@ -470,7 +470,4 @@ int ulogd_select_main(void);
 #define IPPROTO_UDPLITE 136
 #endif
 
-/* XXX: should be configured */
-#define ULOGD_N_PERSTACK_DATA 8
-
 #endif /* _ULOGD_H */
