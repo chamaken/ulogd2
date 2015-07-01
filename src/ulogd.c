@@ -148,6 +148,12 @@ static struct config_keyset ulogd_kset = {
 			.options = CONFIG_OPT_MULTI,
 			.u.parser = &create_stack,
 		},
+		{
+			.key = "threads",
+			.type = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 4,
+		},
 	},
 };
 
@@ -155,6 +161,7 @@ static struct config_keyset ulogd_kset = {
 #define plugin_ce	ulogd_kset.ces[1]
 #define loglevel_ce	ulogd_kset.ces[2]
 #define stack_ce	ulogd_kset.ces[3]
+#define threads_ce	ulogd_kset.ces[4]
 
 /***********************************************************************
  * UTILITY FUNCTIONS FOR PLUGINS
@@ -1413,6 +1420,7 @@ static void print_usage(void)
 	printf("\t-p --pidfile\tRecord ulogd PID in file\n");
 	printf("\t-u --uid\tChange UID/GID\n");
 	printf("\t-i --info\tDisplay infos about plugin\n");
+	printf("\t-t --threads\tSet number of threads\n");
 }
 
 static struct option opts[] = {
@@ -1425,6 +1433,7 @@ static struct option opts[] = {
 	{ "verbose", 0, NULL, 'v' },
 	{ "loglevel", 1, NULL, 'l' },
 	{ "pidfile", 1, NULL, 'p' },
+	{ "threads", 1, NULL, 't' },
 	{NULL, 0, NULL, 0}
 };
 
@@ -1438,10 +1447,11 @@ int main(int argc, char* argv[])
 	uid_t uid = 0;
 	gid_t gid = 0;
 	int loglevel = 0;
+	int nthreads = 0;
 
 	ulogd_logfile = strdup(ULOGD_LOGFILE_DEFAULT);
 
-	while ((argch = getopt_long(argc, argv, "c:p:dvl:h::Vu:i:", opts, NULL)) != -1) {
+	while ((argch = getopt_long(argc, argv, "c:p:dvl:h::Vu:i:t:", opts, NULL)) != -1) {
 		switch (argch) {
 		default:
 		case '?':
@@ -1496,6 +1506,9 @@ int main(int argc, char* argv[])
 		case 'l':
 			loglevel = atoi(optarg);
 			break;
+		case 't':
+			nthreads = atoi(optarg);
+			break;
 		}
 	}
 
@@ -1503,6 +1516,11 @@ int main(int argc, char* argv[])
 	if (loglevel) {
 		loglevel_ce.u.value = loglevel;
 		loglevel_ce.flag |= CONFIG_FLAG_VAL_PROTECTED;
+	}
+
+	if (nthreads) {
+		threads_ce.u.value = nthreads;
+		threads_ce.flag |= CONFIG_FLAG_VAL_PROTECTED;
 	}
 
 	if (ulogd_pidfile) {
@@ -1610,7 +1628,7 @@ int main(int argc, char* argv[])
 		ulogd_log(ULOGD_FATAL, "start_pluginstances\n");
 		warn_and_exit(daemonize);
 	}
-	if (ulogd_start_workers(ULOGD_N_INTERP_THREAD) < 0) {
+	if (ulogd_start_workers(threads_ce.u.value) < 0) {
 		ulogd_log(ULOGD_FATAL, "ulogd_start_worker\n");
 		ulogd_stop_workers();
 		stop_pluginstances();

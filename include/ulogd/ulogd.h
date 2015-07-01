@@ -472,6 +472,5 @@ int ulogd_select_main(void);
 
 /* XXX: should be configured */
 #define ULOGD_N_PERSTACK_DATA 8
-#define ULOGD_N_INTERP_THREAD 16
 
 #endif /* _ULOGD_H */
