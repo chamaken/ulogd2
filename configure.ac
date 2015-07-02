@@ -124,10 +124,10 @@ if [! test "x$enable_nfacct" = "xyes"]; then
 fi
 
 AC_ARG_ENABLE(nfq,
-       AS_HELP_STRING([--enable-nfq], [Enable nfq module [default=yes]]),[enable_nfq=$enableval],[enable_nfq=yes])
+	AS_HELP_STRING([--enable-nfq], [Enable nfq module [default=yes]]),[enable_nfq=$enableval],[enable_nfq=yes])
 AS_IF([test "x$enable_nfq" = "xyes"], [
-    PKG_CHECK_MODULES([LIBNETFILTER_QUEUE], [libnetfilter_queue >= 1.0.2])
-    AC_DEFINE([BUILD_NFQ], [1], [Building nfq module])
+    PKG_CHECK_MODULES([LIBNETFILTER_QUEUE], [libnetfilter_queue >= 1.0.2],
+                      [AC_DEFINE([BUILD_NFQ], [1], [Building nfq module])], [enable_nfq=no])
 ])
 AM_CONDITIONAL([BUILD_NFQ], [test "x$enable_nfq" = "xyes"])
 if [! test "x$enable_nfq" = "xyes"]; then
