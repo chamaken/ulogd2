@@ -7,6 +7,7 @@ import cpylmnl.linux.netfilter.nfnetlink_queueh as nfqnl
 import cpylmnl.linux.netfilterh as nf
 import cpylmnl as mnl
 import cpylmnfq as nfq
+import cpylmnfct as nfct
 
 import ulogd
 from scapy.layers.inet import IP
@@ -45,6 +46,8 @@ def nfq_send_accept(queue_num, qid):
 def configure(iklist, oklist):
     oklist.type = ulogd.ULOGD_DTYPE_SINK
     iklist.type = ulogd.ULOGD_DTYPE_RAW
+    iklist.add(ulogd.Keyinfo(name="oob.family",
+                             type=ulogd.ULOGD_RET_UINT8))
     iklist.add(ulogd.Keyinfo(name="nfq.res_id",
                              type=ulogd.ULOGD_RET_UINT16))
     iklist.add(ulogd.Keyinfo(name="nfq.attrs",
@@ -58,15 +61,28 @@ def start(ikset):
 
 def interp(ikset, okset):
     res_id = ikset["nfq.res_id"].value
+    family = ikset["oob.family"].value
     pattrs = (ctypes.POINTER(mnl.Attr) * (nfqnl.NFQA_MAX + 1))\
         .from_address(ikset["nfq.attrs"].value)
 
-    payload_nla = pattrs[nfqnl.NFQA_PAYLOAD].contents
-    ip = IP(bytes(payload_nla.get_payload_v()))
-    log.info(ip.summary())
+    if pattrs[nfqnl.NFQA_PAYLOAD]:
+        ip = IP(bytes(pattrs[nfqnl.NFQA_PAYLOAD].contents.get_payload_v()))
+        log.info(ip.summary())
 
-    ph_nla = pattrs[nfqnl.NFQA_PACKET_HDR].contents
-    qid = socket.ntohl(ph_nla.get_payload_as(nfqnl.NfqnlMsgPacketHdr).packet_id)
+    if pattrs[nfqnl.NFQA_IFINDEX_INDEV]:
+        ifin = pattrs[nfqnl.NFQA_IFINDEX_INDEV].contents.get_u32()
+        log.info("indev: %d", socket.ntohl(ifin));
+    if pattrs[nfqnl.NFQA_IFINDEX_OUTDEV]:
+        ifout = pattrs[nfqnl.NFQA_IFINDEX_OUTDEV].contents.get_u32()
+        log.info("outdev: %d", socket.ntohl(ifout));
+
+    if pattrs[nfqnl.NFQA_CT]:
+        ct = nfct.Conntrack()
+        ct.payload_parse(pattrs[nfqnl.NFQA_CT].contents.get_payload_v(), family)
+        s = ct.snprintf(4096, nfct.NFCT_T_UNKNOWN, nfct.NFCT_O_DEFAULT, 0)
+        log.info("conntrack: %s", s)
+
+    qid = socket.ntohl(pattrs[nfqnl.NFQA_PACKET_HDR].contents.get_payload_as(nfqnl.NfqnlMsgPacketHdr).packet_id)
     nfq_send_accept(res_id, qid)
     return ulogd.ULOGD_IRET_OK
 
