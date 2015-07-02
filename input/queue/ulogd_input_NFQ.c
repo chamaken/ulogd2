@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include <linux/netlink.h>
 #include <linux/netfilter/nfnetlink_queue.h>
 
 #include <ulogd/ulogd.h>
@@ -53,6 +54,12 @@ enum nfq_conf {
 	NFQ_CONF_BLOCK_NR,		/* 32 */
 	NFQ_CONF_FRAME_SIZE,		/* 8192 */
 	NFQ_CONF_QUEUE_NUM,
+	NFQ_CONF_COPY_MODE,		/* NFQNL_COPY_META / NFQNL_COPY_PACKET */
+	NFQ_CONF_FAIL_OPEN,		/* NFQA_CFG_F_FAIL_OPEN */
+	NFQ_CONF_CONNTRACK,		/* NFQA_CFG_F_CONNTRACK */
+	NFQ_CONF_GSO,			/* NFQA_CFG_F_GSO */
+	NFQ_CONF_UID_GID,		/* NFQA_CFG_F_UID_GID */
+	NFQ_CONF_SECCTX,		/* NFQA_CFG_F_SECCTX */
 	NFQ_CONF_MAX,
 };
 
@@ -82,6 +89,42 @@ static struct config_keyset nfq_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
+		[NFQ_CONF_COPY_MODE] = {
+			.key	 = "copy_mode",
+			.type	 = CONFIG_TYPE_STRING,
+			.options = CONFIG_OPT_NONE,
+			.u.string = "packet",
+		},
+		[NFQ_CONF_FAIL_OPEN] = {
+			.key	 = "fail_open",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
+		[NFQ_CONF_CONNTRACK] = {
+			.key	 = "conntrack",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
+		[NFQ_CONF_GSO] = {
+			.key	 = "gso",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
+		[NFQ_CONF_UID_GID] = {
+			.key	 = "uid_gid",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
+		[NFQ_CONF_SECCTX] = {
+			.key	 = "secctx",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
 	},
 	.num_ces = NFQ_CONF_MAX,
 };
@@ -90,9 +133,17 @@ static struct config_keyset nfq_kset = {
 #define block_nr_ce(x)		(x->ces[NFQ_CONF_BLOCK_NR])
 #define frame_size_ce(x)	(x->ces[NFQ_CONF_FRAME_SIZE])
 #define queue_num_ce(x)		(x->ces[NFQ_CONF_QUEUE_NUM])
+#define copy_mode_ce(x)		(x->ces[NFQ_CONF_COPY_MODE])
+#define fail_open_ce(x)		(x->ces[NFQ_CONF_FAIL_OPEN])
+#define conntrack_ce(x)		(x->ces[NFQ_CONF_CONNTRACK])
+#define gso_ce(x)		(x->ces[NFQ_CONF_GSO])
+#define uid_gid_ce(x)		(x->ces[NFQ_CONF_UID_GID])
+#define secctx_ce(x)		(x->ces[NFQ_CONF_SECCTX])
+
 
 enum ulogd_nfq_keys {
 	ULOGD_NFQ_OKEY_NLATTRS,
+	ULOGD_NFQ_OKEY_FAMILY,
 	ULOGD_NFQ_OKEY_RES_ID,
 	ULOGD_NFQ_OKEY_FRAME,
 	ULOGD_NFQ_OKEY_MAX
@@ -107,6 +158,11 @@ static struct ulogd_key nfq_okeys[] = {
 		.flags	= ULOGD_RETF_EMBED,
 		.name	= "nfq.attrs",
 		.len	= sizeof(struct nlattr *) * (NFQA_MAX + 1),
+	},
+	[ULOGD_NFQ_OKEY_FAMILY] = {
+		.type	= ULOGD_RET_UINT8,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "oob.family",
 	},
 	[ULOGD_NFQ_OKEY_RES_ID] = {
 		.type	= ULOGD_RET_UINT16,
@@ -136,12 +192,13 @@ static int nfq_cb(const struct nlmsghdr *nlh, void *data)
 	struct nlattr **attrs;
 	struct nl_mmap_hdr *frame = (void *)nlh - NL_MMAP_HDRLEN;
 
+	okey_set_u8(&ret[ULOGD_NFQ_OKEY_FAMILY], nfg->nfgen_family);
 	okey_set_u16(&ret[ULOGD_NFQ_OKEY_RES_ID], ntohs(nfg->res_id));
 	okey_set_ptr(&ret[ULOGD_NFQ_OKEY_FRAME], frame);
 	attrs = (struct nlattr **)okey_get_ptr(&ret[ULOGD_NFQ_OKEY_NLATTRS]);
 
 	if (nfq_nlmsg_parse(nlh, attrs) < 0) {
-		ulogd_log(ULOGD_ERROR, "Error parsing nfq message");
+		ulogd_log(ULOGD_ERROR, "could not parse nfq message");
 		ulogd_put_output_keyset(output);
 		return MNL_CB_ERROR;
 	}
@@ -202,7 +259,8 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 		case NL_MMAP_STATUS_UNUSED:
 			return ULOGD_IRET_OK;
 		case NL_MMAP_STATUS_SKIP:
-			ulogd_log(ULOGD_ERROR, "ERROR! found SKIP status frame\n");
+			ulogd_log(ULOGD_ERROR, "found SKIP status frame,"
+				  " ENOBUFS maybe\n");
 			return ULOGD_IRET_ERR;
 		}
 	}
@@ -226,6 +284,39 @@ nfq_hdr_put(char *buf, int type, uint32_t queue_num)
 	return nlh;
 }
 
+static int nfq_put_config(struct nlmsghdr *nlh, struct config_keyset *config)
+{
+	char *copy_mode = copy_mode_ce(config).u.string;
+	uint32_t flags = 0;
+	int range = frame_size_ce(config).u.value - NL_MMAP_HDRLEN;
+
+	if (strcasecmp(copy_mode, "packet") == 0) {
+		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_PACKET, range);
+	} else if (strcasecmp(copy_mode, "meta") == 0) {
+		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_META, range);
+	} else {
+		ulogd_log(ULOGD_ERROR, "unknow copy_mode: %s\n", copy_mode);
+		return -1;
+	}
+
+	if (fail_open_ce(config).u.value)
+		flags |= NFQA_CFG_F_FAIL_OPEN;
+	if (conntrack_ce(config).u.value)
+		flags |= NFQA_CFG_F_CONNTRACK;
+	if (gso_ce(config).u.value)
+		flags |= NFQA_CFG_F_GSO;
+	if (uid_gid_ce(config).u.value)
+		flags |= NFQA_CFG_F_UID_GID;
+#if defined(NFQA_CFG_F_SECCTX)
+	if (secctx_ce(config).u.value)
+		flags |= NFQA_CFG_F_SECCTX;
+#endif
+	mnl_attr_put_u32(nlh, NFQA_CFG_FLAGS, htonl(flags));
+	mnl_attr_put_u32(nlh, NFQA_CFG_MASK, htonl(NFQA_CFG_F_MAX - 1));
+
+	return 0;
+}
+
 static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 {
 	struct nfq_priv *priv =
@@ -233,7 +324,6 @@ static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 	struct nlmsghdr *nlh;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	int queue_num = queue_num_ce(upi->config_kset).u.value;
-	int range = frame_size_ce(upi->config_kset).u.value;
 
 	/* kernels 3.8 and later is required to omit PF_(UN)BIND */
 	nlh = nfq_hdr_put(buf, NFQNL_MSG_CONFIG, 0);
@@ -253,9 +343,8 @@ static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 	}
 
 	nlh = nfq_hdr_put(buf, NFQNL_MSG_CONFIG, queue_num);
-	nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_PACKET, range);
-	mnl_attr_put_u32(nlh, NFQA_CFG_FLAGS, htonl(NFQA_CFG_F_GSO));
-	mnl_attr_put_u32(nlh, NFQA_CFG_MASK, htonl(NFQA_CFG_F_GSO));
+	if (nfq_put_config(nlh, upi->config_kset) == -1)
+		return ULOGD_IRET_ERR;
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_send: %s\n",
 			_sys_errlist[errno]);
@@ -278,8 +367,8 @@ static int constructor_nfq(struct ulogd_source_pluginstance *upi)
 		.nm_block_nr	= block_nr_ce(upi->config_kset).u.value,
 		.nm_frame_size	= frame_size_ce(upi->config_kset).u.value,
 		.nm_frame_nr	= block_size_ce(upi->config_kset).u.value
-		/ frame_size_ce(upi->config_kset).u.value
-		* block_nr_ce(upi->config_kset).u.value,
+				/ frame_size_ce(upi->config_kset).u.value
+				* block_nr_ce(upi->config_kset).u.value,
 	};
 	int optval = 1;
 
