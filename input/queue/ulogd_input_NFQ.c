@@ -171,7 +171,7 @@ static struct ulogd_key nfq_okeys[] = {
 	},
 	[ULOGD_NFQ_OKEY_FRAME] = {
 		.type	= ULOGD_RET_RAW,
-		.flags	= ULOGD_RETF_DESTRUCT,
+		.flags	= ULOGD_RETF_NONE | ULOGD_RETF_DESTRUCT,
 		.name	= "nfq.frame",
 		.destruct = frame_destructor,
 	},
@@ -216,7 +216,7 @@ static int handle_valid_frame(struct ulogd_source_pluginstance *upi,
 	frame->nm_status = NL_MMAP_STATUS_SKIP;
 	ret = mnl_cb_run(MNL_FRAME_PAYLOAD(frame), frame->nm_len,
 			 0, priv->portid, nfq_cb, upi);
-	if (ret != MNL_CB_OK) {
+	if (ret == MNL_CB_ERROR) {
 		ulogd_log(ULOGD_ERROR, "mnl_cb_run: %d %s\n",
 			  errno, _sys_errlist[errno]);
 		frame->nm_status = NL_MMAP_STATUS_UNUSED;
@@ -236,14 +236,15 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 	if (!(what & ULOGD_FD_READ))
 		return 0;
 
-	frame = mnl_ring_get_frame(priv->nlr);
 	while (1) {
+		frame = mnl_ring_get_frame(priv->nlr);
 		switch (frame->nm_status) {
 		case NL_MMAP_STATUS_VALID:
 			ret = handle_valid_frame(upi, frame);
 			mnl_ring_advance(priv->nlr);
 			if (ret != ULOGD_IRET_OK)
 				return ret;
+			break;
 		case NL_MMAP_STATUS_RESERVED:
 			/* currently used by the kernel */
 			return ULOGD_IRET_OK;
@@ -433,6 +434,7 @@ static int destructor_nfq(struct ulogd_source_pluginstance *upi)
 
 	ulogd_unregister_fd(&priv->ufd);
 	mnl_socket_unmap(priv->nlr);
+	free(priv->nlr);
 	mnl_socket_close(priv->nl);
 
 	return 0;
