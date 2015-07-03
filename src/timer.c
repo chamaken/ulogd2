@@ -40,7 +40,9 @@
 static int fd_timer_cb(int fd, unsigned int what, void *data)
 {
         struct ulogd_timer *alarm = data;
+	uint64_t exp;
 
+	read(fd, &exp, sizeof(uint64_t));
 	/* unregister first since cb may call add_timer again */
         ulogd_unregister_fd(&alarm->ufd);
         alarm->cb(alarm, alarm->data);
@@ -50,6 +52,9 @@ static int fd_timer_cb(int fd, unsigned int what, void *data)
 static int fd_itimer_cb(int fd, unsigned int what, void *data)
 {
         struct ulogd_timer *alarm = data;
+	uint64_t exp;
+
+	read(fd, &exp, sizeof(uint64_t));
         alarm->cb(alarm, alarm->data);
         return 0;
 }
@@ -114,7 +119,9 @@ int ulogd_add_timer(struct ulogd_timer *alarm, unsigned long sc)
 
 int ulogd_del_timer(struct ulogd_timer *alarm)
 {
-        return timerfd_settime(alarm->ufd.fd, 0, NULL, NULL);
+	struct itimerspec spec = {{0, 0}, {0, 0}};
+
+        return timerfd_settime(alarm->ufd.fd, 0, &spec, NULL);
 }
 
 int ulogd_timer_pending(struct ulogd_timer *alarm)
