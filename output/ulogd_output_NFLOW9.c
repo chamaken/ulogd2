@@ -965,10 +965,12 @@ static ssize_t send_netflow9(struct netflow9_instance *ii)
 #endif
 	nsent = writev(ii->fd, ii->iovecs, ii->iovcnt);
 	if (nsent != ii->msglen) {
-		if (nsent == -1)
+		if (nsent == -1) {
 			ulogd_log(ULOGD_ERROR, "send: %s\n", strerror(errno));
-		ulogd_log(ULOGD_ERROR, "send - arg: %d, ret: %d\n",
-			  ii->msglen, nsent);
+		} else {
+			ulogd_log(ULOGD_ERROR, "send - arg: %d, ret: %d\n",
+				  ii->msglen, nsent);
+		}
 	}
 
 	return nsent;
