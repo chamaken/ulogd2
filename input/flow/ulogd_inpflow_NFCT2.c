@@ -821,7 +821,7 @@ static int set_reliable(struct mnl_socket *nl)
 	if (mnl_socket_setsockopt(nl, NETLINK_BROADCAST_SEND_ERROR,
 				  &on, sizeof(int)) == -1)
 		return -1;
-	if (mnl_socket_setsockopt(nl, NETLINK_BROADCAST_SEND_ERROR,
+	if (mnl_socket_setsockopt(nl, NETLINK_NO_ENOBUFS,
 				  &on, sizeof(int)) == -1)
 		return -1;
 	return 0;
