@@ -97,12 +97,6 @@ enum {
 	CII_REPLY_RAW_PKTCOUNT_DELTA,
 	CII_REPLY_IP_PROTOCOL,	/* use only orig ip.protocol */
 	CII_FAMILY,		/* illigal dirty hack */
-
-	/* XXX: will be removed if NFCT propagate delta counter */
-	CII_ORIG_RAW_PKTLEN,
-	CII_ORIG_RAW_PKTCOUNT,
-	CII_REPLY_RAW_PKTLEN,
-	CII_REPLY_RAW_PKTCOUNT,
 	CII_MAX,
 };
 
@@ -113,12 +107,6 @@ char *count_keys[] = {
 	[CII_REPLY_RAW_PKTCOUNT_DELTA]	= "reply.raw.pktcount.delta",
 	[CII_REPLY_IP_PROTOCOL]		= "reply.ip.protocol",
 	[CII_FAMILY]			= "oob.family",
-
-	/* XXX: will be removed if NFCT propagate delta counter */
-	[CII_ORIG_RAW_PKTLEN]		= "orig.raw.pktlen",
-	[CII_ORIG_RAW_PKTCOUNT]		= "orig.raw.pktcount",
-	[CII_REPLY_RAW_PKTLEN]		= "reply.raw.pktlen",
-	[CII_REPLY_RAW_PKTCOUNT]	= "reply.raw.pktcount",
 };
 
 /* index for data field offset to swap by direction */
@@ -140,8 +128,6 @@ enum {
 	FOI_FLOW_DIR,
 	FOI_IN_BYTES,
 	FOI_IN_PKTS,
-	FOI_XXX_IN_BYTES,
-	FOI_XXX_IN_PKTS,
 	FOI_MAX,
 };
 
@@ -163,9 +149,6 @@ char *dir_keys[] = {
 	[FOI_FLOW_DIR]			= "flow.direction",
 	[FOI_IN_BYTES]			= "orig.raw.pktlen.delta",
 	[FOI_IN_PKTS]			= "orig.raw.pktcount.delta",
-	/* XXX: will be removed if NFCT propagate delta counter */
-	[FOI_XXX_IN_BYTES]		= "orig.raw.pktlen",
-	[FOI_XXX_IN_PKTS]		= "orig.raw.pktcount",
 };
 
 enum {
@@ -342,12 +325,8 @@ enum {
 };
 
 static int ipfix_map[] = {
-	/* XXX: current NFCT does not propagate delta count
-	 * [IPFIX_octetDeltaCount]		= NETFLOW9_IN_BYTES,
-	 * [IPFIX_packetDeltaCount]		= NETFLOW9_IN_PKTS,
-	 */
-	[IPFIX_octetTotalCount]			= NETFLOW9_IN_BYTES,
-	[IPFIX_packetTotalCount]		= NETFLOW9_IN_PKTS,
+	[IPFIX_octetDeltaCount]			= NETFLOW9_IN_BYTES,
+	[IPFIX_packetDeltaCount]		= NETFLOW9_IN_PKTS,
 	/* [3]					= NETFLOW9_FLOWS,		*/
 	[IPFIX_protocolIdentifier]		= NETFLOW9_PROTOCOL,
 	[IPFIX_classOfServiceIPv4]		= NETFLOW9_TOS,
@@ -484,10 +463,7 @@ alloc_ulogd_netflow9_template(struct ulogd_pluginstance *upi,
 		/* ignore reply for unidirection */
 		if (i == ii->ikey_count[CII_REPLY_RAW_PKTLEN_DELTA]
 		    || i == ii->ikey_count[CII_REPLY_RAW_PKTCOUNT_DELTA]
-		    || i == ii->ikey_count[CII_REPLY_IP_PROTOCOL]
-		    /* XXX: will be removed if NFCT propagate delta counter */
-		    || i == ii->ikey_count[CII_REPLY_RAW_PKTLEN]
-		    || i == ii->ikey_count[CII_REPLY_RAW_PKTCOUNT])
+		    || i == ii->ikey_count[CII_REPLY_IP_PROTOCOL])
 			continue;
 
 		tmpl_len += sizeof(struct netflow9_templ_rec);
@@ -572,10 +548,7 @@ build_template_for_bitmask(struct ulogd_pluginstance *upi,
 
 		if (i == ii->ikey_count[CII_REPLY_RAW_PKTLEN_DELTA]
 		    || i == ii->ikey_count[CII_REPLY_RAW_PKTCOUNT_DELTA]
-		    || i == ii->ikey_count[CII_REPLY_IP_PROTOCOL]
-		    /* XXX: will be removed if NFCT propagate delta counter */
-		    || i == ii->ikey_count[CII_REPLY_RAW_PKTLEN]
-		    || i == ii->ikey_count[CII_REPLY_RAW_PKTCOUNT])
+		    || i == ii->ikey_count[CII_REPLY_IP_PROTOCOL])
 			continue;
 
 		tmpl_rec->type = htons(ipfix_map[key->ipfix.field_id]);
@@ -638,10 +611,7 @@ static int put_data_records(struct ulogd_pluginstance *upi,
 		/* store orig temporarily to (unidirectional) counter */
 		if (i == ii->ikey_count[CII_REPLY_RAW_PKTLEN_DELTA]
 		    || i == ii->ikey_count[CII_REPLY_RAW_PKTCOUNT_DELTA]
-		    || i == ii->ikey_count[CII_REPLY_IP_PROTOCOL]
-		    /* XXX: will be removed if NFCT propagate delta counter */
-		    || i == ii->ikey_count[CII_REPLY_RAW_PKTLEN]
-		    || i == ii->ikey_count[CII_REPLY_RAW_PKTCOUNT])
+		    || i == ii->ikey_count[CII_REPLY_IP_PROTOCOL])
 			continue;
 
 		ret = ulogd_key_putn(&keys[i], buf + len, buflen);
@@ -745,11 +715,6 @@ static int swap_by_dir(struct ulogd_netflow9_template *tmpl,
 		*(uint64_t *)(buf + TOF(FOI_IN_BYTES)) = __cpu_to_be64(bytes);
 	if (TOF(FOI_IN_PKTS) >= 0)
 		*(uint64_t *)(buf + TOF(FOI_IN_PKTS)) = __cpu_to_be64(packets);
-	/* XXX: will be removed if NFCT propagate delta counter */
-	if (TOF(FOI_XXX_IN_BYTES) >= 0)
-		*(uint64_t *)(buf + TOF(FOI_XXX_IN_BYTES)) = __cpu_to_be64(bytes);
-	if (TOF(FOI_XXX_IN_PKTS) >= 0)
-		*(uint64_t *)(buf + TOF(FOI_XXX_IN_PKTS)) = __cpu_to_be64(packets);
 
 	return 0;
 }
@@ -776,17 +741,6 @@ static int nflow9_direction(struct ulogd_pluginstance *upi,
 			ret |= NFLOW9_DIR_ORIG;
 		}
 	}
-	/* XXX: will be removed if NFCT propagate delta counter */
-	else if (IKC(CII_ORIG_RAW_PKTLEN) != sentry
-		 && pp_is_valid(keys, IKC(CII_ORIG_RAW_PKTLEN))) {
-		*orig_bytes
-			= ikey_get_u64(&keys[IKC(CII_ORIG_RAW_PKTLEN)]);
-		if (*orig_bytes > 0) {
-			*orig_packets
-				= ikey_get_u64(&keys[IKC(CII_ORIG_RAW_PKTCOUNT)]);
-			ret |= NFLOW9_DIR_ORIG;
-		}
-	}
 	if (IKC(CII_REPLY_RAW_PKTLEN_DELTA) != sentry
 	    && pp_is_valid(keys, IKC(CII_REPLY_RAW_PKTLEN_DELTA))) {
 		*reply_bytes
@@ -794,17 +748,6 @@ static int nflow9_direction(struct ulogd_pluginstance *upi,
 		if (*reply_bytes > 0) {
 			*reply_packets
 				= ikey_get_u64(&keys[IKC(CII_REPLY_RAW_PKTCOUNT_DELTA)]);
-			ret |= NFLOW9_DIR_REPLY;
-		}
-	}
-	/* XXX: will be removed if NFCT propagate delta counter */
-	else if (IKC(CII_REPLY_RAW_PKTLEN) != sentry
-		 && pp_is_valid(keys, IKC(CII_REPLY_RAW_PKTLEN))) {
-		*reply_bytes
-			= ikey_get_u64(&keys[IKC(CII_REPLY_RAW_PKTLEN)]);
-		if (*reply_bytes > 0) {
-			*reply_packets
-				= ikey_get_u64(&keys[IKC(CII_REPLY_RAW_PKTCOUNT)]);
 			ret |= NFLOW9_DIR_REPLY;
 		}
 	}
