@@ -52,6 +52,17 @@
 #define NSEC_PER_SEC    1000000000L
 #endif
 
+/* flowEndReason
+ *   (none)		0x01: idle timeout
+ *   NFCT_T_UPDATE	0x02: active timeout
+ *   NFCT_T_DESTROY	0x03: end of Flow detected
+ *   (none)		0x04: forced end
+ *   (none)		0x05: lack of resources
+ */
+static uint8_t flowReasons[] = {
+	[NFCT_T_UPDATE]		= 0x02,
+	[NFCT_T_DESTROY]	= 0x03,
+};
 
 struct nfct_priv {
 	struct mnl_socket	*eventnl;
@@ -155,6 +166,7 @@ enum nfct_keys {
 	NFCT_ORIG_IP6_DADDR,
 	NFCT_REPLY_IP6_SADDR,
 	NFCT_REPLY_IP6_DADDR,
+	NFCT_FLOW_END_REASON,
 };
 
 static struct ulogd_key nfct_okeys[] = {
@@ -400,6 +412,15 @@ static struct ulogd_key nfct_okeys[] = {
 			.field_id	= IPFIX_postNATDestinationIPv6Address,
 		},
 	},
+	[NFCT_FLOW_END_REASON]	= {
+		.type	= ULOGD_RET_UINT8,
+		.flags	= ULOGD_RETF_NONE,
+		.name	= "flow.end.reason",
+		.ipfix	= {
+			.vendor		= IPFIX_VENDOR_IETF,
+			.field_id	= IPFIX_flowEndReason,
+		},
+	},
 };
 
 static int propagate_ct(struct ulogd_source_pluginstance *spi,
@@ -501,6 +522,8 @@ static int propagate_ct(struct ulogd_source_pluginstance *spi,
 	}
 
 	okey_set_ptr(&ret[NFCT_CT], ct);
+	if (flowReasons[type])
+		okey_set_u8(&ret[NFCT_FLOW_END_REASON], flowReasons[type]);
 
 	if (ulogd_propagate_results(output) == 0)
 		return MNL_CB_OK;
