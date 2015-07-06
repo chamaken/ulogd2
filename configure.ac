@@ -111,6 +111,20 @@ AS_IF([test "x$enable_nfct" = "xyes"], [
     ])
 ])
 
+AS_IF([test "x$enable_nfct" = "xyes"], [
+    AC_MSG_CHECKING([for enable mmaped netlink])
+    AC_CACHE_VAL(ac_cv_mmaped_netlink,
+    AC_TRY_COMPILE(
+        [ #include <linux/netlink.h>],
+        [ int i = NETLINK_RX_RING; ],
+        ac_cv_mmaped_netlink=yes,
+        ac_cv_mmaped_netlink=no))
+    AC_MSG_RESULT($ac_cv_mmaped_netlink)
+    AS_IF([test "x$ac_cv_mmaped_netlink" = "xyes"], [
+        AC_DEFINE([BUILD_NFCT2], [1], [Building nfct2 module])
+    ])
+])
+
 AC_ARG_ENABLE(nfacct,
        AS_HELP_STRING([--enable-nfacct], [Enable nfacct module [default=yes]]),[enable_nfacct=$enableval],[enable_nfacct=yes])
 AS_IF([test "x$enable_nfacct" = "xyes"], [
@@ -275,6 +289,7 @@ Ulogd configuration:
     NFLOG plugin:			${enable_nflog}
     NFCT plugin:			${enable_nfct}
       with MARK event filter		${ac_cv_nfct_filter_mark}
+    NFCT2 plugin:			${ac_cv_mmaped_netlink}
     NFACCT plugin:			${enable_nfacct}
     ULOG plugin:			${enable_ulog}
     NFQ plugin:				${enable_nfq}
