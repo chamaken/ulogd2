@@ -76,8 +76,6 @@ struct nfct_priv {
 	struct nlmsghdr		*dump_request;
 };
 
-#define EVENT_MASK	NF_NETLINK_CONNTRACK_DESTROY
-
 enum nfct_conf {
 	NFCT_CONF_BLOCK_SIZE = 0,	/* 8192 */
 	NFCT_CONF_BLOCK_NR,		/* 128 */
@@ -839,8 +837,7 @@ static int init_eventnl(struct ulogd_source_pluginstance *spi)
 	}
 
 	if (mnl_socket_bind(priv->eventnl,
-			    NF_NETLINK_CONNTRACK_UPDATE
-			    | NF_NETLINK_CONNTRACK_DESTROY,
+			    NF_NETLINK_CONNTRACK_DESTROY,
 			    MNL_SOCKET_AUTOPID) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_sockt_bind: %s\n",
 			  _sys_errlist[errno]);
