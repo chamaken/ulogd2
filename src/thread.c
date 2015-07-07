@@ -158,7 +158,6 @@ static void *interp_bundle(void *arg)
 		spi = th->bundle->spi;
 		/* exec stacks */
 		llist_for_each_entry(stack, &spi->stacks, list) {
-			ulogd_log(ULOGD_DEBUG, "exec stack: %s\n", stack->name);
 			ret = exec_stack(stack, th->bundle->keysets);
 			if (ret) {
 				ulogd_log(ULOGD_ERROR, "[T%lu/D%p] stack: %s,"

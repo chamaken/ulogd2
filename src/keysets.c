@@ -252,9 +252,6 @@ ulogd_keysets_bundle_copy(struct ulogd_keysets_bundle *src)
 		return NULL;
 	dst->length = size;
 
-	ulogd_log(ULOGD_INFO, "copy - data size: %d [%p:%p]\n",
-		  size, dst, (void *)dst + size);
-
 	memcpy(dst, src, size);
 	offset = (void *)dst - (void *)src;
 
