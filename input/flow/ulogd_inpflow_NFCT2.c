@@ -9,24 +9,12 @@
  * it under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation
  *
- * 10 Jan 2005, Christian Hentschel <chentschel@people.netfilter.org>
- *      Added timestamp accounting support of the conntrack entries,
- *      reworked by Harald Welte.
- *
- * 11 May 2008, Pablo Neira Ayuso <pablo@netfilter.org>
- * 	Use a generic hashtable to store the existing flows
- * 	Add netlink overrun handling
- *
  * TODO:
  * 	- add nanosecond-accurate packet receive timestamp of event-changing
  * 	  packets to {ip,nf}_conntrack_netlink, so we can have accurate IPFIX
  *	  flowStart / flowEnd NanoSeconds.
  *	- SIGHUP for reconfiguration without loosing hash table contents, but
  *	  re-read of config and reallocation / rehashing of table, if required
- *	- Split hashtable code into separate [filter] plugin, so we can run 
- * 	  small non-hashtable ulogd installations on the firewall boxes, send
- * 	  the messages via IPFX to one aggregator who then runs ulogd with a 
- * 	  network wide connection hash table.
  */
 
 #define _GNU_SOURCE
@@ -71,9 +59,10 @@ struct nfct_priv {
 	uint32_t		dumppid;
 	struct mnl_ring		*nlr;
 	struct ulogd_fd		eventfd;
-	struct ulogd_fd		dumpfd;	
+	struct ulogd_fd		dumpfd;
 	struct ulogd_timer	timer;
 	struct nlmsghdr		*dump_request;
+	struct timeval		dump_prev;
 };
 
 enum nfct_conf {
@@ -426,9 +415,11 @@ static int propagate_ct(struct ulogd_source_pluginstance *spi,
 			struct timeval *recent)
 {
 	struct ulogd_keyset *output = ulogd_get_output_keyset(spi);
+	struct nfct_priv *priv = (struct nfct_priv *)spi->private;
 	struct ulogd_key *ret = output->keys;
 	uint64_t ts;
-	
+	time_t start_sec;
+
 	okey_set_u32(&ret[NFCT_CT_EVENT], type);
 	okey_set_u8(&ret[NFCT_OOB_FAMILY], nfct_get_attr_u8(ct, ATTR_L3PROTO));
 
@@ -506,8 +497,16 @@ static int propagate_ct(struct ulogd_source_pluginstance *spi,
 	okey_set_u32(&ret[NFCT_CT_ID], nfct_get_attr_u32(ct, ATTR_ID));
 
 	ts = nfct_get_attr_u64(ct, ATTR_TIMESTAMP_START);
-	okey_set_u32(&ret[NFCT_FLOW_START_SEC], ts / NSEC_PER_SEC);
-	okey_set_u32(&ret[NFCT_FLOW_START_USEC], ts % NSEC_PER_SEC / 1000);
+	start_sec = ts / NSEC_PER_SEC;
+	if (start_sec < priv->dump_prev.tv_sec) {
+		okey_set_u32(&ret[NFCT_FLOW_START_SEC], priv->dump_prev.tv_sec);
+		okey_set_u32(&ret[NFCT_FLOW_START_USEC],
+			     priv->dump_prev.tv_usec);
+	} else {
+		okey_set_u32(&ret[NFCT_FLOW_START_SEC], start_sec);
+		okey_set_u32(&ret[NFCT_FLOW_START_USEC],
+			     ts % NSEC_PER_SEC / 1000);
+	}
 
 	ts = nfct_get_attr_u64(ct, ATTR_TIMESTAMP_STOP);
 	if (ts) {
@@ -543,7 +542,7 @@ static uint32_t nfct_type(const struct nlmsghdr *nlh)
 	}
 	return NFCT_T_UNKNOWN;
 }
-	
+
 struct _cbarg {
 	struct ulogd_source_pluginstance *spi;
 	struct timeval *recent;
@@ -570,7 +569,7 @@ static int data_cb(const struct nlmsghdr *nlh, void *data)
 		nfct_destroy(ct);
 		return MNL_CB_OK;
 	}
-	
+
 	return propagate_ct(spi, nfct_type(nlh), ct, recent);
 }
 
@@ -582,12 +581,11 @@ static int nfct_event_cb(int fd, unsigned int what, void *param)
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	ssize_t nrecv;
 	int ret;
-	struct _cbarg cbarg = {.spi = spi, .recent = &tv};
-	
+	struct _cbarg cbarg = {.spi = spi, .recent = NULL};
+
 	if (!(what & ULOGD_FD_READ))
 		return 0;
 
-	gettimeofday(&tv, NULL);
 	/* recv(mnl_socket_get_fd(priv->eventnl), buf, len, MSG_DONTWAIT); */
 	nrecv = mnl_socket_recvfrom(priv->eventnl, buf, sizeof(buf));
 	if (nrecv == -1) {
@@ -632,7 +630,7 @@ static int nfct_dump_cb(int fd, unsigned int what, void *param)
 	struct nl_mmap_hdr *frame;
 	struct timeval tv;
 	int ret;
-	
+
 	if (!(what & ULOGD_FD_READ))
 		return 0;
 
@@ -645,10 +643,13 @@ static int nfct_dump_cb(int fd, unsigned int what, void *param)
 			ret = handle_valid_frame(spi, frame, &tv);
 			frame->nm_status = NL_MMAP_STATUS_UNUSED;
 			mnl_ring_advance(priv->nlr);
-			if (ret != ULOGD_IRET_OK)
+			if (ret != ULOGD_IRET_OK) {
+				priv->dump_prev = tv;
 				return ret;
+			}
 			break;
 		case NL_MMAP_STATUS_RESERVED:
+			priv->dump_prev = tv;
 			return ULOGD_IRET_OK;
 		case NL_MMAP_STATUS_COPY:
 			/* XXX: only consuming message, may cause segfault */
@@ -659,17 +660,52 @@ static int nfct_dump_cb(int fd, unsigned int what, void *param)
 				  frame->nm_len);
 			frame->nm_status = NL_MMAP_STATUS_UNUSED;
 			mnl_ring_advance(priv->nlr);
-			return ULOGD_IRET_ERR;
+			break;
 		case NL_MMAP_STATUS_UNUSED:
+			priv->dump_prev = tv;
 			return ULOGD_IRET_OK;
 		case NL_MMAP_STATUS_SKIP:
 			ulogd_log(ULOGD_ERROR, "found SKIP status frame,"
 				  " ENOBUFS maybe\n");
+			priv->dump_prev = tv;
 			return ULOGD_IRET_ERR;
 		}
 	}
 
 	return ULOGD_IRET_ERR;
+}
+
+static int first_dump_cb(int fd, unsigned int what, void *param)
+{
+	struct ulogd_source_pluginstance *spi = param;
+	struct nfct_priv *priv = (struct nfct_priv *)spi->private;
+	struct nl_mmap_hdr *frame;
+
+	if (!(what & ULOGD_FD_READ))
+		return 0;
+
+	if (ulogd_unregister_fd(&priv->dumpfd) == -1) {
+		ulogd_log(ULOGD_ERROR, "ulogd_unregister_fd: %s\n",
+			  _sys_errlist[errno]);
+		return ULOGD_IRET_ERR;
+	}
+	priv->dumpfd.cb = &nfct_dump_cb;
+	if (ulogd_register_fd(&priv->dumpfd) == -1) {
+		ulogd_log(ULOGD_ERROR, "ulogd_register_fd: %s\n",
+			  _sys_errlist[errno]);
+		return ULOGD_IRET_ERR;
+	}
+
+	gettimeofday(&priv->dump_prev, NULL);
+
+	frame = mnl_ring_get_frame(priv->nlr);
+	while (frame->nm_status != NL_MMAP_STATUS_UNUSED) {
+		frame->nm_status = NL_MMAP_STATUS_UNUSED;
+		mnl_ring_advance(priv->nlr);
+		frame = mnl_ring_get_frame(priv->nlr);
+	}
+
+	return ULOGD_IRET_OK;
 }
 
 static void nfct_itimer_cb(struct ulogd_timer *t, void *data)
@@ -697,11 +733,11 @@ static struct nlmsghdr *alloc_init_dump_request(uint32_t mark, uint32_t mask)
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr *ret, *nlh = mnl_nlmsg_put_header(buf);
 	struct nfgenmsg *nfh;
-	
+
 	nlh->nlmsg_type = (NFNL_SUBSYS_CTNETLINK << 8)
 			| IPCTNL_MSG_CT_GET_CTRZERO;
 	nlh->nlmsg_flags = NLM_F_REQUEST|NLM_F_DUMP;
-	
+
 	nfh = mnl_nlmsg_put_extra_header(nlh, sizeof(struct nfgenmsg));
 	nfh->nfgen_family = AF_UNSPEC;
 	nfh->version = NFNETLINK_V0;
@@ -728,7 +764,7 @@ static int build_nfct_filter_mark(struct ulogd_source_pluginstance *spi,
 	uintmax_t v;
 	char *filter_string = mark_filter_ce(spi->config_kset).u.string;
 	struct nfct_filter_dump_mark attr;
-	
+
 	if (strlen(filter_string) == 0) {
 		priv->dump_request = alloc_init_dump_request(0, 0);
 		return 0;
@@ -907,7 +943,7 @@ static int init_dumpnl(struct ulogd_source_pluginstance *spi)
 	}
 
 	priv->dumpfd.fd = mnl_socket_get_fd(priv->dumpnl);
-	priv->dumpfd.cb = &nfct_dump_cb;
+	priv->dumpfd.cb = &first_dump_cb;
 	priv->dumpfd.data = spi;
 	priv->dumpfd.when = ULOGD_FD_READ;
 
@@ -934,7 +970,7 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 		ulogd_log(ULOGD_FATAL, "error creating NFCT filter\n");
 		goto error_unmap;
 	}
-	
+
 	if (ulogd_register_fd(&priv->eventfd) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_register_fd: %s\n",
 			  _sys_errlist[errno]);
@@ -951,7 +987,7 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 			  _sys_errlist[errno]);
 		goto error_unregister_dumpfd;
 	}
-	if (ulogd_add_itimer(&priv->timer, interval, interval) != 0) {
+	if (ulogd_add_itimer(&priv->timer, 0, interval) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_add_itimer: %s\n",
 			  _sys_errlist[errno]);
 		goto error_fini_timer;
