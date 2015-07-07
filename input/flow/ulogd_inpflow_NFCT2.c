@@ -682,36 +682,34 @@ static int nfct_dump_cb(int fd, unsigned int what, void *param)
 	return ULOGD_IRET_ERR;
 }
 
-static int first_dump_cb(int fd, unsigned int what, void *param)
+static int clear_counters(struct nfct_priv *priv)
 {
-	struct ulogd_source_pluginstance *spi = param;
-	struct nfct_priv *priv = (struct nfct_priv *)spi->private;
-	struct nl_mmap_hdr *frame;
+	struct mnl_socket *nl = mnl_socket_open(NETLINK_NETFILTER);
+	ssize_t nrecv;
+	char buf[MNL_SOCKET_BUFFER_SIZE];
+	int ret;
 
-	if (!(what & ULOGD_FD_READ))
-		return 0;
+	if (nl == NULL)
+		return ULOGD_IRET_ERR;
 
-	if (ulogd_unregister_fd(&priv->dumpfd) == -1) {
-		ulogd_log(ULOGD_ERROR, "ulogd_unregister_fd: %s\n",
-			  _sys_errlist[errno]);
+	if (mnl_socket_sendto(nl, priv->dump_request,
+			      priv->dump_request->nlmsg_len) == -1) {
+		mnl_socket_close(nl);
 		return ULOGD_IRET_ERR;
 	}
-	priv->dumpfd.cb = &nfct_dump_cb;
-	if (ulogd_register_fd(&priv->dumpfd) == -1) {
-		ulogd_log(ULOGD_ERROR, "ulogd_register_fd: %s\n",
-			  _sys_errlist[errno]);
+	/* below is needed for even just clearing counters */
+	do {
+		nrecv = mnl_socket_recvfrom(nl, buf, sizeof(buf));
+		if (nrecv == -1) {
+			mnl_socket_close(nl);
+			return ULOGD_IRET_ERR;
+		}
+		ret = mnl_cb_run(buf, nrecv, 0, 0, NULL, NULL);
+	} while (ret == MNL_CB_OK);
+
+	mnl_socket_close(nl);
+	if (ret == MNL_CB_ERROR)
 		return ULOGD_IRET_ERR;
-	}
-
-	gettimeofday(&priv->dump_prev, NULL);
-
-	frame = mnl_ring_get_frame(priv->nlr);
-	while (frame->nm_status != NL_MMAP_STATUS_UNUSED) {
-		frame->nm_status = NL_MMAP_STATUS_UNUSED;
-		mnl_ring_advance(priv->nlr);
-		frame = mnl_ring_get_frame(priv->nlr);
-	}
-
 	return ULOGD_IRET_OK;
 }
 
@@ -950,7 +948,7 @@ static int init_dumpnl(struct ulogd_source_pluginstance *spi)
 	}
 
 	priv->dumpfd.fd = mnl_socket_get_fd(priv->dumpnl);
-	priv->dumpfd.cb = &first_dump_cb;
+	priv->dumpfd.cb = &nfct_dump_cb;
 	priv->dumpfd.data = spi;
 	priv->dumpfd.when = ULOGD_FD_READ;
 
@@ -974,6 +972,15 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 		ulogd_log(ULOGD_FATAL, "error creating NFCT filter\n");
 		goto error_close_event;
 	}
+
+	if (!destroy_only_ce(spi->config_kset).u.value) {
+		if (clear_counters(priv) == -1) {
+			ulogd_log(ULOGD_ERROR, "could not clear counters: %s\n",
+				  _sys_errlist[errno]);
+			goto error_close_event;
+		}
+	}
+
 	if (ulogd_register_fd(&priv->eventfd) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_register_fd: %s\n",
 			  _sys_errlist[errno]);
@@ -985,6 +992,7 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 
 	if (init_dumpnl(spi))
 		goto error_unregister_eventfd;
+
 	if (ulogd_register_fd(&priv->dumpfd) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_register_fd: %s\n",
 			  _sys_errlist[errno]);
@@ -995,7 +1003,7 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 			  _sys_errlist[errno]);
 		goto error_unregister_dumpfd;
 	}
-	if (ulogd_add_itimer(&priv->timer, 0, interval) != 0) {
+	if (ulogd_add_itimer(&priv->timer, interval, interval) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_add_itimer: %s\n",
 			  _sys_errlist[errno]);
 		goto error_fini_timer;
