@@ -72,6 +72,7 @@ enum nfct_conf {
 	NFCT_CONF_ACTIVE_TIMEOUT,
 	NFCT_CONF_RELIABLE,
 	NFCT_CONF_MARK_FILTER,
+	NFCT_CONF_DESTROY_ONLY,
 	NFCT_CONF_MAX,
 };
 
@@ -113,6 +114,12 @@ static struct config_keyset nfct_kset = {
 			.type	 = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 		},
+		[NFCT_CONF_DESTROY_ONLY] = {
+			.key	 = "destroy_only",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
 	},
 };
 
@@ -122,6 +129,7 @@ static struct config_keyset nfct_kset = {
 #define active_timeout_ce(x)	((x)->ces[NFCT_CONF_ACTIVE_TIMEOUT])
 #define reliable_ce(x)		((x)->ces[NFCT_CONF_RELIABLE])
 #define mark_filter_ce(x)	((x)->ces[NFCT_CONF_MARK_FILTER])
+#define destroy_only_ce(x)	((x)->ces[NFCT_CONF_DESTROY_ONLY])
 
 enum nfct_keys {
 	NFCT_ORIG_IP_SADDR = 0,
@@ -577,7 +585,6 @@ static int nfct_event_cb(int fd, unsigned int what, void *param)
 {
 	struct ulogd_source_pluginstance *spi = param;
 	struct nfct_priv *priv = (struct nfct_priv *)spi->private;
-	struct timeval tv;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	ssize_t nrecv;
 	int ret;
@@ -963,25 +970,26 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 
 	if (init_eventnl(spi))
 		return ULOGD_IRET_ERR;
-	if (init_dumpnl(spi))
-		goto error_close_event;
-
 	if (build_nfct_filter(spi) != 0) {
 		ulogd_log(ULOGD_FATAL, "error creating NFCT filter\n");
-		goto error_unmap;
+		goto error_close_event;
 	}
-
 	if (ulogd_register_fd(&priv->eventfd) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_register_fd: %s\n",
 			  _sys_errlist[errno]);
-		goto error_unmap;
+		goto error_close_event;
 	}
+
+	if (destroy_only_ce(spi->config_kset).u.value)
+		return ULOGD_IRET_OK;
+
+	if (init_dumpnl(spi))
+		goto error_unregister_eventfd;
 	if (ulogd_register_fd(&priv->dumpfd) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_register_fd: %s\n",
 			  _sys_errlist[errno]);
-		goto error_unregister_eventfd;
+		goto error_unmap;
 	}
-
 	if (ulogd_init_timer(&priv->timer, spi, nfct_itimer_cb) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_init_timer: %s\n",
 			  _sys_errlist[errno]);
@@ -999,11 +1007,11 @@ error_fini_timer:
 	ulogd_fini_timer(&priv->timer);
 error_unregister_dumpfd:
 	ulogd_unregister_fd(&priv->dumpfd);
-error_unregister_eventfd:
-	ulogd_unregister_fd(&priv->eventfd);
 error_unmap:
 	mnl_socket_unmap(priv->nlr);
 	mnl_socket_close(priv->dumpnl);
+error_unregister_eventfd:
+	ulogd_unregister_fd(&priv->eventfd);
 error_close_event:
 	mnl_socket_close(priv->eventnl);
 	return ULOGD_IRET_ERR;
@@ -1016,34 +1024,36 @@ static int destructor_nfct(struct ulogd_source_pluginstance *spi)
 
 	free(priv->dump_request);
 
-	if (ulogd_del_timer(&priv->timer) != 0) {
-		ulogd_log(ULOGD_ERROR, "ulogd_del_timer: %s\n",
-			  _sys_errlist[errno]);
-		ret = ULOGD_IRET_ERR;
-	}
-	if (ulogd_fini_timer(&priv->timer) != 0) {
-		ulogd_log(ULOGD_ERROR, "ulogd_fini_timer: %s\n",
-			  _sys_errlist[errno]);
-		ret = ULOGD_IRET_ERR;
-	}
-	if (ulogd_unregister_fd(&priv->dumpfd) != 0) {
-		ulogd_log(ULOGD_ERROR, "ulogd_unregister_fd: %s\n",
-			  _sys_errlist[errno]);
-		ret = ULOGD_IRET_ERR;
+	if (!destroy_only_ce(spi->config_kset).u.value) {
+		if (ulogd_del_timer(&priv->timer) != 0) {
+			ulogd_log(ULOGD_ERROR, "ulogd_del_timer: %s\n",
+				  _sys_errlist[errno]);
+			ret = ULOGD_IRET_ERR;
+		}
+		if (ulogd_fini_timer(&priv->timer) != 0) {
+			ulogd_log(ULOGD_ERROR, "ulogd_fini_timer: %s\n",
+				  _sys_errlist[errno]);
+			ret = ULOGD_IRET_ERR;
+		}
+		if (ulogd_unregister_fd(&priv->dumpfd) != 0) {
+			ulogd_log(ULOGD_ERROR, "ulogd_unregister_fd: %s\n",
+				  _sys_errlist[errno]);
+			ret = ULOGD_IRET_ERR;
+		}
+		if (mnl_socket_unmap(priv->nlr) == -1) {
+			ulogd_log(ULOGD_ERROR, "mnl_socket_unmap: %s\n",
+				  _sys_errlist[errno]);
+			ret = ULOGD_IRET_ERR;
+		}
+		free(priv->nlr);
+		if (mnl_socket_close(priv->dumpnl) == -1) {
+			ulogd_log(ULOGD_ERROR, "mnl_socket_close: %s\n",
+				  _sys_errlist[errno]);
+			ret = ULOGD_IRET_ERR;
+		}
 	}
 	if (ulogd_unregister_fd(&priv->eventfd) != 0) {
 		ulogd_log(ULOGD_ERROR, "ulogd_unregister_fd: %s\n",
-			  _sys_errlist[errno]);
-		ret = ULOGD_IRET_ERR;
-	}
-	if (mnl_socket_unmap(priv->nlr) == -1) {
-		ulogd_log(ULOGD_ERROR, "mnl_socket_unmap: %s\n",
-			  _sys_errlist[errno]);
-		ret = ULOGD_IRET_ERR;
-	}
-	free(priv->nlr);
-	if (mnl_socket_close(priv->dumpnl) == -1) {
-		ulogd_log(ULOGD_ERROR, "mnl_socket_close: %s\n",
 			  _sys_errlist[errno]);
 		ret = ULOGD_IRET_ERR;
 	}
