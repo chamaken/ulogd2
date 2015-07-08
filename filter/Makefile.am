@@ -32,12 +32,13 @@ ulogd_filter_HWHDR_la_LDFLAGS = -avoid-version -module
 ulogd_filter_MARK_la_SOURCES = ulogd_filter_MARK.c
 ulogd_filter_MARK_la_LDFLAGS = -avoid-version -module
 
-ulogd_filter_PRINTPKT_la_SOURCES = ulogd_filter_PRINTPKT.c ../util/printpkt.c
+ulogd_filter_PRINTPKT_la_SOURCES = ulogd_filter_PRINTPKT.c 
 ulogd_filter_PRINTPKT_la_LDFLAGS = -avoid-version -module
+ulogd_filter_PRINTPKT_la_LIBADD  = $(top_srcdir)/util/libutil.la
 
-ulogd_filter_PRINTFLOW_la_SOURCES = ulogd_filter_PRINTFLOW.c ../util/printflow.c
+ulogd_filter_PRINTFLOW_la_SOURCES = ulogd_filter_PRINTFLOW.c
 ulogd_filter_PRINTFLOW_la_LDFLAGS = -avoid-version -module
-
+ulogd_filter_PRINTFLOW_la_LIBADD  = $(top_srcdir)/util/libutil.la
 ulogd_filter_TIMECONV_la_SOURCES = ulogd_filter_TIMECONV.c
 ulogd_filter_TIMECONV_la_LDFLAGS = -avoid-version -module
 

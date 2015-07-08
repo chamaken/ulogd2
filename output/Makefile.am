@@ -52,13 +52,13 @@ ulogd_output_JSON_la_LDFLAGS = -avoid-version -module
 endif
 
 if BUILD_NFLOW9
-ulogd_output_NFLOW9_la_SOURCES = ulogd_output_NFLOW9.c ../util/ipfix.c
+ulogd_output_NFLOW9_la_SOURCES = ulogd_output_NFLOW9.c
 ulogd_output_NFLOW9_la_LDFLAGS = -avoid-version -module
-ulogd_output_NFLOW9_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS}
+ulogd_output_NFLOW9_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS} $(top_srcdir)/util/libutil.la
 endif
 
 if BUILD_IPFIX
-ulogd_output_IPFIX_la_SOURCES = ulogd_output_IPFIX.c ../util/ipfix.c
+ulogd_output_IPFIX_la_SOURCES = ulogd_output_IPFIX.c 
 ulogd_output_IPFIX_la_LDFLAGS = -avoid-version -module
-ulogd_output_IPFIX_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS}
+ulogd_output_IPFIX_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS} $(top_srcdir)/util/libutil.la
 endif

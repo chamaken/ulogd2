@@ -11,8 +11,9 @@ endif
 
 if BUILD_NFCT
 pkglib_LTLIBRARIES += ulogd_inpflow_NFCT2.la
-ulogd_inpflow_NFCT2_la_SOURCES = ulogd_inpflow_NFCT2.c ../../util/ring.c
-ulogd_inpflow_NFCT2_la_LDFLAGS = -avoid-version -module $(LIBMNL_LIBS) $(LIBNETFILTER_CONNTRACK_LIBS)
+ulogd_inpflow_NFCT2_la_SOURCES = ulogd_inpflow_NFCT2.c
+ulogd_inpflow_NFCT2_la_LDFLAGS = -avoid-version -module
+ulogd_inpflow_NFCT2_la_LIBADD  =  $(LIBMNL_LIBS) $(LIBNETFILTER_CONNTRACK_LIBS) $(top_srcdir)/util/libutil.la
 endif
 
 #ulogd_inpflow_IPFIX_la_SOURCES = ulogd_inpflow_IPFIX.c

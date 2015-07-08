@@ -3,7 +3,7 @@ AM_CFLAGS = ${regular_CFLAGS}
 
 if BUILD_NFQ
 pkglib_LTLIBRARIES		= ulogd_input_NFQ.la
-ulogd_input_NFQ_la_SOURCES	= ulogd_input_NFQ.c ../../util/ring.c
+ulogd_input_NFQ_la_SOURCES	= ulogd_input_NFQ.c
 ulogd_input_NFQ_la_LDFLAGS	= -avoid-version -module
-ulogd_input_NFQ_la_LIBADD	= $(LIBNETFILTER_QUEUE_LIBS) $(LIBMNL_LIBS)
+ulogd_input_NFQ_la_LIBADD	= $(LIBNETFILTER_QUEUE_LIBS) $(LIBMNL_LIBS) $(top_srcdir)/util/libutil.la
 endif
