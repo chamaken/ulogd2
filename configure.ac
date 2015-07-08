@@ -280,7 +280,7 @@ AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile include/libipulog/Makefi
 	  input/sum/Makefile input/queue/Makefile \
 	  filter/Makefile filter/raw2packet/Makefile filter/packet2flow/Makefile \
 	  output/Makefile output/pcap/Makefile output/mysql/Makefile output/pgsql/Makefile output/sqlite3/Makefile \
-	  output/dbi/Makefile python/Makefile \
+	  output/dbi/Makefile python/Makefile python/module/Makefile \
 	  src/Makefile Makefile Rules.make)
 AC_OUTPUT
 

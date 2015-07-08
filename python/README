@@ -1,0 +1,232 @@
+ulogd_PYTHON - python scripting in ulogd2
+
+
+** Sample
+
+* see examples/counter
+
+after installation, cd examples conter and try:
+
+    PYTHONPATH=. ulogd -v -c ulogd.conf
+
+
+* ulogd.conf configuration
+
+configuration item is only ``module'' which specifies python module
+name.
+
+    plugin="/path/to/ulogd lib//ulogd_PYTHON.so"
+    stack=id1:PLUGIN1,py1:PYTHON,id2:PLUGIN2
+    [py1]
+    module="mymodule"
+
+
+** python script template
+
+* non source plugin
+
+  def configure(ikeys, okeys):
+      return ulogd.ULOGD_IRET_OK
+
+  def start(ikset):
+      return ulogd.ULOGD_IRET_OK
+
+  def interp(ikset, okset):
+      return ulogd.ULOGD_IRET_OK
+
+  def stop():
+      return ulogd.ULOGD_IRET_OK
+
+  def signal(signo):
+      pass
+
+
+* source plugin
+
+  def configure(ikeys, okeys):
+      return ulogd.ULOGD_IRET_OK
+
+  def start(spi, ikset):
+      return ulogd.ULOGD_IRET_OK
+
+  def stop():
+      return ulogd.ULOGD_IRET_OK
+
+  def signal(signo):
+      pass
+
+
+These five callback is not optional but required, must be
+implemented like above even if it is not needed.
+
+
+** restriction
+
+This python module fork() at configure() callback function which
+creates input/output keyset, and _exit() after that. start()
+callback function fork() again and wait for interp(), signal() and
+stop() callback function. input/output keyset which was passed from
+interp() callback function are shared between parent - core ulogd -
+by mmap(). There are a few restriction because of it.
+
+
+* key type
+
+This python module can handle only:
+
+    ULOGD_RET_BOOL, ULOGD_RET_UINT8, ULOGD_RET_UINT16, ULOGD_RET_UINT32,
+    ULOGD_RET_UINT64, ULOGD_RET_IPADDR, ULOGD_RET_IP6ADDR
+
+or length field which flag has newly introduced
+ULOGD_RETF_EMBED. value will be embedded in key space if
+ULOGD_RETF_EMBED flag is specified with len field.
+
+
+* global object
+
+only configure() callback function process is separated from another
+four callback function process. global object which is created in
+configure() callback will not exist in another callback function
+call. for example:
+
+  f = open('testfile', 'w')
+
+  def configure(ikeys, okeys):
+      print('configure', file=f)
+      return ulogd.ULOGD_IRET_OK
+
+  def start(ikset):
+      print('start', file=f)
+      return ulogd.ULOGD_IRET_OK
+
+contents of tesfile is only "start", no "configure" line. It is no
+mean to create global object in configure(), it actually handles
+only argument objects, ikeys and okeys. additionally utility
+functions like ulogd_propagate_results() and ulogd_fd, ulogd_timer
+handling functions can not be called in configure().
+
+
+* ulogd_fd and ulogd_timer
+
+Do not call ulogd_register_fd() (ulogd.Fd.register()) and
+ulogd_add_timer() (ulogd.Timer.add()) in configure(). python ulogd
+module will be loaded and called each fork() time and if
+ulogd_register_fd() is called at first fork() (in configure()) the
+ulogd_fd will registered in parent but child will _exit() after
+configure() then invalid ulogd_fd will remain in parent which new
+child can not refer.
+
+So that you should define global ulogd.Fd or ulogd.Timer and bind
+it in start().
+
+    ufd = None
+    timer = None
+    ...
+    def start(ikset, okset):
+        global ufd, timer
+        ufd = ulogd.Fd(...
+        ufd.register
+        timer = ulogd.Timer(...
+        timer.add(...
+
+
+** callback functions
+
+* int configure(ikeys, okeys)
+
+create input keylist and output keylist in this callback function.
+ikeys and okeys are both empty ulogd.Keylist instance.
+ulogd.Keylist's attribute is only "type". methods are add() which
+param is ulogd.Keyinfo and delete() which param is name attribute of
+ulogd.Keyinfo.
+
+type attribute measn struct ulogd_keyset.type. ulogd.Keyinfo is a
+object of struct ulogd_key excluding union u. name is required for
+constructor and another is optional. in the case of
+ulogd_filter_IFINDEX, it shall be:
+
+    def configure(ikeys, okeys):
+        ikeys.type = ulogd.ULOGD_DTYPE_PACKET | ulogd.ULOGD_DTYPE_FLOW
+	ikeys.add(ulogd.Keyinfo(name="oob.ifindex_in",
+			        type=ulogd.ULOGD_RET_UINT32))
+        ikeys.add(ulogd.Keyinfo(name="oob.ifindex_out",
+				type=ulogd.ULOGD_RET_UINT32))
+
+        okeys.type = ulogd.ULOGD_DTYPE_PACKET | ulogd.ULOGD_DTYPE_FLOW
+	okeys.add(ulogd.Keyinfo(name="oob.in",
+	                        type=ulogd.ULOGD_RET_STRING,
+				len=IFNAMSIZ,
+				flags=ulogd.ULOGD_RETF_NONE))
+	okeys.add(ulogd.Keyinfo(name="oob.out",
+	                        type=ulogd.ULOGD_RET_STRING,
+				len=IFNAMSIZ,
+				flags=ulogd.ULOGD_RETF_NONE))
+
+        return ulogd.ULOGD_IRET_OK
+
+
+* int start(ikset): non source plugin
+* int start(spi): source plugin
+
+preparation before interp() or start point for source pluginstance.
+param spi is a ulogd.SourcePluginstance object and ikset is a
+ulogd.IKeyset object. ulogd.IKeyset is iterable and you can get key
+info like:
+
+    for k in ikset:
+        print("name: %s, len: %d, type: %d" % (k.name, k.len, k.type))
+
+It will be useful if ULOGD_DTYPE_WILDCARD is specified at input.type
+at configure(). value can be accquired by "value" attribute but it
+has no mean at here. described above, object which is created in
+this start() callback function will be able to be used another
+callback functions which will be called afterwards.
+
+ulogd.SourcePluginstance has a method get_outout_keyset() which
+returns ulogd.OKeyset. ulogd.OKeyset has a method
+propagate_results() then ulogd.SourcePluginstance object may be a
+param for callback function for ulog.Fd and ulogd.Timer.
+
+    ufd = None
+    ...
+    def fd_callback(fd, what, upi):
+        okset = spi.get_output_keyset()
+    ...
+    def start(spi):
+        global ufd
+	...
+	ufd = ulogd.Fd(fileobj, ulogd.ULOGD_FD_READ, spi)
+	...
+
+
+* int interp(ikset, okset): non source plugin only
+
+ikset param is a ulogd.IKeyset object, okset param is a
+ulogd.OKeyset object. both keyset value can be accessed by its
+"value" attribute. As of configure(), example ulogd_filter_IFINDEX:
+(index2name is not implemented)
+
+    def interp(ikset, okset):
+        okset["oob.in"].value = index2name(ikset["oob.ifindex_in"].value)
+        okset["oob.out"].value = index2name(ikset["oob.ifindex_out"].value)
+        return ulogd.ULOGD_IRET_OK
+
+
+*  int stop()
+*  void signal(signo)
+
+no need to describe. stop() will be called stop and signal() will be
+called at signal receiption.
+
+
+** another ulogd object
+
+* ulogd.Fd (represents struct ulogd_fd)
+  __init__(<file like object>, <what>, <callback> <cbdata>)
+      file like object: which has fileno() method
+      what: ULOGD_FD_READ, ULOGD_FD_WRITE, ULOGD_FD_EXCEPT
+      callback: f(ulogd.Fd, what, cbdata)
+
+* ulogd.Timer (represents struct ulogd_timer)
+  __init__(<callback> <cb data>)
+      callback: f(ulogd.Timer, cbdata)

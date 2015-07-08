@@ -26,3 +26,4 @@ TAGS
 ulogd.conf.5
 
 tmp/
+__pycache__/

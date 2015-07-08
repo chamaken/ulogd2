@@ -1,4 +1,5 @@
 import logging, socket
+from datetime import datetime
 import ulogd
 
 try:
@@ -27,14 +28,22 @@ def configure(iklist, oklist):
                              type=ulogd.ULOGD_RET_IPADDR))
     iklist.add(ulogd.Keyinfo(name="orig.ip.protocol",
                              type=ulogd.ULOGD_RET_UINT8))
-    iklist.add(ulogd.Keyinfo(name="orig.raw.pktlen",
+    iklist.add(ulogd.Keyinfo(name="orig.raw.pktlen.delta",
                              type=ulogd.ULOGD_RET_UINT64))
-    iklist.add(ulogd.Keyinfo(name="orig.raw.pktcount",
+    iklist.add(ulogd.Keyinfo(name="orig.raw.pktcount.delta",
                              type=ulogd.ULOGD_RET_UINT64))
-    iklist.add(ulogd.Keyinfo(name="reply.raw.pktlen",
+    iklist.add(ulogd.Keyinfo(name="reply.raw.pktlen.delta",
                              type=ulogd.ULOGD_RET_UINT64))
-    iklist.add(ulogd.Keyinfo(name="reply.raw.pktcount",
+    iklist.add(ulogd.Keyinfo(name="reply.raw.pktcount.delta",
                              type=ulogd.ULOGD_RET_UINT64))
+    iklist.add(ulogd.Keyinfo(name="flow.start.sec",
+                             type=ulogd.ULOGD_RET_UINT32))
+    iklist.add(ulogd.Keyinfo(name="flow.start.usec",
+                             type=ulogd.ULOGD_RET_UINT32))
+    iklist.add(ulogd.Keyinfo(name="flow.end.sec",
+                             type=ulogd.ULOGD_RET_UINT32))
+    iklist.add(ulogd.Keyinfo(name="flow.end.usec",
+                             type=ulogd.ULOGD_RET_UINT32))
     return ulogd.ULOGD_IRET_OK
 
 
@@ -58,13 +67,25 @@ def interp(ikset, okset):
     ev = ikset["ct.event"].value
     event = "|".join([events[e] for e in filter(lambda x: x & ev != 0, events.keys())])
     proto = ikset["orig.ip.protocol"].value
-    orig_len = ikset["orig.raw.pktlen"].value
-    orig_count = ikset["orig.raw.pktcount"].value
-    reply_len = ikset["reply.raw.pktlen"].value
-    reply_count = ikset["reply.raw.pktcount"].value
+    orig_len = ikset["orig.raw.pktlen.delta"].value
+    orig_count = ikset["orig.raw.pktcount.delta"].value
+    reply_len = ikset["reply.raw.pktlen.delta"].value
+    reply_count = ikset["reply.raw.pktcount.delta"].value
+    start_time = ikset["flow.start.sec"].value + ikset["flow.start.usec"].value / 1000000.0
+    end_time = ikset["flow.end.sec"].value + ikset["flow.end.usec"].value / 1000000.0
+    """
+    start_time = ikset["flow.start.sec"].value \
+                 + float(ikset["flow.start.useconds"].value) / 0xffffffff
+    end_time = ikset["flow.end.sec"].value \
+               + float(ikset["flow.end.useconds"].value) / 0xffffffff
+    """
+    
+    log.info("%s [%s - %s]\t%s => %s [%d]  (=> %d:%d)  (<= %d:%d)" \
+                 % (event,
+                    datetime.fromtimestamp(start_time).isoformat(),
+                    datetime.fromtimestamp(end_time).isoformat(),
+                    src, dst, proto, orig_count, orig_len, reply_count, reply_len))
 
-    log.info("%s - %s => %s [%d]  (=> %d:%d)  (<= %d:%d)" \
-                 % (event, src, dst, proto, orig_count, orig_len, reply_count, reply_len))
     return ulogd.ULOGD_IRET_OK
 
 
@@ -74,6 +95,3 @@ def stop():
 
 def signal(signo):
     log.error("signal: %d" % signo)
-
-
-
