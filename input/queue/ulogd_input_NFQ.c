@@ -216,10 +216,10 @@ static int handle_valid_frame(struct ulogd_source_pluginstance *upi,
 	frame->nm_status = NL_MMAP_STATUS_SKIP;
 	ret = mnl_cb_run(MNL_FRAME_PAYLOAD(frame), frame->nm_len,
 			 0, priv->portid, nfq_cb, upi);
+	frame->nm_status = NL_MMAP_STATUS_UNUSED;
 	if (ret == MNL_CB_ERROR) {
 		ulogd_log(ULOGD_ERROR, "mnl_cb_run: %d %s\n",
 			  errno, _sys_errlist[errno]);
-		frame->nm_status = NL_MMAP_STATUS_UNUSED;
 		return ULOGD_IRET_ERR;
 	}
 
@@ -318,6 +318,24 @@ static int nfq_put_config(struct nlmsghdr *nlh, struct config_keyset *config)
 	return 0;
 }
 
+static int nfq_config_response(struct mnl_ring *nlr)
+{
+	struct nl_mmap_hdr *frame = mnl_ring_get_frame(nlr);
+	void *buf = MNL_FRAME_PAYLOAD(frame);
+	int ret;
+
+	if (frame->nm_status != NL_MMAP_STATUS_VALID) {
+		ulogd_log(ULOGD_ERROR, "no valid response\n");
+		return ULOGD_IRET_ERR;
+	}
+	frame->nm_status = NL_MMAP_STATUS_SKIP;
+	ret = mnl_cb_run(buf, frame->nm_len, 0, 0, NULL, NULL);
+	frame->nm_status = NL_MMAP_STATUS_UNUSED;
+	mnl_ring_advance(nlr);
+
+	return ret;
+}
+
 static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 {
 	struct nfq_priv *priv =
@@ -328,27 +346,45 @@ static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 
 	/* kernels 3.8 and later is required to omit PF_(UN)BIND */
 	nlh = nfq_hdr_put(buf, NFQNL_MSG_CONFIG, 0);
+	nlh->nlmsg_flags |= NLM_F_ACK;
 	nfq_nlmsg_cfg_put_cmd(nlh, AF_INET, NFQNL_CFG_CMD_PF_BIND);
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_send: %s\n",
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
+	if (nfq_config_response(priv->nlr) != 0) {
+		ulogd_log(ULOGD_ERROR, "config PF_BIND: %s\n",
+			  _sys_errlist[errno]);
+		return ULOGD_IRET_ERR;
+	}
 
 	nlh = nfq_hdr_put(buf, NFQNL_MSG_CONFIG, queue_num);
+	nlh->nlmsg_flags |= NLM_F_ACK;	
 	nfq_nlmsg_cfg_put_cmd(nlh, AF_INET, NFQNL_CFG_CMD_BIND);
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_send: %s\n",
 			_sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
+	if (nfq_config_response(priv->nlr) != 0) {
+		ulogd_log(ULOGD_ERROR, "config BIND: %s\n",
+			  _sys_errlist[errno]);
+		return ULOGD_IRET_ERR;
+	}
 
 	nlh = nfq_hdr_put(buf, NFQNL_MSG_CONFIG, queue_num);
+	nlh->nlmsg_flags |= NLM_F_ACK;	
 	if (nfq_put_config(nlh, upi->config_kset) == -1)
 		return ULOGD_IRET_ERR;
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_send: %s\n",
 			_sys_errlist[errno]);
+		return ULOGD_IRET_ERR;
+	}
+	if (nfq_config_response(priv->nlr) != 0) {
+		ulogd_log(ULOGD_ERROR, "config params: %s\n",
+			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
 
@@ -402,6 +438,11 @@ static int constructor_nfq(struct ulogd_source_pluginstance *upi)
 	mnl_socket_setsockopt(priv->nl, NETLINK_NO_ENOBUFS,
 			      &optval, sizeof(int));
 
+	if (nfq_send_request(upi) < 0) {
+		ulogd_log(ULOGD_FATAL, "failed to nfq_send_request\n");
+		goto error_unmap;
+	}
+
 	priv->ufd.fd = mnl_socket_get_fd(priv->nl);
 	priv->ufd.cb = &nfq_read_cb;
 	priv->ufd.data = upi;
@@ -412,15 +453,8 @@ static int constructor_nfq(struct ulogd_source_pluginstance *upi)
 		goto error_unmap;
 	}
 
-	if (nfq_send_request(upi) < 0) {
-		ulogd_log(ULOGD_FATAL, "failed to nfq_send_request\n");
-		goto error_unregist;
-	}
-
 	return ULOGD_IRET_OK;
 
-error_unregist:
-	ulogd_unregister_fd(&priv->ufd);
 error_unmap:
 	mnl_socket_unmap(priv->nlr);
 error_close_sock:
