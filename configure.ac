@@ -111,19 +111,27 @@ AS_IF([test "x$enable_nfct" = "xyes"], [
     ])
 ])
 
-AS_IF([test "x$enable_nfct" = "xyes"], [
-    AC_MSG_CHECKING([for enable mmaped netlink])
-    AC_CACHE_VAL(ac_cv_mmaped_netlink,
-    AC_TRY_COMPILE(
-        [ #include <linux/netlink.h>],
-        [ int i = NETLINK_RX_RING; ],
-        ac_cv_mmaped_netlink=yes,
-        ac_cv_mmaped_netlink=no))
-    AC_MSG_RESULT($ac_cv_mmaped_netlink)
-    AS_IF([test "x$ac_cv_mmaped_netlink" = "xyes"], [
-        AC_DEFINE([BUILD_NFCT2], [1], [Building nfct2 module])
-    ])
+AC_MSG_CHECKING([for enable mmaped netlink])
+AC_CACHE_VAL(ac_cv_mmaped_netlink,
+AC_TRY_COMPILE(
+    [ #include <linux/netlink.h>],
+    [ int i = NETLINK_RX_RING; ],
+    ac_cv_mmaped_netlink=yes,
+    ac_cv_mmaped_netlink=no))
+AC_MSG_RESULT($ac_cv_mmaped_netlink)
+AM_CONDITIONAL([HAVE_NLMMAP], [test "x$ac_cv_mmaped_netlink" = "xyes"])
+
+AC_ARG_ENABLE(nfct2,
+       AS_HELP_STRING([--enable-nfct2], [Enable nfct2 module [default=yes]]),[enable_nfct2=$enableval],[enable_nfct2=yes])
+AS_IF([test "x$enable_nfct2" = "xyes"], [
+    AS_IF([test "x$ac_cv_mmaped_netlink" = "xyes" -a "x$ac_cv_nfct_filter_mark" = "xyes"],
+        [AC_DEFINE([BUILD_NFCT2], [1], [Building nfct2 module])],
+	[enable_nfct2=no])
 ])
+AM_CONDITIONAL([BUILD_NFCT2], [test "x$enable_nfct2" = "xyes"])
+if [! test "x$enable_nfct2" = "xyes"]; then
+	enable_nfct2="no"
+fi
 
 AC_ARG_ENABLE(nfacct,
        AS_HELP_STRING([--enable-nfacct], [Enable nfacct module [default=yes]]),[enable_nfacct=$enableval],[enable_nfacct=yes])
@@ -144,7 +152,7 @@ AS_IF([test "x$enable_nfq" = "xyes"], [
                       [AC_DEFINE([BUILD_NFQ], [1], [Building nfq module])], [enable_nfq=no])
 ])
 AM_CONDITIONAL([BUILD_NFQ], [test "x$enable_nfq" = "xyes"])
-if [! test "x$enable_nfq" = "xyes"]; then
+if [! test "x$enable_nfq" = "xyes" -a "x$ac_cv_mmaped_netlink" = "xyes"]; then
 	enable_nfq="no"
 fi
 
@@ -290,7 +298,7 @@ Ulogd configuration:
     NFLOG plugin:			${enable_nflog}
     NFCT plugin:			${enable_nfct}
       with MARK event filter		${ac_cv_nfct_filter_mark}
-    NFCT2 plugin:			${ac_cv_mmaped_netlink}
+    NFCT2 plugin:			${enable_nfct2}
     NFACCT plugin:			${enable_nfacct}
     ULOG plugin:			${enable_ulog}
     NFQ plugin:				${enable_nfq}

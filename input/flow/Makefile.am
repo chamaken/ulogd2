@@ -7,13 +7,13 @@ pkglib_LTLIBRARIES = ulogd_inpflow_NFCT.la # ulogd_inpflow_IPFIX.la
 
 ulogd_inpflow_NFCT_la_SOURCES = ulogd_inpflow_NFCT.c
 ulogd_inpflow_NFCT_la_LDFLAGS = -avoid-version -module $(LIBNETFILTER_CONNTRACK_LIBS)
-endif
 
-if BUILD_NFCT
+if BUILD_NFCT2
 pkglib_LTLIBRARIES += ulogd_inpflow_NFCT2.la
 ulogd_inpflow_NFCT2_la_SOURCES = ulogd_inpflow_NFCT2.c
 ulogd_inpflow_NFCT2_la_LDFLAGS = -avoid-version -module
 ulogd_inpflow_NFCT2_la_LIBADD  =  $(LIBMNL_LIBS) $(LIBNETFILTER_CONNTRACK_LIBS) $(top_srcdir)/util/libutil.la
+endif
 endif
 
 #ulogd_inpflow_IPFIX_la_SOURCES = ulogd_inpflow_IPFIX.c
