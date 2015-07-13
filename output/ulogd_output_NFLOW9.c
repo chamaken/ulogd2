@@ -292,7 +292,7 @@ enum {
 	NETFLOW9_SRC_VLAN		= 58,	/* 2	vlanId				*/
 	NETFLOW9_DST_VLAN		= 59,	/* 2	postVlanId			*/
 	NETFLOW9_IP_PROTOCOL_VERSION	= 60,	/* 1	ipVersion			*/
-	NETFLOW9_DIRECTION		= 61,	/* 1					*/
+	NETFLOW9_DIRECTION		= 61,	/* 1	flowDirection			*/
 	NETFLOW9_IPV6_NEXT_HOP		= 62,	/* 16	ipNextHopIPv6Address		*/
 	NETFLOW9_BGP_IPV6_NEXT_HOP	= 63,	/* 16	bgpNexthopIPv6Address		*/
 	NETFLOW9_IPV6_OPTION_HEADERS	= 64,	/* 4	ipv6ExtensionHeaders		*/
