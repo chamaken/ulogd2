@@ -55,16 +55,16 @@ struct markif_priv {
  * -A POSTROUTING -o eth3 -j CONNMARK --set-mark  0x000300/0x01ff00
  *
  * config:
- * mark_mask_in="0xff"
- * mark_mask_out="0xff00 >> 8"
- * mark_mask_flow=0x10000
+ * mask_ingress="0xff"
+ * mask_egress="0xff00 >> 8"
+ * mask_flow=0x10000
  *
  * Then:           ingressInterface         egressInterface        flowDirection
  *   eth1->eth2            1                       2                    ingress
  *   eth1->eth3            1                       3                    ingress
  *   eth2->eth1            2                       1                    egress
  *   eth3->eth1            3                       1                    egress
- *   eth2->eth3            2                       3                    egress
+ *   eth2->eth3            2                       3                    ? (egress)
  */
 
 enum {
@@ -202,27 +202,27 @@ static int start_markif(struct ulogd_pluginstance *upi,
 			(struct markif_priv *)upi->private;
 
 	if (strlen(maskin_ce(upi->config_kset).u.string) == 0) {
-		ulogd_log(ULOGD_FATAL, "no input mask specified\n");
+		ulogd_log(ULOGD_FATAL, "no mask_ingress specified\n");
 		return -1;
 	}
 	if (extract_param(maskin_ce(upi->config_kset).u.string,
 			  &priv->in_mask, &priv->in_shift) != 0) {
-		ulogd_log(ULOGD_FATAL, "invalid mark_mask_in\n");
+		ulogd_log(ULOGD_FATAL, "invalid mask_ingress\n");
 		return -1;
 	}
-	ulogd_log(ULOGD_INFO, "input mask: %#x >> %#x\n",
+	ulogd_log(ULOGD_INFO, "ingress mask: %#x >> %#x\n",
 		  priv->in_mask, priv->in_shift);
 
 	if (strlen(maskout_ce(upi->config_kset).u.string) == 0) {
-		ulogd_log(ULOGD_FATAL, "no output mask spcefied\n");
+		ulogd_log(ULOGD_FATAL, "no mask_egress spcefied\n");
 		return -1;
 	}
 	if (extract_param(maskout_ce(upi->config_kset).u.string,
 			  &priv->out_mask, &priv->out_shift) != 0) {
-		ulogd_log(ULOGD_FATAL, "invalid mark_mask_out\n");
+		ulogd_log(ULOGD_FATAL, "invalid mask_egress\n");
 		return -1;
 	}
-	ulogd_log(ULOGD_INFO, "input mask: %#x >> %#x\n",
+	ulogd_log(ULOGD_INFO, "egress mask: %#x >> %#x\n",
 		  priv->out_mask, priv->out_shift);
 
 	ulogd_log(ULOGD_INFO, "direction mask: %#x\n",
