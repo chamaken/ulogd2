@@ -21,6 +21,8 @@ mnl_socket_tx_mmap(struct mnl_socket *nls, struct nl_mmap_req *req, int flags);
 int mnl_socket_unmap(struct mnl_ring *nlr);
 void mnl_ring_advance(struct mnl_ring *nlr);
 struct nl_mmap_hdr *mnl_ring_get_frame(const struct mnl_ring *nlr);
+struct nl_mmap_hdr *mnl_ring_lookup_frame(struct mnl_ring *nlr,
+					  enum nl_mmap_status status);
 
 extern char *_frame_status_strlist[];
 

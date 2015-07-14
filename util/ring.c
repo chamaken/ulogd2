@@ -96,3 +96,20 @@ struct nl_mmap_hdr *mnl_ring_get_frame(const struct mnl_ring *nlr)
 				      + block_pos * nlr->block_size
 				      + frame_off * nlr->frame_size);
 }
+
+struct nl_mmap_hdr *mnl_ring_lookup_frame(struct mnl_ring *nlr,
+					  enum nl_mmap_status status)
+{
+	struct nl_mmap_hdr *frame, *sentinel;
+
+	sentinel = frame = mnl_ring_get_frame(nlr);
+	do {
+		if (frame->nm_status == status)
+			return frame;
+		mnl_ring_advance(nlr);
+		frame = mnl_ring_get_frame(nlr);
+	} while (frame != sentinel);
+
+	return NULL;
+}
+
