@@ -216,10 +216,10 @@ static int handle_valid_frame(struct ulogd_source_pluginstance *upi,
 	frame->nm_status = NL_MMAP_STATUS_SKIP;
 	ret = mnl_cb_run(MNL_FRAME_PAYLOAD(frame), frame->nm_len,
 			 0, priv->portid, nfq_cb, upi);
-	frame->nm_status = NL_MMAP_STATUS_UNUSED;
 	if (ret == MNL_CB_ERROR) {
 		ulogd_log(ULOGD_ERROR, "mnl_cb_run: %d %s\n",
 			  errno, _sys_errlist[errno]);
+		frame->nm_status = NL_MMAP_STATUS_UNUSED;
 		return ULOGD_IRET_ERR;
 	}
 
@@ -231,7 +231,7 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 	struct ulogd_source_pluginstance *upi = param;
 	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
 	struct nl_mmap_hdr *frame;
-	int ret;
+	int ret, nproc = 0;
 
 	if (!(what & ULOGD_FD_READ))
 		return 0;
@@ -253,17 +253,23 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 			recv(fd, alloca(frame->nm_len), frame->nm_len,
 			     MSG_DONTWAIT);
 			ulogd_log(ULOGD_ERROR, "exceeded the frame size: %d\n",
-				frame->nm_len);
+				  frame->nm_len);
 			frame->nm_status = NL_MMAP_STATUS_UNUSED;
 			mnl_ring_advance(priv->nlr);
 			return ULOGD_IRET_ERR;
 		case NL_MMAP_STATUS_UNUSED:
-			return ULOGD_IRET_OK;
+			if (nproc > 0)
+				return ULOGD_IRET_OK;
+			if (mnl_ring_lookup_frame(priv->nlr,
+						  NL_MMAP_STATUS_VALID) == NULL)
+				return ULOGD_IRET_ERR;
+			break;
 		case NL_MMAP_STATUS_SKIP:
 			ulogd_log(ULOGD_ERROR, "found SKIP status frame,"
 				  " ENOBUFS maybe\n");
 			return ULOGD_IRET_ERR;
 		}
+		nproc++;
 	}
 
 	return ULOGD_IRET_ERR;
@@ -476,7 +482,22 @@ static int destructor_nfq(struct ulogd_source_pluginstance *upi)
 
 static void signal_nfq(struct ulogd_source_pluginstance *upi, int signal)
 {
-	ulogd_log(ULOGD_DEBUG, "receive signal: %d\n", signal);
+	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
+	struct nl_mmap_hdr *frame, *sentinel;;
+
+	switch (signal) {
+	case SIGUSR1:
+		sentinel = frame = mnl_ring_get_frame(priv->nlr);
+		do {
+			ulogd_log(ULOGD_DEBUG, "---- frame status %p: %d\n",
+				  frame, frame->nm_status);
+			mnl_ring_advance(priv->nlr);
+			frame = mnl_ring_get_frame(priv->nlr);
+		} while (frame != sentinel);
+		break;
+	default:
+		ulogd_log(ULOGD_DEBUG, "receive signal: %d\n", signal);
+	}
 }
 
 static struct ulogd_source_plugin nfq_plugin = {
