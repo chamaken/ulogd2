@@ -12,6 +12,7 @@ compared with original ulogd:
 * partial multi-thread
 * python plugin
 * (working) IPFIX and NetFlow v9 plugin
+* mmaped NFCT and NFQUEUE source plugin
 
 
 implementation note
@@ -39,11 +40,6 @@ TODO
 ----
 
 * would it be better to make source pluginstance to multi-thread?
-
-* config param to specify num of threads
-* config param to specify how many keysets source pluginstance has
-* more params which is available for nfqueue
-* mmaped and propagating delta counter NFCT
 * nft output
 * delete unavailable plugins (use static variable as key ptr)
 
@@ -138,8 +134,8 @@ stack=src,pi1,pi2,...
    call registered callback if related fd is readable.
 
 4. create output - ulogd_keyset.  
-   read data from fd and put it to ulogd_keyset which is acquired by
-   ulogd_get_output_keyset()
+   source plugin read data from fd and put it to ulogd_keyset which
+   is acquired by ulogd_get_output_keyset()
 
 5. propagate ulogd_keyset.  
    ulogd_propagate_results() gets interp_thread and pass
