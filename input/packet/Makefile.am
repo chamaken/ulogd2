@@ -12,6 +12,10 @@ if BUILD_NFLOG
 pkglib_LTLIBRARIES += ulogd_inppkt_NFLOG.la
 endif
 
+if BUILD_NFLOG2
+pkglib_LTLIBRARIES += ulogd_inppkt_NFLOG2.la
+endif
+
 ulogd_inppkt_NFLOG_la_SOURCES = ulogd_inppkt_NFLOG.c
 ulogd_inppkt_NFLOG_la_LDFLAGS = -avoid-version -module $(LIBNETFILTER_LOG_LIBS)
 
@@ -21,3 +25,6 @@ ulogd_inppkt_ULOG_la_LIBADD = ../../libipulog/libipulog.la
 
 ulogd_inppkt_UNIXSOCK_la_SOURCES = ulogd_inppkt_UNIXSOCK.c
 ulogd_inppkt_UNIXSOCK_la_LDFLAGS = -avoid-version -module
+
+ulogd_inppkt_NFLOG2_la_SOURCES = ulogd_inppkt_NFLOG2.c
+ulogd_inppkt_NFLOG2_la_LDFLAGS = -avoid-version -module $(LIBMNL_LIBS) $(LIBNETFILTER_LOG_LIBS) $(top_srcdir)/util/libutil.la

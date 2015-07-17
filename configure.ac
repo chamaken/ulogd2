@@ -58,6 +58,16 @@ if [! test "x$enable_ulog" = "xyes"]; then
 	enable_ulog="no"
 fi
 
+AC_MSG_CHECKING([for enable mmaped netlink])
+AC_CACHE_VAL(ac_cv_mmaped_netlink,
+AC_TRY_COMPILE(
+    [ #include <linux/netlink.h>],
+    [ int i = NETLINK_RX_RING; ],
+    ac_cv_mmaped_netlink=yes,
+    ac_cv_mmaped_netlink=no))
+AC_MSG_RESULT($ac_cv_mmaped_netlink)
+AM_CONDITIONAL([HAVE_NLMMAP], [test "x$ac_cv_mmaped_netlink" = "xyes"])
+
 dnl Check for the right nfnetlink version
 PKG_CHECK_MODULES([LIBNFNETLINK], [libnfnetlink >= 1.0.1])
 AC_ARG_ENABLE(nflog,
@@ -69,6 +79,18 @@ AS_IF([test "x$enable_nflog" = "xyes"], [
 AM_CONDITIONAL([BUILD_NFLOG], [test "x$enable_nflog" = "xyes"])
 if [! test "x$enable_nflog" = "xyes"]; then
 	enable_nflog="no"
+fi
+
+AC_ARG_ENABLE(nflog2,
+       AS_HELP_STRING([--enable-nflog2], [Enable nflog2 module [default=yes]]),[enable_nflog2=$enableval],[enable_nflog2=yes])
+AS_IF([test "x$enable_nflog2" = "xyes"], [
+    AS_IF([test "x$ac_cv_mmaped_netlink" = "xyes" -a "x$enable_nflog" = "xyes"],
+        [AC_DEFINE([BUILD_NFLOG2], [1], [Building nflog2 module])],
+	[enable_nflog2=no])
+])
+AM_CONDITIONAL([BUILD_NFLOG2], [test "x$enable_nflog2" = "xyes"])
+if [! test "x$enable_nflog2" = "xyes"]; then
+	enable_nflog2="no"
 fi
 
 AC_ARG_ENABLE(nfct,
@@ -110,16 +132,6 @@ AS_IF([test "x$enable_nfct" = "xyes"], [
         AC_DEFINE([HAVE_NFCT_FILTER_MARK], [1], [Building nfct mark event filter])
     ])
 ])
-
-AC_MSG_CHECKING([for enable mmaped netlink])
-AC_CACHE_VAL(ac_cv_mmaped_netlink,
-AC_TRY_COMPILE(
-    [ #include <linux/netlink.h>],
-    [ int i = NETLINK_RX_RING; ],
-    ac_cv_mmaped_netlink=yes,
-    ac_cv_mmaped_netlink=no))
-AC_MSG_RESULT($ac_cv_mmaped_netlink)
-AM_CONDITIONAL([HAVE_NLMMAP], [test "x$ac_cv_mmaped_netlink" = "xyes"])
 
 AC_ARG_ENABLE(nfct2,
        AS_HELP_STRING([--enable-nfct2], [Enable nfct2 module [default=yes]]),[enable_nfct2=$enableval],[enable_nfct2=yes])
@@ -296,6 +308,7 @@ echo "
 Ulogd configuration:
   Input plugins:
     NFLOG plugin:			${enable_nflog}
+    NFLOG2 plugin:			${enable_nflog2}
     NFCT plugin:			${enable_nfct}
       with MARK event filter		${ac_cv_nfct_filter_mark}
     NFCT2 plugin:			${enable_nfct2}
