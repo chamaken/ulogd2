@@ -1,6 +1,6 @@
 /* ulogd_input_NFQ.c
  *
- * ulogd input plugin for nfqueue
+ * ulogd input plugin for mmaped nfqueue
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2
@@ -18,11 +18,11 @@
 #include <linux/netlink.h>
 #include <linux/netfilter/nfnetlink_queue.h>
 
-#include <ulogd/ulogd.h>
-#include <ulogd/ring.h>
-
 #include <libmnl/libmnl.h>
 #include <libnetfilter_queue/libnetfilter_queue.h>
+
+#include <ulogd/ulogd.h>
+#include <ulogd/ring.h>
 
 struct nfq_priv {
 	struct mnl_socket	*nl;
@@ -129,16 +129,16 @@ static struct config_keyset nfq_kset = {
 	.num_ces = NFQ_CONF_MAX,
 };
 
-#define block_size_ce(x)	(x->ces[NFQ_CONF_BLOCK_SIZE])
-#define block_nr_ce(x)		(x->ces[NFQ_CONF_BLOCK_NR])
-#define frame_size_ce(x)	(x->ces[NFQ_CONF_FRAME_SIZE])
-#define queue_num_ce(x)		(x->ces[NFQ_CONF_QUEUE_NUM])
-#define copy_mode_ce(x)		(x->ces[NFQ_CONF_COPY_MODE])
-#define fail_open_ce(x)		(x->ces[NFQ_CONF_FAIL_OPEN])
-#define conntrack_ce(x)		(x->ces[NFQ_CONF_CONNTRACK])
-#define gso_ce(x)		(x->ces[NFQ_CONF_GSO])
-#define uid_gid_ce(x)		(x->ces[NFQ_CONF_UID_GID])
-#define secctx_ce(x)		(x->ces[NFQ_CONF_SECCTX])
+#define block_size_ce(x)	(((x)->ces[NFQ_CONF_BLOCK_SIZE]).u.value)
+#define block_nr_ce(x)		(((x)->ces[NFQ_CONF_BLOCK_NR]).u.value)
+#define frame_size_ce(x)	(((x)->ces[NFQ_CONF_FRAME_SIZE]).u.value)
+#define queue_num_ce(x)		(((x)->ces[NFQ_CONF_QUEUE_NUM]).u.value)
+#define copy_mode_ce(x)		(((x)->ces[NFQ_CONF_COPY_MODE]).u.string)
+#define fail_open_ce(x)		(((x)->ces[NFQ_CONF_FAIL_OPEN]).u.value)
+#define conntrack_ce(x)		(((x)->ces[NFQ_CONF_CONNTRACK]).u.value)
+#define gso_ce(x)		(((x)->ces[NFQ_CONF_GSO]).u.value)
+#define uid_gid_ce(x)		(((x)->ces[NFQ_CONF_UID_GID]).u.value)
+#define secctx_ce(x)		(((x)->ces[NFQ_CONF_SECCTX]).u.value)
 
 
 enum ulogd_nfq_keys {
@@ -195,10 +195,10 @@ static int nfq_cb(const struct nlmsghdr *nlh, void *data)
 	okey_set_u8(&ret[ULOGD_NFQ_OKEY_FAMILY], nfg->nfgen_family);
 	okey_set_u16(&ret[ULOGD_NFQ_OKEY_RES_ID], ntohs(nfg->res_id));
 	okey_set_ptr(&ret[ULOGD_NFQ_OKEY_FRAME], frame);
-	attrs = (struct nlattr **)okey_get_ptr(&ret[ULOGD_NFQ_OKEY_NLATTRS]);
 
+	attrs = (struct nlattr **)okey_get_ptr(&ret[ULOGD_NFQ_OKEY_NLATTRS]);
 	if (nfq_nlmsg_parse(nlh, attrs) < 0) {
-		ulogd_log(ULOGD_ERROR, "could not parse nfq message");
+		ulogd_log(ULOGD_ERROR, "could not parse nfq message\n");
 		ulogd_put_output_keyset(output);
 		return MNL_CB_ERROR;
 	}
@@ -293,7 +293,7 @@ nfq_hdr_put(char *buf, int type, uint32_t queue_num)
 
 static int nfq_put_config(struct nlmsghdr *nlh, struct config_keyset *config)
 {
-	char *copy_mode = copy_mode_ce(config).u.string;
+	char *copy_mode = copy_mode_ce(config);
 	uint32_t flags = 0;
 
 	if (strcasecmp(copy_mode, "packet") == 0) {
@@ -309,16 +309,16 @@ static int nfq_put_config(struct nlmsghdr *nlh, struct config_keyset *config)
 		return -1;
 	}
 
-	if (fail_open_ce(config).u.value)
+	if (fail_open_ce(config))
 		flags |= NFQA_CFG_F_FAIL_OPEN;
-	if (conntrack_ce(config).u.value)
+	if (conntrack_ce(config))
 		flags |= NFQA_CFG_F_CONNTRACK;
-	if (gso_ce(config).u.value)
+	if (gso_ce(config))
 		flags |= NFQA_CFG_F_GSO;
-	if (uid_gid_ce(config).u.value)
+	if (uid_gid_ce(config))
 		flags |= NFQA_CFG_F_UID_GID;
 #if defined(NFQA_CFG_F_SECCTX)
-	if (secctx_ce(config).u.value)
+	if (secctx_ce(config))
 		flags |= NFQA_CFG_F_SECCTX;
 #endif
 	mnl_attr_put_u32(nlh, NFQA_CFG_FLAGS, htonl(flags));
@@ -347,11 +347,10 @@ static int nfq_config_response(struct mnl_ring *nlr)
 
 static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 {
-	struct nfq_priv *priv =
-		(struct nfq_priv *)upi->private;
+	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
 	struct nlmsghdr *nlh;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
-	int queue_num = queue_num_ce(upi->config_kset).u.value;
+	int queue_num = queue_num_ce(upi->config_kset);
 
 	/* kernels 3.8 and later is required to omit PF_(UN)BIND */
 	nlh = nfq_hdr_put(buf, NFQNL_MSG_CONFIG, 0);
@@ -409,12 +408,12 @@ static int constructor_nfq(struct ulogd_source_pluginstance *upi)
 {
 	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
 	struct nl_mmap_req req = {
-		.nm_block_size	= block_size_ce(upi->config_kset).u.value,
-		.nm_block_nr	= block_nr_ce(upi->config_kset).u.value,
-		.nm_frame_size	= frame_size_ce(upi->config_kset).u.value,
-		.nm_frame_nr	= block_size_ce(upi->config_kset).u.value
-				/ frame_size_ce(upi->config_kset).u.value
-				* block_nr_ce(upi->config_kset).u.value,
+		.nm_block_size	= block_size_ce(upi->config_kset),
+		.nm_block_nr	= block_nr_ce(upi->config_kset),
+		.nm_frame_size	= frame_size_ce(upi->config_kset),
+		.nm_frame_nr	= block_size_ce(upi->config_kset)
+				/ frame_size_ce(upi->config_kset)
+				* block_nr_ce(upi->config_kset),
 	};
 	int optval = 1;
 
