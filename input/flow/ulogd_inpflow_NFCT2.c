@@ -63,6 +63,7 @@ struct nfct_priv {
 	struct ulogd_timer	timer;
 	struct nlmsghdr		*dump_request;
 	struct timeval		dump_prev;
+	int 			event_bufsize;
 };
 
 enum nfct_conf {
@@ -73,6 +74,8 @@ enum nfct_conf {
 	NFCT_CONF_RELIABLE,
 	NFCT_CONF_MARK_FILTER,
 	NFCT_CONF_DESTROY_ONLY,
+	NFCT_CONF_EVENT_BUFSIZ,
+	NFCT_CONF_EVENT_BUFMAX,
 	NFCT_CONF_MAX,
 };
 
@@ -120,6 +123,18 @@ static struct config_keyset nfct_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
+		[NFCT_CONF_EVENT_BUFSIZ] = {
+			.key	 = "event_buffer_size",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
+		[NFCT_CONF_EVENT_BUFMAX] = {
+			.key	 = "event_buffer_maxsize",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		}
 	},
 };
 
@@ -130,6 +145,8 @@ static struct config_keyset nfct_kset = {
 #define reliable_ce(x)		((x)->ces[NFCT_CONF_RELIABLE])
 #define mark_filter_ce(x)	((x)->ces[NFCT_CONF_MARK_FILTER])
 #define destroy_only_ce(x)	((x)->ces[NFCT_CONF_DESTROY_ONLY])
+#define event_bufsiz_ce(x)	((x)->ces[NFCT_CONF_EVENT_BUFSIZ])
+#define event_bufmax_ce(x)	((x)->ces[NFCT_CONF_EVENT_BUFMAX])
 
 enum nfct_keys {
 	NFCT_ORIG_IP_SADDR = 0,
@@ -581,6 +598,52 @@ static int data_cb(const struct nlmsghdr *nlh, void *data)
 	return propagate_ct(spi, nfct_type(nlh), ct, recent);
 }
 
+static int setnlbufsiz(struct mnl_socket *nl, int size)
+{
+	int fd = mnl_socket_get_fd(nl);
+	socklen_t socklen = sizeof(int);
+
+	if (setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &size, socklen) == -1) {
+		setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, socklen);
+	}
+	getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, &socklen);
+	return size;
+}
+
+static int update_bufsize(struct ulogd_source_pluginstance *upi)
+{
+	struct nfct_priv *priv = (struct nfct_priv *)upi->private;
+	int maxbufsiz = event_bufmax_ce(upi->config_kset).u.value;
+	int size;
+	static int warned = 0;
+
+	if (maxbufsiz == 0 && ! warned) {
+		warned = 1;
+		ulogd_log(ULOGD_NOTICE,
+			  "We are losing events. Please, "
+			  "consider using the clauses "
+			  "`event_buffer_size' and "
+			  "`event_buffer_maxsize'\n");
+		return 0;
+	}
+
+	size = priv->event_bufsize * 2;
+	if (size > maxbufsiz) {
+		if (warned)
+			return 0;
+		warned = 1;
+		ulogd_log(ULOGD_NOTICE,
+			  "Maximum buffer size (%d) in NFCT has been "
+			  "reached. Please, consider rising "
+			  "`event_buffer_size` and "
+			  "`event_buffer_maxsize` "
+			  "clauses.\n", priv->event_bufsize);
+		return 0;
+	}
+	priv->event_bufsize = setnlbufsiz(priv->eventnl, size);
+	return 1;
+}
+
 static int nfct_event_cb(int fd, unsigned int what, void *param)
 {
 	struct ulogd_source_pluginstance *spi = param;
@@ -596,7 +659,12 @@ static int nfct_event_cb(int fd, unsigned int what, void *param)
 	/* recv(mnl_socket_get_fd(priv->eventnl), buf, len, MSG_DONTWAIT); */
 	nrecv = mnl_socket_recvfrom(priv->eventnl, buf, sizeof(buf));
 	if (nrecv == -1) {
-		ulogd_log(ULOGD_ERROR, "recv: %s\n", _sys_errlist[errno]);
+		if (errno == ENOBUFS) {
+			update_bufsize(spi);
+		} else {
+			ulogd_log(ULOGD_ERROR, "recv: %s\n",
+				  _sys_errlist[errno]);
+		}
 		return ULOGD_IRET_ERR;
 	}
 
@@ -965,6 +1033,8 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 {
 	struct nfct_priv *priv = (struct nfct_priv *)spi->private;
 	unsigned long interval = active_timeout_ce(spi->config_kset).u.value;
+	int event_bufsiz, event_bufmax;
+	socklen_t socklen = sizeof(int);
 
 	if (init_eventnl(spi))
 		return ULOGD_IRET_ERR;
@@ -979,6 +1049,22 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 				  _sys_errlist[errno]);
 			goto error_close_event;
 		}
+	}
+
+	event_bufsiz = event_bufsiz_ce(spi->config_kset).u.value;
+	event_bufmax = event_bufmax_ce(spi->config_kset).u.value;
+	if (event_bufsiz) {
+		if (event_bufsiz > event_bufmax) {
+			ulogd_log(ULOGD_INFO, "set event buffer size to: %d\n",
+				  event_bufsiz);
+			event_bufsiz_ce(spi->config_kset).u.value
+				= event_bufsiz = event_bufmax;
+		}
+		priv->event_bufsize = setnlbufsiz(priv->eventnl, event_bufsiz);
+	} else {
+		getsockopt(mnl_socket_get_fd(priv->eventnl),
+			   SOL_SOCKET, SO_RCVBUF,
+			   &priv->event_bufsize, &socklen);
 	}
 
 	if (ulogd_register_fd(&priv->eventfd) != 0) {
