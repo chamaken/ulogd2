@@ -465,6 +465,8 @@ static int constructor_nfq(struct ulogd_source_pluginstance *upi)
 
 error_unmap:
 	mnl_socket_unmap(priv->nlr);
+	free(priv->nlr);
+	priv->nlr = NULL;
 error_close_sock:
 	mnl_socket_close(priv->nl);
 	return ULOGD_IRET_ERR;
@@ -477,6 +479,7 @@ static int destructor_nfq(struct ulogd_source_pluginstance *upi)
 	ulogd_unregister_fd(&priv->ufd);
 	mnl_socket_unmap(priv->nlr);
 	free(priv->nlr);
+	priv->nlr = NULL;
 	mnl_socket_close(priv->nl);
 
 	return 0;
