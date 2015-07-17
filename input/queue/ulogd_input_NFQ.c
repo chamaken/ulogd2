@@ -295,12 +295,15 @@ static int nfq_put_config(struct nlmsghdr *nlh, struct config_keyset *config)
 {
 	char *copy_mode = copy_mode_ce(config).u.string;
 	uint32_t flags = 0;
-	int range = frame_size_ce(config).u.value - NL_MMAP_HDRLEN;
 
 	if (strcasecmp(copy_mode, "packet") == 0) {
-		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_PACKET, range);
+		/* copy_range is determined by frame size in mmaped socket.
+		 * set max size to show the size at NL_MMAP_STATUS_COPY */
+		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_PACKET, 0xffff);
 	} else if (strcasecmp(copy_mode, "meta") == 0) {
-		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_META, range);
+		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_META, 0);
+	} else if (strcasecmp(copy_mode, "none") == 0) {
+		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_NONE, 0);
 	} else {
 		ulogd_log(ULOGD_ERROR, "unknow copy_mode: %s\n", copy_mode);
 		return -1;
