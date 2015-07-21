@@ -840,7 +840,7 @@ static int create_stack(const char *option)
 	struct ulogd_stack_element *elem, *elem2;
 
 	char *buf = strdup(option);
-	char pi_id[ULOGD_MAX_KEYLEN];
+	char pi_id[ULOGD_MAX_KEYLEN + 1];
 	char *tok, *plname, *equals;
 	int ret = 0;
 
