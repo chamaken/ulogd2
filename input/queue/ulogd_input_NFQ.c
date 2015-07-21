@@ -342,7 +342,9 @@ static int nfq_config_response(struct mnl_ring *nlr)
 	frame->nm_status = NL_MMAP_STATUS_UNUSED;
 	mnl_ring_advance(nlr);
 
-	return ret;
+	if (ret == MNL_CB_ERROR)
+		return ULOGD_IRET_ERR;
+	return ULOGD_IRET_OK;
 }
 
 static int nfq_send_request(struct ulogd_source_pluginstance *upi)
