@@ -202,6 +202,8 @@ static int nfq_cb(const struct nlmsghdr *nlh, void *data)
 		ulogd_put_output_keyset(output);
 		return MNL_CB_ERROR;
 	}
+	okey_set_valid(&ret[ULOGD_NFQ_OKEY_NLATTRS]);
+
 	ulogd_propagate_results(output);
 
 	return MNL_CB_OK;
