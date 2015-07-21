@@ -49,6 +49,7 @@ enum nflog_conf {
 	NFLOG_CONF_NUMLABEL,
 	NFLOG_CONF_QTHRESH,
 	NFLOG_CONF_QTIMEOUT,
+	NFLOG_CONF_COPY_MODE,		/* NFULNL_COPY_ NONE / META / PACKET */
 	NFLOG_CONF_MAX,
 };
 
@@ -121,6 +122,12 @@ static struct config_keyset nflog_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
+		[NFLOG_CONF_COPY_MODE] = {
+			.key	 = "copy_mode",
+			.type	 = CONFIG_TYPE_STRING,
+			.options = CONFIG_OPT_NONE,
+			.u.string = "packet",
+		},
 	}
 };
 
@@ -135,6 +142,7 @@ static struct config_keyset nflog_kset = {
 #define label_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_NUMLABEL]).u.value)
 #define qthresh_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_QTHRESH]).u.value)
 #define qtimeout_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_QTIMEOUT]).u.value)
+#define copy_mode_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_COPY_MODE]).u.string)
 
 enum nflog_keys {
 	NFLOG_KEY_RAW_MAC = 0,
@@ -684,6 +692,7 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr *nlh;
 	uint16_t group = group_ce(upi);
+	char *copy_mode = copy_mode_ce(upi);
 	uint16_t flags = 0;
 
 	/* This is the system logging (conntrack, ...) facility */
@@ -708,7 +717,19 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
-	nlh = nflog_build_cfg_params(buf, NFULNL_COPY_PACKET, 0xFFFF, group);
+
+	if (strcasecmp(copy_mode, "packet") == 0) {
+		nlh = nflog_build_cfg_params(buf, NFULNL_COPY_PACKET,
+					     0xFFFF, group);
+	} else if (strcasecmp(copy_mode, "meta") == 0) {
+		nlh = nflog_build_cfg_params(buf, NFULNL_COPY_META, 0, group);
+	} else if (strcasecmp(copy_mode, "none") == 0) {
+		nlh = nflog_build_cfg_params(buf, NFULNL_COPY_NONE, 0, group);
+	} else {
+		ulogd_log(ULOGD_ERROR, "unknown copy_mode: %s\n", copy_mode);
+		return ULOGD_IRET_ERR;
+	}
+
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 			  _sys_errlist[errno]);
