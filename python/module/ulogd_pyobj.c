@@ -641,7 +641,7 @@ py_ulogd_keylist_add(struct py_ulogd_keylist *self, PyObject *args)
 		return NULL;
 	}
 	Py_INCREF(key);
-	llist_add(&key->list, &self->list);
+	llist_add_tail(&key->list, &self->list);
 	self->raw->num_keys++;
 
 	Py_RETURN_NONE;
@@ -720,14 +720,25 @@ py_ulogd_keyset_getitem(struct py_ulogd_keyset *self,
 			PyTypeObject *type, PyObject *args)
 {
 	struct ulogd_key *key = NULL;
+	long index;
 	char *name;
 	PyObject *keyobj;
 
-	if (!PyArg_Parse(args, "s", &name))
-		return NULL;
-	key = find_key_by_name(self->raw, name);
-	if (key == NULL) {
-		PyErr_Format(PyExc_KeyError, "not exist: %s", name);
+	if (PyLong_Check(args)) {
+		index = PyLong_AsLong(args);
+		if (index < 0 || index > self->raw->num_keys) {
+			PyErr_Format(PyExc_KeyError, "not exist: %d", index);
+			return NULL;
+		}
+		key = &self->raw->keys[index];
+	} else if (PyArg_Parse(args, "s", &name)) {
+		key = find_key_by_name(self->raw, name);
+		if (key == NULL) {
+			PyErr_Format(PyExc_KeyError, "not exist: %s", name);
+			return NULL;
+		}
+	} else {
+		PyErr_SetString(PyExc_TypeError, "invalid arg type");
 		return NULL;
 	}
 

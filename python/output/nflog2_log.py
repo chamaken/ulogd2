@@ -27,6 +27,8 @@ def configure(iklist, oklist):
                              type=ulogd.ULOGD_RET_UINT32))
     iklist.add(ulogd.Keyinfo(name="oob.seq.global",
                              type=ulogd.ULOGD_RET_UINT32))
+    iklist.add(ulogd.Keyinfo(name="oob.prefix",
+                             type=ulogd.ULOGD_RET_STRING))
     iklist.add(ulogd.Keyinfo(name="raw.pkt",
                              type=ulogd.ULOGD_RET_RAW))
     iklist.add(ulogd.Keyinfo(name="nflog.attrs",
@@ -41,14 +43,15 @@ def start(ikset):
 
 def interp(ikset, okset):
     family = ikset["oob.family"].value
-    seq_local = ikset["oob.seq.local"].value
-    seq_global = ikset["oob.seq.global"].value
+    seq_local = ikset[1].value
+    seq_global = ikset[2].value
+    prefix = ikset[3].value
     raw_pkt = ikset["raw.pkt"].value
     pattrs = (ctypes.POINTER(mnl.Attr) * (nflog.NFULA_MAX + 1)).from_address(ikset["nflog.attrs"].value)
 
     ip = IP(bytes(pattrs[nflog.NFULA_PAYLOAD].contents.get_payload_v()))
     log.info(ip.summary())
-    log.info("\tseq - local: %r, global: %r", seq_local, seq_global)
+    log.info("\tseq - local: %r, global: %r, prefix: %r", seq_local, seq_global, prefix)
     return ulogd.ULOGD_IRET_OK
 
 
