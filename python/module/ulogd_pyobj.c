@@ -350,7 +350,7 @@ static PyObject *py_ulogd_inkey_is_valid(struct py_ulogd_key *self,
 {
 	struct ulogd_key *key = self->raw;
 
-	if (key->u.source && key->flags & ULOGD_RETF_VALID)
+	if (key->u.source && key->u.source->flags & ULOGD_RETF_VALID)
 		Py_RETURN_TRUE;
 	Py_RETURN_FALSE;
 }
