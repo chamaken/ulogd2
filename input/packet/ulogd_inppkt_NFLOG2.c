@@ -871,8 +871,6 @@ error_unbind:
 		unbind_all(priv->nl);
 error_unmap:
 	mnl_socket_unmap(priv->nlr);
-	free(priv->nlr);
-	priv->nlr = NULL;
 error_close_sock:
 	mnl_socket_close(priv->nl);
 	return ULOGD_IRET_ERR;
@@ -890,8 +888,6 @@ static int stop(struct ulogd_source_pluginstance *upi)
 	nlh->nlmsg_flags &= ~NLM_F_ACK;
 	mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len);
 	mnl_socket_unmap(priv->nlr);
-	free(priv->nlr);
-	priv->nlr = NULL;
 	mnl_socket_close(priv->nl);
 
 	return 0;

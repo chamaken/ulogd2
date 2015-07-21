@@ -76,6 +76,7 @@ int mnl_socket_unmap(struct mnl_ring *nlr)
 {
 	int ret = munmap(nlr->ring, ring_size(nlr));
 	nlr->ring = NULL;
+	free(nlr);
 	return ret;
 }
 
