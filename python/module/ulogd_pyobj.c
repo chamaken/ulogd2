@@ -315,6 +315,9 @@ py_ulogd_key_getvalue(struct py_ulogd_key *self, PyObject *args)
 {
 	struct ulogd_key *key = self->raw;
 
+	if (!key->u.source || !(key->u.source->flags & ULOGD_RETF_VALID))
+		Py_RETURN_NONE;
+
 	switch (key->type) {
 	case ULOGD_RET_BOOL:
 		if (ikey_get_u8(key)) {
