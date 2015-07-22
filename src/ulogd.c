@@ -719,17 +719,33 @@ static int ulogd_stacks_destroy(struct ulogd_source_pluginstance *spi)
 	return 0;
 }
 
-static int check_last_output()
+static int check_stack_keys()
 {
 	struct ulogd_source_pluginstance *spi;
+	struct ulogd_pluginstance *prev;
 	struct ulogd_stack *stack;
 	struct ulogd_stack_element *elem;
 
 	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
+		prev = (struct ulogd_pluginstance *)spi;
 		llist_for_each_entry(stack, &spi->stacks, list) {
+			llist_for_each_entry(elem, &stack->elements, list) {
+				/* check input/output key consistency */
+				if (!(UPI_OUTPUT_KEYSET(prev)->type
+				      & UPI_INPUT_KEYSET(elem->pi)->type)) {
+					ulogd_log(ULOGD_ERROR, "type mismatch"
+						  " between %s:%s and %s:%s"
+						  " in stack\n",
+						  prev->id, prev->plugin->name,
+						  elem->pi->id,
+						  elem->pi->plugin->name);
+					return -EINVAL;
+				}
+				prev = elem->pi;
+			}
+			/* check the last output key type */
 			elem = llist_entry(stack->elements.prev,
 					   struct ulogd_stack_element, list);
-			/* check the last output key type */
 			if ((UPI_OUTPUT_KEYSET(elem->pi)->type
 			     & ULOGD_DTYPE_SINK) == 0) {
 				ulogd_log(ULOGD_ERROR, "last pluginstance in stack "
@@ -834,7 +850,7 @@ static int create_stack(const char *option)
 {
 	struct ulogd_stack *stack;
 	struct ulogd_plugin *pl = NULL;
-	struct ulogd_pluginstance *pi = NULL, *pi_prev;
+	struct ulogd_pluginstance *pi = NULL;
 	struct ulogd_source_plugin *spl;
 	struct ulogd_source_pluginstance *spi;
 	struct ulogd_stack_element *elem, *elem2;
@@ -897,9 +913,6 @@ static int create_stack(const char *option)
 		goto out_stack;
 	}
 
-	/* access source plugin as normal plugin for key consistency check */
-	pi_prev = (struct ulogd_pluginstance *)spi;
-
 	/* PASS 2: find and instanciate plugins of stack, link them together */
 	tok = strtok(NULL, ",\n");
 	for (; tok; tok = strtok(NULL, ",\n")) {
@@ -932,15 +945,6 @@ static int create_stack(const char *option)
 				  pi_id);
 			ret = -ENOMEM;
 			goto out_name;
-		}
-
-		/* check input/output key consistency */
-		if (!(UPI_INPUT_KEYSET(pi)->type
-		      & UPI_OUTPUT_KEYSET(pi_prev)->type)) {
-			ulogd_log(ULOGD_ERROR, "type mismatch between "
-				  "%s:%s and %s:%s in stack\n",
-				  pi->id, pi->plugin->name,
-				  pi_prev->id, pi_prev->plugin->name);
 		}
 
 		ulogd_log(ULOGD_DEBUG, "pushing `%s' on stack\n", pl->name);
@@ -1633,8 +1637,8 @@ int main(int argc, char* argv[])
 		ulogd_log(ULOGD_FATAL, "configure_pluginstances\n");
 		warn_and_exit(daemonize);
 	}
-	if (check_last_output()) {
-		ulogd_log(ULOGD_FATAL, "check_last_output\n");
+	if (check_stack_keys()) {
+		ulogd_log(ULOGD_FATAL, "check_stack_keys\n");
 		warn_and_exit(daemonize);
 	}
 	if (ulogd_keysets_bundles_alloc_init(&ulogd_source_pluginstances,
