@@ -772,7 +772,7 @@ static int clear_counters(struct nfct_priv *priv)
 			mnl_socket_close(nl);
 			return ULOGD_IRET_ERR;
 		}
-		ret = mnl_cb_run(buf, nrecv, 0, 0, NULL, NULL);
+		ret = mnl_cb_run(buf, nrecv, 0, priv->dumppid, NULL, NULL);
 	} while (ret == MNL_CB_OK);
 
 	mnl_socket_close(nl);
