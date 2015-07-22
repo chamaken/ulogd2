@@ -626,8 +626,9 @@ nflog_build_cfg_u16(char *buf, uint16_t type, uint16_t group, uint16_t val)
 	return nlh;
 }
 
-static int nflog_config_response(struct mnl_ring *nlr)
+static int nflog_config_response(struct nflog_priv *priv)
 {
+	struct mnl_ring *nlr = priv->nlr;
 	struct nl_mmap_hdr *frame = mnl_ring_get_frame(nlr);
 	void *buf = MNL_FRAME_PAYLOAD(frame);
 	int ret;
@@ -637,7 +638,7 @@ static int nflog_config_response(struct mnl_ring *nlr)
 		return ULOGD_IRET_ERR;
 	}
 	frame->nm_status = NL_MMAP_STATUS_SKIP;
-	ret = mnl_cb_run(buf, frame->nm_len, 0, 0, NULL, NULL);
+	ret = mnl_cb_run(buf, frame->nm_len, 0, priv->portid, NULL, NULL);
 	frame->nm_status = NL_MMAP_STATUS_UNUSED;
 	mnl_ring_advance(nlr);
 
@@ -663,7 +664,7 @@ static int become_system_logging(struct ulogd_source_pluginstance *upi,
 				  _sys_errlist[errno]);
 			return ULOGD_IRET_ERR;
 		}
-		if (nflog_config_response(priv->nlr) != ULOGD_IRET_OK) {
+		if (nflog_config_response(priv) != ULOGD_IRET_OK) {
 			ulogd_log(ULOGD_ERROR, "request PF_UNBIND: %s\n",
 				  _sys_errlist[errno]);
 			return ULOGD_IRET_ERR;
@@ -677,7 +678,7 @@ static int become_system_logging(struct ulogd_source_pluginstance *upi,
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
-	if (nflog_config_response(priv->nlr) != ULOGD_IRET_OK) {
+	if (nflog_config_response(priv) != ULOGD_IRET_OK) {
 		ulogd_log(ULOGD_ERROR, "request command PF_BIND: %s\n",
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
@@ -712,7 +713,7 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
-	if (nflog_config_response(priv->nlr) != 0) {
+	if (nflog_config_response(priv) != 0) {
 		ulogd_log(ULOGD_ERROR, "request command BIND: %s\n",
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
@@ -735,7 +736,7 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
-	if (nflog_config_response(priv->nlr) != 0) {
+	if (nflog_config_response(priv) != 0) {
 		ulogd_log(ULOGD_ERROR, "request config COPY_PACKET: %s\n",
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
@@ -749,7 +750,7 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 				  _sys_errlist[errno]);
 			return ULOGD_IRET_ERR;
 		}
-		if (nflog_config_response(priv->nlr) != ULOGD_IRET_OK) {
+		if (nflog_config_response(priv) != ULOGD_IRET_OK) {
 			ulogd_log(ULOGD_NOTICE,
 				  "NFLOG netlink queue threshold can't "
 				  "be set to %d: %s\n", qthresh_ce(upi),
@@ -766,7 +767,7 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 				  _sys_errlist[errno]);
 			return ULOGD_IRET_ERR;
 		}
-		if (nflog_config_response(priv->nlr) != ULOGD_IRET_OK) {
+		if (nflog_config_response(priv) != ULOGD_IRET_OK) {
 			ulogd_log(ULOGD_NOTICE,
 				  "NFLOG netlink queue timeout can't "
 				  "be set to %d: %s\n", qtimeout_ce(upi),
@@ -788,7 +789,7 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 				  _sys_errlist[errno]);
 			return ULOGD_IRET_ERR;
 		}
-		if (nflog_config_response(priv->nlr) != ULOGD_IRET_OK) {
+		if (nflog_config_response(priv) != ULOGD_IRET_OK) {
 			ulogd_log(ULOGD_ERROR, "unable to set flags 0x%x: %s\n",
 				  flags, _sys_errlist[errno]);
 			return ULOGD_IRET_ERR;
