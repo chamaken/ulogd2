@@ -37,6 +37,7 @@ AC_FUNC_VPRINTF
 AC_CHECK_FUNCS(socket strerror)
 
 regular_CFLAGS="-Wall -Wextra -Wno-unused-parameter"
+# regular_CFLAGS="-Wall -Wextra -Wno-unused-parameter -fno-omit-frame-pointer -fstack-protector-all -fsanitize=address"
 AC_SUBST([regular_CFLAGS])
 
 AC_SEARCH_LIBS([pthread_create], [pthread], [libpthread_LIBS="$LIBS"; LIBS=""])
@@ -84,7 +85,19 @@ fi
 AC_ARG_ENABLE(nflog2,
        AS_HELP_STRING([--enable-nflog2], [Enable nflog2 module [default=yes]]),[enable_nflog2=$enableval],[enable_nflog2=yes])
 AS_IF([test "x$enable_nflog2" = "xyes"], [
-    AS_IF([test "x$ac_cv_mmaped_netlink" = "xyes" -a "x$enable_nflog" = "xyes"],
+    AC_MSG_CHECKING([does libnetfilter_log have nflog_nlmsg_parse])
+    AC_CACHE_VAL(ac_cv_nflog_nlmsg_parse,
+        SAVE_LIBS=$LIBS
+        LIBS="$LIBS -lnetfilter_log -lmnl"
+        AC_TRY_LINK(
+	    [ #include <stddef.h>
+	      #include <libnetfilter_log/libnetfilter_log.h> ],	    
+            [ return nflog_nlmsg_parse(NULL, NULL); ],
+            ac_cv_nflog_nlmsg_parse=yes,
+            ac_cv_nflog_nlmsg_parse=no)
+	LIBS=$SAVE_LIBS)
+    AC_MSG_RESULT($ac_cv_nflog_nlmsg_parse)
+    AS_IF([test "x$ac_cv_mmaped_netlink" = "xyes" -a "x$ac_cv_nflog_nlmsg_parse" = "xyes" -a "x$enable_nflog2" = "xyes"],
         [AC_DEFINE([BUILD_NFLOG2], [1], [Building nflog2 module])],
 	[enable_nflog2=no])
 ])
