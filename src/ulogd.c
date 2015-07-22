@@ -763,20 +763,6 @@ static int start_pluginstances()
 	struct ulogd_source_pluginstance *spi, *err_spi = NULL;
 	int ret;
 
-	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
-		if (spi->plugin->start) {
-			ret = spi->plugin->start(spi);
-			if (ret < 0) {
-				ulogd_log(ULOGD_ERROR, "error during "
-					  "start of plugin %s\n",
-					  spi->plugin->name);
-				err_spi = spi;
-				goto call_stop;
-			}
-		}
-	}
-	err_spi = NULL;
-
 	llist_for_each_entry(pi, &ulogd_pluginstances, list) {
 		if (pi->plugin->start) {
 			ret = pi->plugin->start(pi, pi->input_template);
@@ -789,23 +775,38 @@ static int start_pluginstances()
 			}
 		}
 	}
+	err_pi = NULL;
+
+	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
+		if (spi->plugin->start) {
+			ret = spi->plugin->start(spi);
+			if (ret < 0) {
+				ulogd_log(ULOGD_ERROR, "error during "
+					  "start of plugin %s\n",
+					  spi->plugin->name);
+				err_spi = spi;
+				goto call_stop;
+			}
+		}
+	}
 
 	return 0;
 
 call_stop:
-	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
-		if (spi == err_spi)
+	llist_for_each_entry(pi, &ulogd_pluginstances, list) {
+		if (pi == err_pi)
 			break;
-		if (spi->plugin->stop) {
-			spi->plugin->stop(spi);
+		if (pi->plugin->stop) {
+			pi->plugin->stop(pi);
 		}
 	}
-	if (err_pi != NULL) {
-		llist_for_each_entry(pi, &ulogd_pluginstances, list) {
-			if (pi == err_pi)
+
+	if (err_spi != NULL) {
+		llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
+			if (spi == err_spi)
 				break;
-			if (pi->plugin->stop) {
-				pi->plugin->stop(pi);
+			if (spi->plugin->stop) {
+				spi->plugin->stop(spi);
 			}
 		}
 	}
