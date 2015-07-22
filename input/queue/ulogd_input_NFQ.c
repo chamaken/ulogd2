@@ -329,8 +329,9 @@ static int nfq_put_config(struct nlmsghdr *nlh, struct config_keyset *config)
 	return 0;
 }
 
-static int nfq_config_response(struct mnl_ring *nlr)
+static int nfq_config_response(struct nfq_priv *priv)
 {
+	struct mnl_ring *nlr = priv->nlr;
 	struct nl_mmap_hdr *frame = mnl_ring_get_frame(nlr);
 	void *buf = MNL_FRAME_PAYLOAD(frame);
 	int ret;
@@ -340,7 +341,7 @@ static int nfq_config_response(struct mnl_ring *nlr)
 		return ULOGD_IRET_ERR;
 	}
 	frame->nm_status = NL_MMAP_STATUS_SKIP;
-	ret = mnl_cb_run(buf, frame->nm_len, 0, 0, NULL, NULL);
+	ret = mnl_cb_run(buf, frame->nm_len, 0, priv->portid, NULL, NULL);
 	frame->nm_status = NL_MMAP_STATUS_UNUSED;
 	mnl_ring_advance(nlr);
 
@@ -365,7 +366,7 @@ static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
-	if (nfq_config_response(priv->nlr) != 0) {
+	if (nfq_config_response(priv) != 0) {
 		ulogd_log(ULOGD_ERROR, "config PF_BIND: %s\n",
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
@@ -379,7 +380,7 @@ static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 			_sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
-	if (nfq_config_response(priv->nlr) != 0) {
+	if (nfq_config_response(priv) != 0) {
 		ulogd_log(ULOGD_ERROR, "config BIND: %s\n",
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
@@ -394,7 +395,7 @@ static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 			_sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
-	if (nfq_config_response(priv->nlr) != 0) {
+	if (nfq_config_response(priv) != 0) {
 		ulogd_log(ULOGD_ERROR, "config params: %s\n",
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
