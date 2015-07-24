@@ -1234,13 +1234,19 @@ static void deliver_signal_pluginstances(int signal)
 	struct ulogd_pluginstance *pi;
 
 	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
-		if (spi->plugin->signal)
+		if (spi->plugin->signal) {
+			ulogd_log(ULOGD_DEBUG, "call signal - %s:%s(%d)\n",
+				  spi->id, spi->plugin->name, signal);
 			(*spi->plugin->signal)(spi, signal);
+		}
 	}
 
 	llist_for_each_entry(pi, &ulogd_pluginstances, list) {
-		if (pi->plugin->signal)
+		if (pi->plugin->signal) {
+			ulogd_log(ULOGD_DEBUG, "call signal - %s:%s(%d)\n",
+				  pi->id, pi->plugin->name, signal);
 			(*pi->plugin->signal)(pi, signal);
+		}
 	}
 }
 
@@ -1251,7 +1257,7 @@ static void stop_pluginstances(void)
 
 	llist_for_each_entry_safe(spi, s, &ulogd_source_pluginstances, list) {
 		if (spi->plugin->stop) {
-			ulogd_log(ULOGD_DEBUG, "calling stop for %s:%s\n",
+			ulogd_log(ULOGD_DEBUG, "call stop - %s:%s\n",
 				  spi->id, spi->plugin->name);
 			spi->plugin->stop(spi);
 		}
@@ -1264,7 +1270,7 @@ static void stop_pluginstances(void)
 
 	llist_for_each_entry_safe(pi, p, &ulogd_pluginstances, list) {
 		if (pi->plugin->stop) {
-			ulogd_log(ULOGD_DEBUG, "calling stop for %s:%s\n",
+			ulogd_log(ULOGD_DEBUG, "call stop - %s:%s\n",
 				  pi->id, pi->plugin->name);
 			pi->plugin->stop(pi);
 		}
