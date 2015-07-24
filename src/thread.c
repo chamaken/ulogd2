@@ -591,6 +591,16 @@ failure_unlock:
 	return -ret;
 }
 
+int ulogd_suspend_propagation(void)
+{
+	return pthread_mutex_lock(&ulogd_runnable_workers_mutex);
+}
+
+int ulogd_resume_propagation(void)
+{
+	return pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
+}
+
 /* public interface in ulogd.h
  * propagate results to all downstream plugins in the stack */
 int ulogd_propagate_results(struct ulogd_keyset *okeys)

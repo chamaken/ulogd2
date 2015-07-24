@@ -99,7 +99,7 @@ static int info_mode = 0;
 static int verbose = 0;
 static int created_pidfile = 0;
 
-struct ulogd_fd signal_ufd; /* XXX: close on err/exit */
+static struct ulogd_fd signal_ufd; /* XXX: close on err/exit */
 
 /* linked list for all registered plugins */
 static LLIST_HEAD(ulogd_plugins);
@@ -114,6 +114,8 @@ static LLIST_HEAD(ulogd_pluginstances);
 /* linked list for source plug instances */
 static LLIST_HEAD(ulogd_source_pluginstances);
 
+extern int ulogd_suspend_propagation(void);
+extern int ulogd_resume_propagation(void);
 
 /* function returns 0 on success */
 static int load_plugin(const char *file);
@@ -763,6 +765,13 @@ static int start_pluginstances()
 	struct ulogd_source_pluginstance *spi, *err_spi = NULL;
 	int ret;
 
+	ret = ulogd_suspend_propagation();
+	if (ret != 0) {
+		ulogd_log(ULOGD_FATAL, "ulogd_suspend_propagation: %s\n",
+			_sys_errlist[ret]);
+		return ULOGD_IRET_ERR;
+	}
+
 	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
 		if (spi->plugin->start) {
 			ret = spi->plugin->start(spi);
@@ -790,9 +799,16 @@ static int start_pluginstances()
 		}
 	}
 
+	ret = ulogd_resume_propagation();
+	if (ret != 0) {
+		ulogd_log(ULOGD_FATAL, "ulogd_resume_propagation: %s\n",
+			_sys_errlist[ret]);
+		return ULOGD_IRET_ERR;
+	}
 	return 0;
 
 call_stop:
+	ulogd_resume_propagation();
 	llist_for_each_entry(spi, &ulogd_source_pluginstances, list) {
 		if (spi == err_spi)
 			break;
