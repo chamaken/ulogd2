@@ -1,3 +1,7 @@
+# requires:
+# scapy-python3	https://github.com/phaethon/scapy
+# cpylm*	https://github.com/chamaken/
+
 import logging
 import ctypes, socket
 
@@ -18,7 +22,7 @@ logging.basicConfig(level=logging.INFO,
                     filename='%s.log' % __name__,
                     filemode='a',
                     format='%(asctime)s %(levelname)s %(module)s %(message)s')
-nl = mnl.Socket(netlink.NETLINK_NETFILTER)
+nl = None # mnl.Socket
 
 
 def nfq_hdr_put(buf, nltype, queue_num):
@@ -56,10 +60,21 @@ def configure(iklist, oklist):
 
 
 def start(ikset):
+    global nl
+    nl = mnl.Socket(netlink.NETLINK_NETFILTER)
     return ulogd.ULOGD_IRET_OK
 
 
 def interp(ikset, okset):
+    res_id = ikset[1].value
+    attrs = mnl.ptrs2attrs(ikset[2].value, nfqnl.NFQA_MAX + 1)
+    ph = attrs[nfqnl.NFQA_PACKET_HDR].get_payload_as(nfqnl.NfqnlMsgPacketHdr)
+    packet_id = socket.ntohl(ph.packet_id)
+    log.info("res_id: %d, qid: %d", res_id, packet_id)
+    nfq_send_accept(res_id, packet_id)
+    return ulogd.ULOGD_IRET_OK
+
+def interp_(ikset, okset):
     res_id = ikset["nfq.res_id"].value
     family = ikset["oob.family"].value
     pattrs = (ctypes.POINTER(mnl.Attr) * (nfqnl.NFQA_MAX + 1))\

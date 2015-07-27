@@ -1,3 +1,7 @@
+# requires:
+# scapy-python3	https://github.com/phaethon/scapy
+# cpylm*	https://github.com/chamaken/
+
 import logging
 import ctypes, socket, os
 
@@ -12,12 +16,8 @@ import ulogd
 from scapy.layers.inet import IP
 
 
-log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,
-                    filename='%s_%d.log' % (__name__, os.getpid()),
-                    filemode='a',
-                    format='%(asctime)s %(levelname)s %(module)s %(message)s')
-nl = mnl.Socket(netlink.NETLINK_NETFILTER)
+log = None	# logging.getLogger
+nl = None	# mnl.Socket
 
 
 def nfq_hdr_put(buf, nltype, queue_num):
@@ -58,15 +58,23 @@ def configure(iklist, oklist):
 
 
 def start(ikset):
+    global log, nl
+    log = logging.getLogger(__name__)
+    logging.basicConfig(level=logging.INFO,
+                        filename='%s_%d.log' % (__name__, os.getpid()),
+                        filemode='a',
+                        format='%(asctime)s %(levelname)s %(module)s %(message)s')
+    nl = mnl.Socket(netlink.NETLINK_NETFILTER)
     return ulogd.ULOGD_IRET_OK
 
 
 def interp(ikset, okset):
     res_id = ikset[0].value
-    pattrs = (ctypes.POINTER(mnl.Attr) * (nfqnl.NFQA_MAX + 1)).from_address(ikset[1].value)
-    qid = socket.ntohl(pattrs[nfqnl.NFQA_PACKET_HDR].contents.get_payload_as(nfqnl.NfqnlMsgPacketHdr).packet_id)
-    log.info("res_id: %d, qid: %d", res_id, qid)
-    nfq_send_accept(res_id, qid)
+    attrs = mnl.ptrs2attrs(ikset[1].value, nfqnl.NFQA_MAX + 1)
+    ph = attrs[nfqnl.NFQA_PACKET_HDR].get_payload_as(nfqnl.NfqnlMsgPacketHdr)
+    packet_id = socket.ntohl(ph.packet_id)
+    log.info("res_id: %d, qid: %d", res_id, packet_id)
+    nfq_send_accept(res_id, packet_id)
     return ulogd.ULOGD_IRET_OK
 
 

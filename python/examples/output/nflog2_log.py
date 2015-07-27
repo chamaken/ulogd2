@@ -1,3 +1,7 @@
+# requires:
+# scapy-python3	https://github.com/phaethon/scapy
+# cpylm*	https://github.com/chamaken/
+
 import logging
 import ctypes, socket
 
