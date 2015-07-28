@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <stdbool.h>
 
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE
@@ -34,6 +35,7 @@ struct nflog_priv {
 	uint32_t		portid;
 	struct ulogd_fd		ufd;
 	struct mnl_ring		*nlr;
+	bool			skipped;
 };
 
 /* configuration entries */
@@ -518,9 +520,12 @@ handle_frame:
 		}
 		goto handle_frame;
 	case NL_MMAP_STATUS_SKIP:
-		ulogd_log(ULOGD_ERROR, "found SKIP status frame,"
-			  " ENOBUFS maybe\n");
-		return ULOGD_IRET_ERR;
+		if (!priv->skipped) {
+			priv->skipped = true;
+			ulogd_log(ULOGD_ERROR, "found SKIP status"
+				  " frame, ENOBUFS maybe\n");
+		}
+		return ULOGD_IRET_OK;
 	}
 
 	ulogd_log(ULOGD_ERROR, "unknown frame_status: %d\n", frame->nm_status);

@@ -8,12 +8,13 @@
  */
 #define _GNU_SOURCE /* _sys_errlist[] */
 
-#include <stdlib.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <sys/mman.h>
-#include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #include <linux/netlink.h>
 #include <linux/netfilter/nfnetlink_queue.h>
@@ -29,6 +30,7 @@ struct nfq_priv {
 	uint32_t		portid;
 	struct ulogd_fd		ufd;
 	struct mnl_ring		*nlr;
+	bool			skipped;
 };
 
 /*
@@ -267,9 +269,12 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 				return ULOGD_IRET_ERR;
 			break;
 		case NL_MMAP_STATUS_SKIP:
-			ulogd_log(ULOGD_ERROR, "found SKIP status frame,"
-				  " ENOBUFS maybe\n");
-			return ULOGD_IRET_ERR;
+			if (!priv->skipped) {
+				priv->skipped = true;
+				ulogd_log(ULOGD_ERROR, "found SKIP status"
+					  " frame, ENOBUFS maybe\n");
+			}
+			return ULOGD_IRET_OK;
 		}
 		nproc++;
 	}

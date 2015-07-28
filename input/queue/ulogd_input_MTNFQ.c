@@ -10,15 +10,16 @@
  */
 #define _GNU_SOURCE /* _sys_errlist[] */
 
-#include <stdlib.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <pthread.h>
 #include <poll.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/socket.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <sys/eventfd.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 #include <linux/netlink.h>
 #include <linux/netfilter/nfnetlink_queue.h>
@@ -47,6 +48,8 @@ struct mtnfq_priv {
 	pthread_t		tid;
 	pthread_mutex_t		req_lock, res_lock;
 	pthread_cond_t		status_condv;
+
+	bool			skipped;
 };
 
 enum nfq_conf {
@@ -229,7 +232,7 @@ static int handle_valid_frame(struct ulogd_source_pluginstance *upi,
 
 static int nfq_read_cb(struct ulogd_source_pluginstance *upi)
 {
-	struct mtnfq_priv *priv =	(struct mtnfq_priv *)upi->private;
+	struct mtnfq_priv *priv = (struct mtnfq_priv *)upi->private;
 	struct nl_mmap_hdr *frame;
 	int fd = mnl_socket_get_fd(priv->nl);
 	int ret, nproc = 0;
@@ -240,8 +243,10 @@ static int nfq_read_cb(struct ulogd_source_pluginstance *upi)
 		case NL_MMAP_STATUS_VALID:
 			ret = handle_valid_frame(upi, frame);
 			mnl_ring_advance(priv->nlr);
-			if (ret != ULOGD_IRET_OK)
+			if (ret != ULOGD_IRET_OK) {
+				ulogd_log(ULOGD_DEBUG, "---- handle_valid returns: %d\n", ret);
 				return ret;
+			}
 			break;
 		case NL_MMAP_STATUS_RESERVED:
 			/* currently used by the kernel */
@@ -263,9 +268,12 @@ static int nfq_read_cb(struct ulogd_source_pluginstance *upi)
 				return ULOGD_IRET_ERR;
 			break;
 		case NL_MMAP_STATUS_SKIP:
-			ulogd_log(ULOGD_ERROR, "found SKIP status frame,"
-				  " ENOBUFS maybe\n");
-			return ULOGD_IRET_ERR;
+			if (!priv->skipped) {
+				priv->skipped = true;
+				ulogd_log(ULOGD_ERROR, "found SKIP status"
+					  " frame, ENOBUFS maybe\n");
+			}
+			return ULOGD_IRET_OK;
 		}
 		nproc++;
 	}

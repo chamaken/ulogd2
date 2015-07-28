@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -64,6 +65,7 @@ struct nfct_priv {
 	struct nlmsghdr		*dump_request;
 	struct timeval		dump_prev;
 	int 			event_bufsize;
+	bool			skipped;
 };
 
 enum nfct_conf {
@@ -740,10 +742,13 @@ static int nfct_dump_cb(int fd, unsigned int what, void *param)
 			priv->dump_prev = tv;
 			return ULOGD_IRET_OK;
 		case NL_MMAP_STATUS_SKIP:
-			ulogd_log(ULOGD_ERROR, "found SKIP status frame,"
-				  " ENOBUFS maybe\n");
+			if (!priv->skipped) {
+				priv->skipped = true;
+				ulogd_log(ULOGD_ERROR, "found SKIP status"
+					  " frame, ENOBUFS maybe\n");
+			}
 			priv->dump_prev = tv;
-			return ULOGD_IRET_ERR;
+			return ULOGD_IRET_OK;
 		}
 	}
 
