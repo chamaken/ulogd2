@@ -637,7 +637,7 @@ static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
 	}
 
 	uatomic_set(&ksb->refcnt, spi->nstacks);
-	uatomic_add(&ksb->spi->refcnt, spi->nstacks);
+	uatomic_set(&ksb->spi->refcnt, spi->nstacks);
 
 	/* would be a trylock? no. */
 	ret = pthread_mutex_lock(&worker->mutex);
