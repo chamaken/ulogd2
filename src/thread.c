@@ -309,8 +309,11 @@ static void *interp_stack(void *arg)
 		}
 
 		ret = exec_stack(th->stack, th->bundle->keysets);
-		ulogd_log(ULOGD_ERROR, "stack: %s, returned: %d\n",
-			  th->stack->name, ret);
+		if (ret) {
+			ulogd_log(ULOGD_ERROR, "[T%lu/D%p] stack: %s,"
+				  " returned: %d\n",
+				  th->tid, th->bundle, th->stack->name, ret);
+		}
 
 		if (uatomic_sub_return(&th->bundle->refcnt, 1) == 0) {
 			/* XXX: ?comparison of unsigned expression < 0 is always false [-Wtype-limits] */
@@ -644,7 +647,7 @@ static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
 	if (ret != 0) {
 		ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
 			_sys_errlist[ret]);
-		return ULOGD_IRET_ERR;
+		goto failure;
 	}
 
 	/* let worker run: source pluginstance */
@@ -653,16 +656,20 @@ static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
 	if (ret != 0) {
 		ulogd_log(ULOGD_FATAL, "pthread_cond_signal: %s\n",
 			_sys_errlist[ret]);
-		return ULOGD_IRET_ERR;
+		goto failure;
 	}
 	ret = pthread_mutex_unlock(&worker->mutex);
 	if (ret != 0) {
 		ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
 			_sys_errlist[ret]);
-		return ULOGD_IRET_ERR;
+		goto failure;
 	}
 
 	return ULOGD_IRET_OK;
+
+failure:
+	put_worker(worker);
+	return ULOGD_IRET_ERR;
 }
 
 __attribute__ ((unused))
@@ -683,31 +690,37 @@ static inline int ulogd_propagate_results_stack(struct ulogd_keyset *okeys)
 			return ULOGD_IRET_ERR;
 		}
 
+		uatomic_add(&ksb->spi->refcnt, 1);
+
 		ret = pthread_mutex_lock(&worker->mutex);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
 				  _sys_errlist[ret]);
-			return ULOGD_IRET_ERR;
+			goto failure;
 		}
 
 		worker->stack = stack;
 		worker->bundle = ksb;
-		uatomic_add(&ksb->spi->refcnt, 1);
 		ret = pthread_cond_signal(&worker->condv);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_cond_signal: %s\n",
 				  _sys_errlist[ret]);
-			return ULOGD_IRET_ERR;
+			goto failure;
 		}
 		ret = pthread_mutex_unlock(&worker->mutex);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
 				  _sys_errlist[ret]);
-			return ULOGD_IRET_ERR;
+			goto failure;
 		}
 	}
 
 	return ULOGD_IRET_OK;
+
+failure:
+	uatomic_sub(&ksb->spi->refcnt, 1);
+	put_worker(worker);
+	return ULOGD_IRET_ERR;
 }
 
 /* public interface in ulogd.h
