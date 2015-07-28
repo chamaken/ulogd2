@@ -9,8 +9,8 @@ logging.basicConfig(level=logging.INFO,
 
 
 def configure(ikeys, okeys):
+    ikeys.type = ulogd.ULOGD_DTYPE_RAW
     okeys.type = ulogd.ULOGD_DTYPE_SINK
-    ikeys.type = ulogd.ULOGD_DTYPE_NULL
     ikeys.add(ulogd.Keyinfo(name="sample.counter",
                             type=ulogd.ULOGD_RET_UINT32))
     return ulogd.ULOGD_IRET_OK

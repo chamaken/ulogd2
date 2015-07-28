@@ -23,7 +23,7 @@ def timer_callback(t, spi):
 
 
 def configure(okeys):
-    okeys.type = ulogd.ULOGD_DTYPE_NULL
+    okeys.type = ulogd.ULOGD_DTYPE_RAW
     okeys.add(ulogd.Keyinfo(name="sample.counter",
                             type=ulogd.ULOGD_RET_UINT32))
     return ulogd.ULOGD_IRET_OK

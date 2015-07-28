@@ -92,12 +92,10 @@ def interp(ikset, okset):
         nfq_payload = pattrs[nfqnl.NFQA_PAYLOAD].contents
         ip = IP(bytes(nfq_payload.get_payload_v()))
 
-        ip[ICMP].chksum = 0
-        icmpb = bytes(ip[ICMP])
         if ip[ICMP].seq % 2 == 0:
-            icmpb = bytes(ip[ICMP]).replace(b'#', b'$')
-        ip[ICMP] = ip[ICMP].__class__(icmpb)
-        ip[ICMP].chksum = utils.checksum(icmpb)
+            ip[ICMP].payload = ip[ICMP].payload.__class__(bytes(ip[ICMP].payload).replace(b'#', b'$'))
+            ip[ICMP].chksum = 0 # NEED THIS
+            ip[ICMP].chksum = utils.checksum(bytes(ip[ICMP]))
 
         nfq_send_repeat(res_id, qid, 10, (ctypes.c_ubyte * len(ip)).from_buffer(bytearray(bytes(ip))))
     else:
