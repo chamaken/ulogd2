@@ -12,6 +12,12 @@
 #include <ulogd/keysets.h>
 #include <ulogd/thread.h>
 
+#ifdef THREAD_PER_STACK
+#define START_ROUTINE interp_stack
+#else
+#define START_ROUTINE interp_bundle
+#endif
+
 static LLIST_HEAD(ulogd_interp_workers);
 static LLIST_HEAD(ulogd_runnable_workers);
 static pthread_mutex_t
@@ -106,7 +112,9 @@ static int exec_stack(struct ulogd_stack *stack,
 	return ret;
 }
 
-/* pthread void *(*start_routine): use subsequent */
+/* pthread void *(*start_routine)
+ * call interp for the whole pluginstances which head is the same
+ */
 static void *interp_bundle(void *arg)
 {
 	struct ulogd_interp_thread *th = arg;
@@ -252,13 +260,14 @@ failure_unlock_spi:
 	goto failure;
 }
 
-/* pthread void *(*start_routine): use stack */
+/* pthread void *(*start_routine)
+ * call interp per stack
+ */
 __attribute__ ((unused))
 static void *interp_stack(void *arg)
 {
 	struct ulogd_interp_thread *th = arg;
 	struct ulogd_source_pluginstance *spi;
-	struct ulogd_stack *stack;
 	int ret;
 
 	while (th->runnable) {
@@ -286,13 +295,22 @@ static void *interp_stack(void *arg)
 			goto failure_unlock_th;
 		}
 		if (!th->runnable) {
-			/* only break? */
+			if (th->bundle != NULL) {
+				ulogd_log(ULOGD_ERROR, "discard keysets: %p"
+					  " because of stop\n", th->bundle);
+				ulogd_clean_results(th->bundle);
+				ulogd_put_keysets_bundle(th->bundle);
+				th->bundle = NULL;
+				th->retval = ULOGD_IRET_ERR;
+			}
+			put_worker(th);
+			/* is above enough? */
 			break;
 		}
 
 		ret = exec_stack(th->stack, th->bundle->keysets);
 		ulogd_log(ULOGD_ERROR, "stack: %s, returned: %d\n",
-			  stack->name, ret);
+			  th->stack->name, ret);
 
 		if (uatomic_sub_return(&th->bundle->refcnt, 1) == 0) {
 			/* XXX: ?comparison of unsigned expression < 0 is always false [-Wtype-limits] */
@@ -315,6 +333,7 @@ static void *interp_stack(void *arg)
 		spi = th->bundle->spi;
 		/* XXX: need to check runnable? */
 		if (uatomic_sub_return(&spi->refcnt, 1) == 0) {
+			/* notify to ulogd_wait_consume() */
 			ret = pthread_mutex_lock(&spi->refcnt_mutex);
 			if (ret != 0) {
 				ulogd_log(ULOGD_FATAL,
@@ -444,7 +463,7 @@ int ulogd_start_workers(int nthreads)
 		llist_add(&args[nthr].runnable_list, &ulogd_runnable_workers);
 		/* XXX: any attr? */
 		ret = pthread_create(&args[nthr].tid, NULL,
-				     interp_bundle, /* or interp_stack */
+				     START_ROUTINE,
 				     &args[nthr]);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_create: %s\n",
@@ -601,9 +620,7 @@ int ulogd_resume_propagation(void)
 	return pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
 }
 
-/* public interface in ulogd.h
- * propagate results to all downstream plugins in the stack */
-int ulogd_propagate_results(struct ulogd_keyset *okeys)
+static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
 {
 	/* I know here is a dirty hack */
 	struct ulogd_keysets_bundle *ksb
@@ -645,34 +662,63 @@ int ulogd_propagate_results(struct ulogd_keyset *okeys)
 		return ULOGD_IRET_ERR;
 	}
 
-	/*
-	  struct ulogd_source_pluginstance *spi = ksb->spi;
-	  struct ulogd_stack *stack;
-	  llist_for_each_entry(stack, &spi->stacks, list) {
+	return ULOGD_IRET_OK;
+}
+
+__attribute__ ((unused))
+static inline int ulogd_propagate_results_stack(struct ulogd_keyset *okeys)
+{
+	struct ulogd_keysets_bundle *ksb
+		= (void *)okeys - offsetof(struct ulogd_keysets_bundle, keysets);
+	struct ulogd_source_pluginstance *spi = ksb->spi;
+	struct ulogd_stack *stack;
+	struct ulogd_interp_thread *worker;
+	int ret;
+
+	uatomic_set(&ksb->refcnt, spi->nstacks);
+	llist_for_each_entry(stack, &spi->stacks, list) {
 		worker = ulogd_get_worker();
 		if (worker == NULL) {
 			ulogd_log(ULOGD_FATAL, "ulogd_get_worker\n");
 			return ULOGD_IRET_ERR;
 		}
 
+		ret = pthread_mutex_lock(&worker->mutex);
+		if (ret != 0) {
+			ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
+				  _sys_errlist[ret]);
+			return ULOGD_IRET_ERR;
+		}
+
 		worker->stack = stack;
 		worker->bundle = ksb;
+		uatomic_add(&ksb->spi->refcnt, 1);
 		ret = pthread_cond_signal(&worker->condv);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_cond_signal: %s\n",
-				_sys_errlist[ret]);
+				  _sys_errlist[ret]);
 			return ULOGD_IRET_ERR;
 		}
 		ret = pthread_mutex_unlock(&worker->mutex);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
-				_sys_errlist[ret]);
+				  _sys_errlist[ret]);
 			return ULOGD_IRET_ERR;
 		}
-	  }
-	*/
+	}
 
 	return ULOGD_IRET_OK;
+}
+
+/* public interface in ulogd.h
+ * propagate results to all downstream plugins in the stack */
+int ulogd_propagate_results(struct ulogd_keyset *okeys)
+{
+#ifdef THREAD_PER_STACK
+	return ulogd_propagate_results_stack(okeys);
+#else
+	return ulogd_propagate_results_bundle(okeys);
+#endif
 }
 
 int ulogd_wait_consume(struct ulogd_source_pluginstance *spi)
