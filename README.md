@@ -1,18 +1,18 @@
-could
-=====
-one of a Child Of ULogD.
+could?
+======
+one of a Child Of ULogD. I can't think good name...
 
 
 feature
 -------
 
-compared with original ulogd:
+compared with the original ulogd:
 
 * unstable
 * partial multi-thread
 * python plugin
 * (working) IPFIX and NetFlow v9 plugin
-* mmaped NFCT and NFQUEUE source plugin
+* mmaped NFCT, NFLOG and NFQUEUE source plugin
 
 
 implementation note
@@ -26,7 +26,7 @@ implementation note
   introduce struct ulogd_keysets_bundle for which head is the same
   source pluginstance.
 
-### multi thread
+### multi-thread
   source pluginstance is not run in a thread created by
   pthread_create(), but in main thread. stacks which is subsequent
   of source pluginstance will run in thread created by
@@ -40,8 +40,9 @@ TODO
 ----
 
 * would it be better to make source pluginstance to multi-thread?
+  multi-threaded source plugin can be implemented, see MTNFQ.
 * nft output
-* delete unavailable plugins (use static variable as key ptr)
+* delete or fix unavailable plugins (use static variable as key ptr)
 
 
 struct memo
@@ -87,9 +88,9 @@ source_pluginstance
 
 stack=src,pi1,pi2,...
 
-    +------------------------------
- ---+ keysets_bundle: .list ---------------------- .list -- (for pool)
-    |                 .spi
+    +------------------------------                +----
+ ---+ keysets_bundle: .list -----------------------+ keysets_bundle: .list -- (for pool)
+    |                 .spi                         |
     +-----------------.keysets ----
  0: | src.output: .num_keys, .type, .keys
     +------------------------------
@@ -125,13 +126,14 @@ stack=src,pi1,pi2,...
 ![to propagate](https://github.com/chamaken/ulogd2/blob/v3.x/doc/image/propagate.png "propagate")
 
 1. prepare in main.  
+   call configure and start callbacks.
    source pluginstance may register fd which they will read.
 
 2. main thread get into ulogd_main_loop().  
-   wait fd by epoll.
+   wait fds by epoll.
 
-3. callback.  
-   call registered callback if related fd is readable.
+3. ufd or timer callback.
+   call registered ufd callback if related fd is readable.
 
 4. create output - ulogd_keyset.  
    source plugin read data from fd and put it to ulogd_keyset which
