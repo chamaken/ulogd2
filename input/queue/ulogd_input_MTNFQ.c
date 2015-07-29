@@ -305,6 +305,7 @@ static void *start_routine(void *arg)
 			while (priv->status_req != MTNFQ_STATUS_RUNNING) {
 				if (priv->status_req == MTNFQ_STATUS_STOP) {
 					priv->retval = EXIT_SUCCESS;
+					pthread_mutex_unlock(&priv->req_lock);
 					return &priv->retval;
 				}
 				pthread_mutex_lock(&priv->res_lock);
