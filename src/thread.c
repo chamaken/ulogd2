@@ -30,6 +30,21 @@ static int put_worker(struct ulogd_interp_thread *worker)
 {
 	int ret;
 
+	ret = pthread_mutex_lock(&worker->mutex);
+	if (ret != 0) {
+		ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
+			_sys_errlist[ret]);
+		return -1;
+	}
+	worker->bundle = NULL;
+	worker->stack = NULL;
+	ret = pthread_mutex_unlock(&worker->mutex);
+	if (ret != 0) {
+		ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
+			_sys_errlist[ret]);
+		return -1;
+	}
+
 	ret = pthread_mutex_lock(&ulogd_runnable_workers_mutex);
 	if (ret != 0) {
 		ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
@@ -156,7 +171,6 @@ static void *interp_bundle(void *arg)
 					  " because of stop\n", th->bundle);
 				ulogd_clean_results(th->bundle);
 				ulogd_put_keysets_bundle(th->bundle);
-				th->bundle = NULL;
 				th->retval = ULOGD_IRET_ERR;
 			}
 			put_worker(th);
@@ -213,9 +227,6 @@ static void *interp_bundle(void *arg)
 				  _sys_errlist[ret]);
 			goto failure_unlock_refcnt;
 		}
-
-		/* to make self into condv waiting */
-		th->bundle = NULL;
 
 		/* put self back to runnable_workers */
 		ret = put_worker(th);
@@ -278,8 +289,6 @@ static void *interp_stack(void *arg)
 					  " because of stop\n", th->bundle);
 				ulogd_clean_results(th->bundle);
 				ulogd_put_keysets_bundle(th->bundle);
-				th->bundle = NULL;
-				th->stack = NULL;
 				th->retval = ULOGD_IRET_ERR;
 			}
 			put_worker(th);
@@ -335,10 +344,6 @@ static void *interp_stack(void *arg)
 				goto failure_unlock_refcnt;
 			}
 		}
-
-		/* to make self into condv waiting */
-		th->stack = NULL;
-		th->bundle = NULL;
 
 		/* put self back to active_workers */
 		ret = put_worker(th);
