@@ -1365,6 +1365,7 @@ static int signal_handler(int fd, unsigned int what, void *data)
 {
 	struct signalfd_siginfo fdsi;
 	ssize_t s;
+	int ret;
 
 	ulogd_log(ULOGD_NOTICE, "signal received, calling pluginstances\n");
 	s = read(fd, &fdsi, sizeof(struct signalfd_siginfo));
@@ -1396,11 +1397,19 @@ static int signal_handler(int fd, unsigned int what, void *data)
 		break;
 	}
 
-	if (ulogd_sync_workers() < 0) {
-		ulogd_log(ULOGD_FATAL, "ulogd_sync_workers\n");
+	ret = ulogd_suspend_propagation();
+	if (ret != 0) {
+		ulogd_log(ULOGD_FATAL, "ulogd_suspend_propagation: %s\n",
+			_sys_errlist[ret]);
 		return ULOGD_IRET_ERR;
 	}
 	deliver_signal_pluginstances(fdsi.ssi_signo);
+	ret = ulogd_resume_propagation();
+	if (ret != 0) {
+		ulogd_log(ULOGD_FATAL, "ulogd_resume_propagation: %s\n",
+			_sys_errlist[ret]);
+		return ULOGD_IRET_ERR;
+	}
 
 	return ULOGD_IRET_OK;
 }

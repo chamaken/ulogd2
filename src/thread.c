@@ -130,6 +130,8 @@ static void *interp_bundle(void *arg)
 				_sys_errlist[ret]);
 			goto failure;
 		}
+		/* only self set .bundle to NULL
+		 * and no one can set these at that time */
 		while (th->bundle == NULL) {
 			if (!th->runnable)
 				break;
@@ -212,29 +214,8 @@ static void *interp_bundle(void *arg)
 			goto failure_unlock_refcnt;
 		}
 
-
 		/* to make self into condv waiting */
-		ret = pthread_mutex_lock(&th->mutex); /* verbose? */
-		if (ret != 0) {
-			ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
-				  _sys_errlist[ret]);
-			goto failure;
-		}
 		th->bundle = NULL;
-		/* notify th->bundle == NULL to ulogd_sync_workers() */
-		ret = pthread_cond_signal(&th->condv);
-		if (ret != 0) {
-			ulogd_log(ULOGD_FATAL,
-				  "pthread_cond_signal: %s\n",
-				  _sys_errlist[ret]);
-			goto failure_unlock_th;
-		}
-		ret = pthread_mutex_unlock(&th->mutex);
-		if (ret != 0) {
-			ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
-				  _sys_errlist[ret]);
-			goto failure_unlock_th;
-		}
 
 		/* put self back to runnable_workers */
 		ret = put_worker(th);
@@ -273,6 +254,8 @@ static void *interp_stack(void *arg)
 				_sys_errlist[ret]);
 			goto failure;
 		}
+		/* only self set .bundle and .stack to NULL
+		 * and no one can set these at that time */
 		while (th->stack == NULL || th->bundle == NULL) {
 			if (!th->runnable)
 				break;
@@ -296,6 +279,7 @@ static void *interp_stack(void *arg)
 				ulogd_clean_results(th->bundle);
 				ulogd_put_keysets_bundle(th->bundle);
 				th->bundle = NULL;
+				th->stack = NULL;
 				th->retval = ULOGD_IRET_ERR;
 			}
 			put_worker(th);
@@ -353,20 +337,8 @@ static void *interp_stack(void *arg)
 		}
 
 		/* to make self into condv waiting */
-		ret = pthread_mutex_lock(&th->mutex); /* verbose? */
-		if (ret != 0) {
-			ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
-				  _sys_errlist[ret]);
-			goto failure;
-		}
 		th->stack = NULL;
 		th->bundle = NULL;
-		ret = pthread_mutex_unlock(&th->mutex);
-		if (ret != 0) {
-			ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
-				  _sys_errlist[ret]);
-			goto failure_unlock_th;
-		}
 
 		/* put self back to active_workers */
 		ret = put_worker(th);
@@ -573,38 +545,6 @@ int ulogd_stop_workers(void)
 	return 0;
 }
 
-/* wait for all ulogd_inter_thread suspends.
- * It make sense only when called from main thread. Functions which updates
- * ulogd_interp_thread's bundle is this and another one is
- * ulogd_propagate_results() which must be called from main thread, fd or timer
- * callback. This means only ulogd_interp_thread self updates the bundle at the
- * time this function is called. */
-int ulogd_sync_workers(void)
-{
-	struct ulogd_interp_thread *th;
-	int ret;
-
-	llist_for_each_entry(th, &ulogd_interp_workers, list) {
-		ret = pthread_mutex_lock(&th->mutex);
-		if (ret != 0)
-			return -ret;
-		while (th->bundle != NULL) {
-			ret = pthread_cond_wait(&th->condv, &th->mutex);
-			if (ret != 0)
-				goto failure_unlock;
-		}
-		ret = pthread_mutex_unlock(&th->mutex);
-		if (ret != 0)
-			goto failure_unlock;
-	}
-
-	return 0;
-
-failure_unlock:
-	pthread_mutex_unlock(&th->mutex);
-	return -ret;
-}
-
 int ulogd_suspend_propagation(void)
 {
 	return pthread_mutex_lock(&ulogd_runnable_workers_mutex);
@@ -631,8 +571,6 @@ static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
 		return ULOGD_IRET_ERR;
 	}
 
-	uatomic_set(&ksb->refcnt, spi->nstacks);
-
 	/* would be a trylock? no. */
 	ret = pthread_mutex_lock(&worker->mutex);
 	if (ret != 0) {
@@ -641,6 +579,7 @@ static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
 		goto failure;
 	}
 
+	uatomic_set(&ksb->refcnt, spi->nstacks);
 	/* let worker run: source pluginstance */
 	worker->bundle = ksb;
 	ret = pthread_cond_signal(&worker->condv);

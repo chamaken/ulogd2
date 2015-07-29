@@ -470,7 +470,7 @@ static int handle_packet(struct ulogd_source_pluginstance *upi,
 	okey_set_u32(&ret[UNIXSOCK_KEY_RAW_PCKTCOUNT], 1);
 
 	ulogd_propagate_results(output);
-	ulogd_wait_consume(upi);
+	ulogd_wait_consume(output);
 
 	return 0;
 }
