@@ -47,7 +47,7 @@ struct mtnfq_priv {
 	enum thread_status	status_req, status_res;
 	pthread_t		tid;
 	pthread_mutex_t		req_lock, res_lock;
-	pthread_cond_t		status_condv;
+	pthread_cond_t		req_condv, res_condv;
 
 	bool			skipped;
 };
@@ -311,10 +311,10 @@ static void *start_routine(void *arg)
 				pthread_mutex_lock(&priv->res_lock);
 				if (priv->status_res != priv->status_req) {
 					priv->status_res = priv->status_req;				
-					pthread_cond_signal(&priv->status_condv);
+					pthread_cond_signal(&priv->res_condv);
 				}
 				pthread_mutex_unlock(&priv->res_lock);
-				pthread_cond_wait(&priv->status_condv,
+				pthread_cond_wait(&priv->req_condv,
 						  &priv->req_lock);
 			}
 			pthread_mutex_unlock(&priv->req_lock);
@@ -342,7 +342,7 @@ static int suspend_routine(struct mtnfq_priv *priv)
 
 	pthread_mutex_lock(&priv->req_lock);
 	priv->status_req = MTNFQ_STATUS_SUSPEND;
-	pthread_cond_signal(&priv->status_condv);
+	pthread_cond_signal(&priv->req_condv);
 	pthread_mutex_unlock(&priv->req_lock);
 	if (write(priv->statusfd, &u, sizeof(u)) != sizeof(u)) {
 		ulogd_log(ULOGD_ERROR, "write statusfd: %s\n",
@@ -352,7 +352,7 @@ static int suspend_routine(struct mtnfq_priv *priv)
 
 	pthread_mutex_lock(&priv->res_lock);
 	while (priv->status_res != MTNFQ_STATUS_SUSPEND)
-		pthread_cond_wait(&priv->status_condv, &priv->res_lock);
+		pthread_cond_wait(&priv->res_condv, &priv->res_lock);
 	pthread_mutex_unlock(&priv->res_lock);
 
 	return ULOGD_IRET_OK;
@@ -362,7 +362,7 @@ static int resume_routine(struct mtnfq_priv *priv)
 {
 	pthread_mutex_lock(&priv->req_lock);
 	priv->status_req = MTNFQ_STATUS_RUNNING;
-	pthread_cond_signal(&priv->status_condv);
+	pthread_cond_signal(&priv->req_condv);
 	pthread_mutex_unlock(&priv->req_lock);
 
 	return ULOGD_IRET_OK;
@@ -375,7 +375,7 @@ static int stop_routine(struct mtnfq_priv *priv)
 	
 	pthread_mutex_lock(&priv->req_lock);
 	priv->status_req = MTNFQ_STATUS_STOP;
-	pthread_cond_signal(&priv->status_condv);
+	pthread_cond_signal(&priv->req_condv);
 	pthread_mutex_unlock(&priv->req_lock);
 	write(priv->statusfd, &u, sizeof(u));
 
@@ -528,7 +528,8 @@ static int init_thread(struct ulogd_source_pluginstance *spi)
 	pthread_mutexattr_settype(&attr, ULOGD_MUTEX_ATTR);
 	pthread_mutex_init(&priv->req_lock, &attr);
 	pthread_mutex_init(&priv->res_lock, &attr);
-	pthread_cond_init(&priv->status_condv, NULL);
+	pthread_cond_init(&priv->req_condv, NULL);
+	pthread_cond_init(&priv->res_condv, NULL);	
 	priv->statusfd = eventfd(0, 0);
 	if (priv->statusfd == -1) {
 		ulogd_log(ULOGD_ERROR, "eventfd: %s\n",
