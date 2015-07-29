@@ -23,7 +23,7 @@ static LLIST_HEAD(ulogd_runnable_workers);
 static pthread_mutex_t
 ulogd_runnable_workers_mutex = ULOGD_MUTEX_INITIALIZER;
 static pthread_cond_t ulogd_runnable_workers_condv = PTHREAD_COND_INITIALIZER;
-
+static int ulogd_runnable_workers_runnable = 1;
 
 /* push back worker */
 static int put_worker(struct ulogd_interp_thread *worker)
@@ -371,7 +371,8 @@ static struct ulogd_interp_thread *ulogd_get_worker(void)
 		return NULL;
 	}
 
-	while (llist_empty(&ulogd_runnable_workers)) {
+	while (llist_empty(&ulogd_runnable_workers)
+	       || !ulogd_runnable_workers_runnable) {
 		ret = pthread_cond_wait(&ulogd_runnable_workers_condv,
 					&ulogd_runnable_workers_mutex);
 		if (ret != 0) {
@@ -547,12 +548,19 @@ int ulogd_stop_workers(void)
 
 int ulogd_suspend_propagation(void)
 {
-	return pthread_mutex_lock(&ulogd_runnable_workers_mutex);
+	pthread_mutex_lock(&ulogd_runnable_workers_mutex);
+	ulogd_runnable_workers_runnable = 0;
+	pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
+	return 0;
 }
 
 int ulogd_resume_propagation(void)
 {
-	return pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
+	pthread_mutex_lock(&ulogd_runnable_workers_mutex);
+	ulogd_runnable_workers_runnable = 1;
+	pthread_cond_broadcast(&ulogd_runnable_workers_condv);
+	pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
+	return 0;
 }
 
 static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
