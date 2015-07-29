@@ -470,6 +470,7 @@ static int handle_packet(struct ulogd_source_pluginstance *upi,
 	okey_set_u32(&ret[UNIXSOCK_KEY_RAW_PCKTCOUNT], 1);
 
 	ulogd_propagate_results(output);
+	ulogd_wait_consume(upi);
 
 	return 0;
 }
@@ -592,8 +593,6 @@ static int unixsock_instance_read_cb(int fd, unsigned int what, void *param)
 
 	if (!(what & ULOGD_FD_READ))
 		return 0;
-
-	ulogd_wait_consume(upi);
 
 	len = read(fd, buf, sizeof(buf));
 	if (len < 0) {

@@ -336,11 +336,6 @@ struct ulogd_source_pluginstance {
 	struct ulogd_source_plugin *plugin;
 
 	int usage;
-	int refcnt; /* based on keysets_bundle.nstacks */
-
-	/* to notify refcnt == 0 to ulogd_wait_consume() */
-	pthread_mutex_t refcnt_mutex;
-	pthread_cond_t refcnt_condv;
 
 	/* list of keysets_bundles used by stacks
 	 * whose head is this pluginstance */
@@ -394,7 +389,7 @@ struct ulogd_stack_element {
 
 /* thread.c */
 int ulogd_propagate_results(struct ulogd_keyset *okeys);
-int ulogd_wait_consume(struct ulogd_source_pluginstance *spi);
+int ulogd_wait_consume(struct ulogd_keyset *okeys);
 
 /* register a new interpreter plugin */
 void ulogd_register_plugin(struct ulogd_plugin *me);

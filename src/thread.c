@@ -118,9 +118,9 @@ static int exec_stack(struct ulogd_stack *stack,
 static void *interp_bundle(void *arg)
 {
 	struct ulogd_interp_thread *th = arg;
-	struct ulogd_source_pluginstance *spi;
+	struct ulogd_keysets_bundle *ksb;
 	struct ulogd_stack *stack;
-	int ret, usage;
+	int ret;
 
 	while (th->runnable) {
 		/* wait message */
@@ -162,61 +162,56 @@ static void *interp_bundle(void *arg)
 			break;
 		}
 
-		usage = 0;
-		spi = th->bundle->spi;
+		ksb = th->bundle;
 		/* exec stacks */
-		llist_for_each_entry(stack, &spi->stacks, list) {
-			ret = exec_stack(stack, th->bundle->keysets);
+		llist_for_each_entry(stack, &ksb->spi->stacks, list) {
+			ret = exec_stack(stack, ksb->keysets);
 			if (ret) {
 				ulogd_log(ULOGD_ERROR, "[T%lu/D%p] stack: %s,"
 					  " returned: %d\n",
-					  th->tid, th->bundle, stack->name, ret);
+					  th->tid, ksb, stack->name, ret);
 			}
 			/* no atomic op is needed since we own entire */
-			th->bundle->refcnt--;
-			usage = uatomic_sub_return(&spi->refcnt, 1);
-			assert(usage >= 0);
+			ksb->refcnt--;
 		}
-		assert(th->bundle->refcnt == 0); /* XXX: if and log */
+		assert(ksb->refcnt == 0); /* XXX: if and log */
 
 		/* cleanup */
-		ret = ulogd_clean_results(th->bundle);
+		ret = ulogd_clean_results(ksb);
 		if (ret != 0) { /* not fatal rignt now */
 			ulogd_log(ULOGD_ERROR, "ulogd_clean_results: %s\n",
 				  _sys_errlist[errno]);
 		}
 		/* put back keysets bundle */
-		ret = ulogd_put_keysets_bundle(th->bundle);
+		ret = ulogd_put_keysets_bundle(ksb);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "ulogd_put_output_keyset\n");
 			goto failure;
 		}
 
-		/* XXX: need to check runnable here? */
-		if (usage == 0) {
-			/* notify to ulogd_wait_consume() */
-			ret = pthread_mutex_lock(&spi->refcnt_mutex);
-			if (ret != 0) {
-				ulogd_log(ULOGD_FATAL,
-					  "pthread_mutex_lock: %s\n",
-					  _sys_errlist[ret]);
-				goto failure_unlock_spi;
-			}
-			ret = pthread_cond_signal(&spi->refcnt_condv);
-			if (ret != 0) {
-				ulogd_log(ULOGD_FATAL,
-					  "pthread_cond_signal: %s\n",
-					  _sys_errlist[ret]);
-				goto failure_unlock_spi;
-			}
-			ret = pthread_mutex_unlock(&spi->refcnt_mutex);
-			if (ret != 0) {
-				ulogd_log(ULOGD_FATAL,
-					  "pthread_mutex_unlock: %s\n",
-					  _sys_errlist[ret]);
-				goto failure_unlock_spi;
-			}
+		/* notify to ulogd_wait_consume() */
+		ret = pthread_mutex_lock(&ksb->refcnt_mutex);
+		if (ret != 0) {
+			ulogd_log(ULOGD_FATAL,
+				  "pthread_mutex_lock: %s\n",
+				  _sys_errlist[ret]);
+			goto failure;
 		}
+		ret = pthread_cond_signal(&ksb->refcnt_condv);
+		if (ret != 0) {
+			ulogd_log(ULOGD_FATAL,
+				  "pthread_cond_signal: %s\n",
+				  _sys_errlist[ret]);
+			goto failure_unlock_refcnt;
+		}
+		ret = pthread_mutex_unlock(&ksb->refcnt_mutex);
+		if (ret != 0) {
+			ulogd_log(ULOGD_FATAL,
+				  "pthread_mutex_unlock: %s\n",
+				  _sys_errlist[ret]);
+			goto failure_unlock_refcnt;
+		}
+
 
 		/* to make self into condv waiting */
 		ret = pthread_mutex_lock(&th->mutex); /* verbose? */
@@ -255,8 +250,8 @@ failure:	/* means no one must own me */
 failure_unlock_th:
 	pthread_mutex_unlock(&th->mutex);
 	goto failure;
-failure_unlock_spi:
-	pthread_mutex_unlock(&spi->refcnt_mutex);
+failure_unlock_refcnt:
+	pthread_mutex_unlock(&ksb->refcnt_mutex);
 	goto failure;
 }
 
@@ -267,7 +262,7 @@ __attribute__ ((unused))
 static void *interp_stack(void *arg)
 {
 	struct ulogd_interp_thread *th = arg;
-	struct ulogd_source_pluginstance *spi;
+	struct ulogd_keysets_bundle *ksb;
 	int ret;
 
 	while (th->runnable) {
@@ -308,55 +303,52 @@ static void *interp_stack(void *arg)
 			break;
 		}
 
-		ret = exec_stack(th->stack, th->bundle->keysets);
+		ksb = th->bundle;
+		ret = exec_stack(th->stack, ksb->keysets);
 		if (ret) {
 			ulogd_log(ULOGD_ERROR, "[T%lu/D%p] stack: %s,"
 				  " returned: %d\n",
 				  th->tid, th->bundle, th->stack->name, ret);
 		}
 
-		if (uatomic_sub_return(&th->bundle->refcnt, 1) == 0) {
+		if (uatomic_sub_return(&ksb->refcnt, 1) == 0) {
 			/* XXX: ?comparison of unsigned expression < 0 is always false [-Wtype-limits] */
 			/* cleanup */
-			ret = ulogd_clean_results(th->bundle);
+			ret = ulogd_clean_results(ksb);
 			if (ret != 0) { /* not fatal rignt now */
 				ulogd_log(ULOGD_ERROR,
 					  "ulogd_clean_results: %s\n",
 					  _sys_errlist[errno]);
 			}
 			/* put back keysets */
-			ret = ulogd_put_keysets_bundle(th->bundle);
+			ret = ulogd_put_keysets_bundle(ksb);
 			if (ret != 0) {
 				ulogd_log(ULOGD_FATAL,
 					  "ulogd_put_output_keyset\n");
 				goto failure;
 			}
-		}
 
-		spi = th->bundle->spi;
-		/* XXX: need to check runnable? */
-		if (uatomic_sub_return(&spi->refcnt, 1) == 0) {
 			/* notify to ulogd_wait_consume() */
-			ret = pthread_mutex_lock(&spi->refcnt_mutex);
+			ret = pthread_mutex_lock(&ksb->refcnt_mutex);
 			if (ret != 0) {
 				ulogd_log(ULOGD_FATAL,
 					  "pthread_mutex_lock: %s\n",
 					  _sys_errlist[ret]);
-				goto failure_unlock_spi;
+				goto failure;
 			}
-			ret = pthread_cond_signal(&spi->refcnt_condv);
+			ret = pthread_cond_signal(&ksb->refcnt_condv);
 			if (ret != 0) {
 				ulogd_log(ULOGD_FATAL,
 					  "pthread_cond_signal: %s\n",
 					  _sys_errlist[ret]);
-				goto failure_unlock_spi;
+				goto failure_unlock_refcnt;
 			}
-			ret = pthread_mutex_unlock(&spi->refcnt_mutex);
+			ret = pthread_mutex_unlock(&ksb->refcnt_mutex);
 			if (ret != 0) {
 				ulogd_log(ULOGD_FATAL,
 					  "pthread_mutex_unlock: %s\n",
 					  _sys_errlist[ret]);
-				goto failure_unlock_spi;
+				goto failure_unlock_refcnt;
 			}
 		}
 
@@ -390,8 +382,8 @@ failure:
 failure_unlock_th:
 	pthread_mutex_unlock(&th->mutex);
 	goto failure;
-failure_unlock_spi:
-	pthread_mutex_unlock(&spi->refcnt_mutex);
+failure_unlock_refcnt:
+	pthread_mutex_unlock(&ksb->refcnt_mutex);
 	goto failure;
 }
 
@@ -640,7 +632,6 @@ static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
 	}
 
 	uatomic_set(&ksb->refcnt, spi->nstacks);
-	uatomic_set(&ksb->spi->refcnt, spi->nstacks);
 
 	/* would be a trylock? no. */
 	ret = pthread_mutex_lock(&worker->mutex);
@@ -690,8 +681,6 @@ static inline int ulogd_propagate_results_stack(struct ulogd_keyset *okeys)
 			return ULOGD_IRET_ERR;
 		}
 
-		uatomic_add(&ksb->spi->refcnt, 1);
-
 		ret = pthread_mutex_lock(&worker->mutex);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
@@ -718,7 +707,6 @@ static inline int ulogd_propagate_results_stack(struct ulogd_keyset *okeys)
 	return ULOGD_IRET_OK;
 
 failure:
-	uatomic_sub(&ksb->spi->refcnt, 1);
 	put_worker(worker);
 	return ULOGD_IRET_ERR;
 }
@@ -734,26 +722,28 @@ int ulogd_propagate_results(struct ulogd_keyset *okeys)
 #endif
 }
 
-int ulogd_wait_consume(struct ulogd_source_pluginstance *spi)
+int ulogd_wait_consume(struct ulogd_keyset *okeys)
 {
+	struct ulogd_keysets_bundle *ksb
+		= (void *)okeys - offsetof(struct ulogd_keysets_bundle, keysets);
 	int ret;
 
-	ret = pthread_mutex_lock(&spi->refcnt_mutex);
+	ret = pthread_mutex_lock(&ksb->refcnt_mutex);
 	if (ret != 0) {
 		ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
 			  _sys_errlist[ret]);
 		return -1;
 	}
 	/* was added in ulogd_propagate_result() and deced in interp_bundle() */
-	while (uatomic_read(&spi->refcnt) != 0) {
-		ret = pthread_cond_wait(&spi->refcnt_condv, &spi->refcnt_mutex);
+	while (uatomic_read(&ksb->refcnt) != 0) {
+		ret = pthread_cond_wait(&ksb->refcnt_condv, &ksb->refcnt_mutex);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_cond_wait: %s\n",
 				  _sys_errlist[ret]);
 			return -1;
 		}
 	}
-	ret = pthread_mutex_unlock(&spi->refcnt_mutex);
+	ret = pthread_mutex_unlock(&ksb->refcnt_mutex);
 	if (ret != 0) {
 		ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
 			  _sys_errlist[ret]);

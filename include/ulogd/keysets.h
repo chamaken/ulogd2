@@ -8,8 +8,13 @@ struct ulogd_keysets_bundle {
 	struct llist_head list;
 	struct ulogd_source_pluginstance *spi;
 	unsigned int num_keysets;
-	int refcnt; /* == source_pluginstance.nstacks */
 	size_t length;
+
+	int refcnt; /* == source_pluginstance.nstacks */
+	/* to notify refcnt == 0 to ulogd_wait_consume() */
+	pthread_mutex_t refcnt_mutex;
+	pthread_cond_t refcnt_condv;
+
 	struct ulogd_keyset keysets[0];
 };
 

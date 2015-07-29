@@ -226,6 +226,8 @@ static int interp_packet(struct ulogd_source_pluginstance *ip,
 	okey_set_u16(&ret[ULOG_KEY_OOB_PROTOCOL], 0);
 
 	ulogd_propagate_results(output);
+	ulogd_wait_consume(output);
+
 	return 0;
 }
 
@@ -240,9 +242,6 @@ static int ulog_read_cb(int fd, unsigned int what, void *param)
 
 	if (!(what & ULOGD_FD_READ))
 		return 0;
-
-	/* wait whole read buffer has processed */
-	ulogd_wait_consume(upi);
 
 	while ((len = ipulog_read(u->libulog_h, u->libulog_buf,
 				 upi->config_kset->ces[0].u.value))) {
