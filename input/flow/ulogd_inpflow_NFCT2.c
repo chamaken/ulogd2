@@ -1144,7 +1144,6 @@ static int destructor_nfct(struct ulogd_source_pluginstance *spi)
 				  _sys_errlist[errno]);
 			ret = ULOGD_IRET_ERR;
 		}
-		free(priv->nlr);
 		if (mnl_socket_close(priv->dumpnl) == -1) {
 			ulogd_log(ULOGD_ERROR, "mnl_socket_close: %s\n",
 				  _sys_errlist[errno]);
