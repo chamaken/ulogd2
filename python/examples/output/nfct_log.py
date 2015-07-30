@@ -72,7 +72,9 @@ def interp(ikset, okset):
     reply_len = ikset["reply.raw.pktlen"].value
     reply_count = ikset["reply.raw.pktcount"].value
     start_time = ikset["flow.start.sec"].value + ikset["flow.start.usec"].value / 1000000.0
-    end_time = ikset["flow.end.sec"].value + ikset["flow.end.usec"].value / 1000000.0
+    end_time = 0
+    if ikset["flow.end.sec"].value:
+        end_time = ikset["flow.end.sec"].value + ikset["flow.end.usec"].value / 1000000.0
     
     log.info("%s [%s - %s]\t%s => %s [%d]  (=> %d:%d)  (<= %d:%d)" \
                  % (event,
