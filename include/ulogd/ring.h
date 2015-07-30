@@ -1,5 +1,5 @@
 #ifndef _ULOGD_RING_H_
-#define _ULOGD_RING_H
+#define _ULOGD_RING_H_
 
 #include <linux/netlink.h>
 #include <libmnl/libmnl.h>
