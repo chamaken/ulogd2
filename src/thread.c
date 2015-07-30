@@ -23,7 +23,13 @@ static LLIST_HEAD(ulogd_runnable_workers);
 static pthread_mutex_t
 ulogd_runnable_workers_mutex = ULOGD_MUTEX_INITIALIZER;
 static pthread_cond_t ulogd_runnable_workers_condv = PTHREAD_COND_INITIALIZER;
-static int ulogd_runnable_workers_runnable = 1;
+enum runnable_workers_status {
+	WORKERS_RUNNABLE,
+	WORKERS_SUSPEND,
+	WORKERS_STOP
+};
+static enum runnable_workers_status
+ulogd_runnable_workers_status = WORKERS_RUNNABLE;
 
 /* push back worker */
 static int put_worker(struct ulogd_interp_thread *worker)
@@ -56,6 +62,7 @@ static int put_worker(struct ulogd_interp_thread *worker)
 	if (ret != 0) {
 		ulogd_log(ULOGD_FATAL, "pthread_cond_broadcast: %s\n",
 			_sys_errlist[ret]);
+		pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
 		return -1;
 	}
 	ret = pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
@@ -145,11 +152,7 @@ static void *interp_bundle(void *arg)
 				_sys_errlist[ret]);
 			goto failure;
 		}
-		/* only self set .bundle to NULL
-		 * and no one can set these at that time */
-		while (th->bundle == NULL) {
-			if (!th->runnable)
-				break;
+		while (th->bundle == NULL && th->runnable) {
 			ret = pthread_cond_wait(&th->condv, &th->mutex);
 			if (ret != 0) {
 				ulogd_log(ULOGD_FATAL, "pthread_cond_wait:"
@@ -163,7 +166,6 @@ static void *interp_bundle(void *arg)
 				  _sys_errlist[ret]);
 			goto failure_unlock_th;
 		}
-
 		/* break if not runnable */
 		if (!th->runnable) {
 			if (th->bundle != NULL) {
@@ -172,8 +174,8 @@ static void *interp_bundle(void *arg)
 				ulogd_clean_results(th->bundle);
 				ulogd_put_keysets_bundle(th->bundle);
 				th->retval = ULOGD_IRET_ERR;
+				put_worker(th);
 			}
-			put_worker(th);
 			/* is above enough? */
 			break;
 		}
@@ -376,15 +378,24 @@ static struct ulogd_interp_thread *ulogd_get_worker(void)
 		return NULL;
 	}
 
-	while (llist_empty(&ulogd_runnable_workers)
-	       || !ulogd_runnable_workers_runnable) {
+check_cond:
+	switch (ulogd_runnable_workers_status) {
+	case WORKERS_STOP:
+		pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
+		return NULL;
+	case WORKERS_RUNNABLE:
+		if (!llist_empty(&ulogd_runnable_workers))
+			break;
+		/* pass through */
+	default: /* WORKERS_SUSPEND */
 		ret = pthread_cond_wait(&ulogd_runnable_workers_condv,
 					&ulogd_runnable_workers_mutex);
 		if (ret != 0) {
-			ulogd_log(ULOGD_FATAL, "pthread_cond_wait: %s\n",
-				_sys_errlist[ret]);
+			ulogd_log(ULOGD_FATAL, "pthread_cond_wait:"
+				  " %s\n", _sys_errlist[ret]);
 			return NULL;
 		}
+		goto check_cond;
 	}
 
 	worker = llist_entry(ulogd_runnable_workers.next,
@@ -406,7 +417,7 @@ static struct ulogd_interp_thread *ulogd_get_worker(void)
 int ulogd_start_workers(int nthreads)
 {
 	struct ulogd_interp_thread *args, *cur, *tmp;
-	int ret, nthr = -1;
+	int ret, nthr;
 
 	args = calloc(sizeof(struct ulogd_interp_thread), nthreads);
 	if (args == NULL) {
@@ -414,13 +425,6 @@ int ulogd_start_workers(int nthreads)
 		return -1;
 	}
 
-	/* may not need, it's initial */
-	ret = pthread_mutex_lock(&ulogd_runnable_workers_mutex);
-	if (ret != 0) {
-		ulogd_log(ULOGD_FATAL, "pthread_mutex_lock: %s\n",
-			_sys_errlist[ret]);
-		goto failure_lock;
-	}
 	for (nthr = 0; nthr < nthreads; nthr++) {
 		pthread_mutexattr_t attr;
 
@@ -433,7 +437,6 @@ int ulogd_start_workers(int nthreads)
 		args[nthr].stack = NULL;
 		args[nthr].runnable = true;
 		llist_add(&args[nthr].list, &ulogd_interp_workers);
-		llist_add(&args[nthr].runnable_list, &ulogd_runnable_workers);
 		/* XXX: any attr? */
 		ret = pthread_create(&args[nthr].tid, NULL,
 				     START_ROUTINE,
@@ -444,7 +447,13 @@ int ulogd_start_workers(int nthreads)
 			goto failure_cancel;
 		}
 	}
-	goto success;
+	/* may not need, but this makes helgrind happy */
+	pthread_mutex_lock(&ulogd_runnable_workers_mutex);
+	llist_for_each_entry(cur, &ulogd_interp_workers, list)
+		llist_add(&cur->runnable_list, &ulogd_runnable_workers);
+	pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
+
+	return nthr;
 
 failure_cancel:
 	for (--nthr; nthr >= 0; nthr--) {
@@ -465,23 +474,10 @@ failure_cancel:
 		pthread_mutex_destroy(&cur->mutex);
 		pthread_cond_destroy(&cur->condv);
 		llist_del(&cur->list);
-		llist_del(&cur->runnable_list);
-		free(cur);
 	}
+	free(args);
 
-success:
-	ret = pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
-	if (ret != 0) {
-		ulogd_log(ULOGD_FATAL, "pthread_mutex_unlock: %s\n",
-			  _sys_errlist[ret]);
-		return -1;
-	}
-
-failure_lock:
-	if (nthr != nthreads)
-		free(args);
-
-	return nthr;
+	return -1;
 }
 
 /* XXX: use a lot of no async-signal-safe functions
@@ -504,7 +500,6 @@ int ulogd_stop_workers(void)
 			return -1;
 		}
 		cur->runnable = false;
-
 		ret = pthread_cond_signal(&cur->condv);
 		if (ret != 0) {
 			ulogd_log(ULOGD_FATAL, "pthread_cond_signal: %s\n",
@@ -531,6 +526,7 @@ int ulogd_stop_workers(void)
 			ulogd_log(ULOGD_ERROR, "thread [T%lu] returns: %d\n",
 				  *retval);
 		}
+		/* I can't understand why this makes helgrind unhappy */
 		ret = pthread_mutex_destroy(&cur->mutex);
 		if (ret != 0) {
 			ulogd_log(ULOGD_ERROR, "pthread_mutex_destroy: %s\n",
@@ -554,7 +550,7 @@ int ulogd_stop_workers(void)
 int ulogd_suspend_propagation(void)
 {
 	pthread_mutex_lock(&ulogd_runnable_workers_mutex);
-	ulogd_runnable_workers_runnable = 0;
+	ulogd_runnable_workers_status = WORKERS_SUSPEND;
 	pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
 	return 0;
 }
@@ -562,7 +558,16 @@ int ulogd_suspend_propagation(void)
 int ulogd_resume_propagation(void)
 {
 	pthread_mutex_lock(&ulogd_runnable_workers_mutex);
-	ulogd_runnable_workers_runnable = 1;
+	ulogd_runnable_workers_status = WORKERS_RUNNABLE;
+	pthread_cond_broadcast(&ulogd_runnable_workers_condv);
+	pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
+	return 0;
+}
+
+int ulogd_stop_propagation(void)
+{
+	pthread_mutex_lock(&ulogd_runnable_workers_mutex);
+	ulogd_runnable_workers_status = WORKERS_RUNNABLE;
 	pthread_cond_broadcast(&ulogd_runnable_workers_condv);
 	pthread_mutex_unlock(&ulogd_runnable_workers_mutex);
 	return 0;
@@ -579,8 +584,8 @@ static inline int ulogd_propagate_results_bundle(struct ulogd_keyset *okeys)
 	struct ulogd_interp_thread *worker = ulogd_get_worker();
 	int ret;
 
-	if (worker == NULL) {
-		ulogd_log(ULOGD_FATAL, "ulogd_get_worker\n");
+	if (worker == NULL || worker->runnable == false) {
+		ulogd_log(ULOGD_FATAL, "workers may have stopped\n");
 		return ULOGD_IRET_ERR;
 	}
 

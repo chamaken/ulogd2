@@ -116,6 +116,7 @@ static LLIST_HEAD(ulogd_source_pluginstances);
 
 extern int ulogd_suspend_propagation(void);
 extern int ulogd_resume_propagation(void);
+extern int ulogd_stop_propagation(void);
 
 /* function returns 0 on success */
 static int load_plugin(const char *file);
@@ -1337,6 +1338,8 @@ static void sigterm_handler(int signal)
 	ulogd_stop_workers();
 
 	deliver_signal_pluginstances(signal);
+
+	ulogd_stop_propagation();
 
 	stop_pluginstances();
 
