@@ -44,10 +44,10 @@ struct mtnfq_priv {
 	struct mnl_ring		*nlr;
 
 	int			retval, statusfd;
-	enum thread_status	status_req, status_res;
+	enum thread_status	status_req;
 	pthread_t		tid;
-	pthread_mutex_t		req_lock, res_lock;
-	pthread_cond_t		req_condv, res_condv;
+	pthread_mutex_t		req_lock;
+	pthread_cond_t		req_condv;
 
 	bool			skipped;
 };
@@ -308,12 +308,6 @@ static void *start_routine(void *arg)
 					pthread_mutex_unlock(&priv->req_lock);
 					return &priv->retval;
 				}
-				pthread_mutex_lock(&priv->res_lock);
-				if (priv->status_res != priv->status_req) {
-					priv->status_res = priv->status_req;				
-					pthread_cond_signal(&priv->res_condv);
-				}
-				pthread_mutex_unlock(&priv->res_lock);
 				pthread_cond_wait(&priv->req_condv,
 						  &priv->req_lock);
 			}
@@ -338,8 +332,6 @@ static int suspend_routine(struct mtnfq_priv *priv)
 {
 	uint64_t u = 1; /* must not be 0, see eventfd(2) */
 	
-	priv->status_res = MTNFQ_STATUS_INVALID;
-
 	pthread_mutex_lock(&priv->req_lock);
 	priv->status_req = MTNFQ_STATUS_SUSPEND;
 	pthread_cond_signal(&priv->req_condv);
@@ -349,11 +341,6 @@ static int suspend_routine(struct mtnfq_priv *priv)
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
-
-	pthread_mutex_lock(&priv->res_lock);
-	while (priv->status_res != MTNFQ_STATUS_SUSPEND)
-		pthread_cond_wait(&priv->res_condv, &priv->res_lock);
-	pthread_mutex_unlock(&priv->res_lock);
 
 	return ULOGD_IRET_OK;
 }
@@ -527,9 +514,7 @@ static int init_thread(struct ulogd_source_pluginstance *spi)
 	pthread_mutexattr_init(&attr);
 	pthread_mutexattr_settype(&attr, ULOGD_MUTEX_ATTR);
 	pthread_mutex_init(&priv->req_lock, &attr);
-	pthread_mutex_init(&priv->res_lock, &attr);
 	pthread_cond_init(&priv->req_condv, NULL);
-	pthread_cond_init(&priv->res_condv, NULL);	
 	priv->statusfd = eventfd(0, 0);
 	if (priv->statusfd == -1) {
 		ulogd_log(ULOGD_ERROR, "eventfd: %s\n",
@@ -537,7 +522,6 @@ static int init_thread(struct ulogd_source_pluginstance *spi)
 		return ULOGD_IRET_ERR;
 	}
 	priv->status_req = MTNFQ_STATUS_RUNNING;
-	priv->status_res = MTNFQ_STATUS_INVALID;
 
 	return ULOGD_IRET_OK;
 }
