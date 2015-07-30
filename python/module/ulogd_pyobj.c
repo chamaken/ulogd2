@@ -623,8 +623,7 @@ py_ulogd_keylist_add(struct py_ulogd_keylist *self, PyObject *args)
 		PyErr_SetString(PyExc_AttributeError, "no type");
 		return NULL;
 	}
-	if (key->raw->name == NULL
-	    || strlen(key->raw->name) == 0) {
+	if (strlen(key->raw->name) == 0) {
 		PyErr_SetString(PyExc_AttributeError, "no name");
 		return NULL;
 	}
