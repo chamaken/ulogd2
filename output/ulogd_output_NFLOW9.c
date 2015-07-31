@@ -642,11 +642,11 @@ static int orig_swap(struct ulogd_netflow9_template *tmpl,
 {
 	switch (family) {
 	case AF_INET:
-		swap(buf, sizeof(uint32_t),
+		swap(buf, sizeof(struct in_addr ),
 		     TOF(FOI_REPLY_IP_SADDR), TOF(FOI_REPLY_IP_DADDR));
 		break;
 	case AF_INET6:
-		swap(buf, sizeof(uint32_t),
+		swap(buf, sizeof(struct in6_addr ),
 		     TOF(FOI_REPLY_IP6_SADDR), TOF(FOI_REPLY_IP6_DADDR));
 		break;
 	default:
@@ -666,11 +666,11 @@ static int reply_swap(struct ulogd_netflow9_template *tmpl,
 {
 	switch (family) {
 	case AF_INET:
-		swap(buf, sizeof(uint32_t),
+		swap(buf, sizeof(struct in_addr),
 		     TOF(FOI_ORIG_IP_SADDR), TOF(FOI_ORIG_IP_DADDR));
 		break;
 	case AF_INET6:
-		swap(buf, sizeof(uint32_t),
+		swap(buf, sizeof(struct in6_addr ),
 		     TOF(FOI_ORIG_IP_SADDR), TOF(FOI_ORIG_IP_DADDR));
 		break;
 	default:
@@ -682,7 +682,7 @@ static int reply_swap(struct ulogd_netflow9_template *tmpl,
 		swap(buf, sizeof(uint16_t),
 		     TOF(FOI_ORIG_L4_SPORT), TOF(FOI_ORIG_L4_DPORT));
 	if (TOF(FOI_IF_INPUT) >= 0 && TOF(FOI_IF_OUTPUT) >= 0)
-		swap(buf, sizeof(uint16_t),
+		swap(buf, sizeof(uint32_t),
 		     TOF(FOI_IF_INPUT), TOF(FOI_IF_OUTPUT));
 	if (TOF(FOI_FLOW_DIR) >= 0)
 		*(uint8_t *)(buf + TOF(FOI_FLOW_DIR))
