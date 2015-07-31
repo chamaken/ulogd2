@@ -33,7 +33,8 @@ struct markif_priv {
 	uint32_t	in_shift, out_shift;
 };
 
-/*       LAN              WAN
+/*
+ *       LAN              WAN
  *              +---+
  * ---- eth1 -- | B | -- eth2 ----
  *              | O |
@@ -44,15 +45,15 @@ struct markif_priv {
  *   ip flow ingress
  *   ip flow egress
  *
- * *mangle
+ * *nat
  * # indev
- * -A PREROUTING  -i eth1 -j CONNMARK --set-xmark 0x000001/0x0000ff
- * -A PREROUTING  -i eth2 -j CONNMARK --set-xmark 0x000002/0x0000ff
- * -A PREROUTING  -i eth3 -j CONNMARK --set-xmark 0x000003/0x0000ff
+ * -A PREROUTING  -i eth1 -j CONNMARK --set-mark 0x000001/0x0100ff
+ * -A PREROUTING  -i eth2 -j CONNMARK --set-mark 0x010002/0x0100ff
+ * -A PREROUTING  -i eth3 -j CONNMARK --set-mark 0x010003/0x0100ff
  * # outdev
- * -A POSTROUTING -o eth1 -j CONNMARK --set-mark  0x010100/0x01ff00
- * -A POSTROUTING -o eth2 -j CONNMARK --set-mark  0x000200/0x01ff00
- * -A POSTROUTING -o eth3 -j CONNMARK --set-mark  0x000300/0x01ff00
+ * -A POSTROUTING -o eth1 -j CONNMARK --set-mark 0x000100/0x00ff00
+ * -A POSTROUTING -o eth2 -j CONNMARK --set-mark 0x000200/0x00ff00
+ * -A POSTROUTING -o eth3 -j CONNMARK --set-mark 0x000300/0x00ff00
  *
  * config:
  * mask_ingress="0xff"
@@ -60,11 +61,13 @@ struct markif_priv {
  * mask_flow=0x10000
  *
  * Then:           ingressInterface         egressInterface        flowDirection
- *   eth1->eth2            1                       2                    ingress
- *   eth1->eth3            1                       3                    ingress
- *   eth2->eth1            2                       1                    egress
- *   eth3->eth1            3                       1                    egress
- *   eth2->eth3            2                       3                    ? (egress)
+ *   eth1->eth2            1                       2                    0 ingress
+ *   eth1->eth3            1                       3                    0 ingress
+ *   eth2->eth1            2                       1                    1 egress
+ *   eth3->eth1            3                       1                    1 egress
+ *   eth2->eth3            2                       3                    1 egress?
+ *
+ * http://patchwork.ozlabs.org/patch/278213/
  */
 
 enum {
