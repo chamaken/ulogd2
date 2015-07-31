@@ -12,7 +12,9 @@ compared with the original ulogd:
 * partial multi-thread
 * python plugin
 * (working) IPFIX and NetFlow v9 plugin
-* mmaped NFCT, NFLOG and NFQUEUE source plugin
+* mmaped NFCT, NFLOG and NFQUEUE source plugin  
+  It cause a kernel panic.  
+  see: https://www.mail-archive.com/netdev@vger.kernel.org/msg71352.html
 
 
 implementation note
@@ -39,7 +41,7 @@ implementation note
 TODO
 ----
 
-* would it be better to make source pluginstance to multi-thread?
+* would it be better to make source pluginstance to multi-thread?  
   multi-threaded source plugin can be implemented, see MTNFQ.
 * nft output
 * delete or fix unavailable plugins (use static variable as key ptr)
