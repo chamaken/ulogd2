@@ -181,6 +181,8 @@ if [! test "x$enable_nfq" = "xyes" -a "x$ac_cv_mmaped_netlink" = "xyes"]; then
 	enable_nfq="no"
 fi
 
+AM_CONDITIONAL([BUILD_NFCTST], [test "x$enable_nfctst" = "xyes"])
+
 AC_ARG_WITH([pgsql], AS_HELP_STRING([--without-pgsql], [Build without postgresql output plugin [default=test]]))
 AS_IF([test "x$with_pgsql" != "xno"], [
 	CT_CHECK_POSTGRES_DB()
@@ -310,7 +312,7 @@ AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile include/libipulog/Makefi
 	  include/linux/netfilter_ipv4/Makefile libipulog/Makefile \
 	  util/Makefile \
 	  input/Makefile input/packet/Makefile input/flow/Makefile \
-	  input/sum/Makefile input/queue/Makefile \
+	  input/sum/Makefile input/queue/Makefile input/stats/Makefile \
 	  filter/Makefile filter/raw2packet/Makefile filter/packet2flow/Makefile \
 	  output/Makefile output/pcap/Makefile output/mysql/Makefile output/pgsql/Makefile output/sqlite3/Makefile \
 	  output/dbi/Makefile python/Makefile python/module/Makefile \
@@ -328,6 +330,7 @@ Ulogd configuration:
     NFACCT plugin:			${enable_nfacct}
     ULOG plugin:			${enable_ulog}
     NFQ plugin:				${enable_nfq}
+    NFCTST plugin:			${enable_nfctst}
   Output plugins:
     PCAP plugin:			${enable_pcap}
     PGSQL plugin:			${enable_pgsql}
