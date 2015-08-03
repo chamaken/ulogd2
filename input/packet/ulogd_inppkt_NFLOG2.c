@@ -372,7 +372,7 @@ static int nflog_cb(const struct nlmsghdr *nlh, void *data)
 	struct nl_mmap_hdr *frame = (void *)nlh - NL_MMAP_HDRLEN;
 	
 	attrs = (struct nlattr **)okey_get_ptr(&ret[NFLOG_KEY_NLATTRS]);
-	if (nflog_nlmsg_parse(nlh, attrs) == MNL_CB_ERROR) {
+	if (nflog_nlmsg_parse_attrs(nlh, attrs) == MNL_CB_ERROR) {
 		ulogd_log(ULOGD_ERROR, "could not parse nflog message: %s\n",
 			  _sys_errlist[errno]);
 		ulogd_put_output_keyset(output);
