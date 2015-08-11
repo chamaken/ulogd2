@@ -21,17 +21,17 @@ implementation note
 -------------------
 
 ### introduce ulogd_source_pluginstance
-  introduce struct ulogd_source_pluginstance at the head of stack.
-  it holds all stacks which head is this instance.
+  introduce struct ulogd_source_pluginstance at the head of stack.  
+  It holds all stacks which head is this instance.
 
 ### verbose data
-  introduce struct ulogd_keysets_bundle for which head is the same
+  introduce struct ulogd_keysets_bundle for which head is the same  
   source pluginstance.
 
 ### multi-thread
-  source pluginstance is not run in a thread created by
-  pthread_create(), but in main thread. stacks which is subsequent
-  of source pluginstance will run in thread created by
+  source pluginstance is not run in a thread created by  
+  pthread_create(), but in main thread. stacks which is subsequent  
+  of source pluginstance will run in thread created by  
   pthread_create().
 
 ### share instances
@@ -41,9 +41,11 @@ implementation note
 TODO
 ----
 
+* naming a good one.
 * would it be better to make source pluginstance to multi-thread?  
   multi-threaded source plugin can be implemented, see MTNFQ.
 * nft output
+* source plugin stacking
 * delete or fix unavailable plugins (use static variable as key ptr)
 
 
@@ -128,7 +130,7 @@ stack=src,pi1,pi2,...
 ![to propagate](https://github.com/chamaken/ulogd2/blob/v3.x/doc/image/propagate.png "propagate")
 
 1. prepare in main.  
-   call configure and start callbacks.
+   call configure and start callbacks.  
    source pluginstance may register fd which they will read.
 
 2. main thread get into ulogd_main_loop().  
@@ -138,15 +140,15 @@ stack=src,pi1,pi2,...
    call registered ufd callback if related fd is readable.
 
 4. create output - ulogd_keyset.  
-   source plugin read data from fd and put it to ulogd_keyset which
+   source plugin read data from fd and put it to ulogd_keyset which  
    is acquired by ulogd_get_output_keyset()
 
 5. propagate ulogd_keyset.  
-   ulogd_propagate_results() gets interp_thread and pass
+   ulogd_propagate_results() gets interp_thread and pass  
    ulogd_keysets_bundle to it (by condv)
 
 6. thread routine.  
-   get source pluginstance from ulogd_keyset_bundle and traverse
-   each stack which the source pluginstance hold. After executing
-   stack, put ulogd_keysets_bundle back to pool (global list) and
+   get source pluginstance from ulogd_keyset_bundle and traverse  
+   each stack which the source pluginstance hold. After executing  
+   stack, put ulogd_keysets_bundle back to pool (global list) and  
    put self back to pool too.
