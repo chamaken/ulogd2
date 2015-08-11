@@ -26,6 +26,7 @@
 #include <libmnl/libmnl.h>
 #include <errno.h>
 #include <string.h>
+#include <signal.h>
 
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
@@ -96,9 +97,10 @@ static int py_parent_waitpid(struct py_priv *priv, int option)
 			  strerror(errno));
 		break;
 	case 0:
-		ulogd_log(ULOGD_ERROR, "send/recv error: %s,"
-			  " but no child has exited\n",
-			  strerror(errno));
+		/* WNOHANG was specified and the child exist
+		 * but have not yet changed state */
+		ulogd_log(ULOGD_INFO, "child have not yet changed state\n");
+		return ULOGD_IRET_ERR;
 		break;
 	default:
 		ulogd_log(ULOGD_INFO, "child: %d has exited: %d\n",
@@ -106,10 +108,6 @@ static int py_parent_waitpid(struct py_priv *priv, int option)
 		priv->childpid = 0;
 	}
 
-	if (!WIFEXITED(status))
-		return ULOGD_IRET_ERR;
-	if (!WEXITSTATUS(status) == 0)
-		return ULOGD_IRET_ERR;
 	return ULOGD_IRET_OK;
 }
 
@@ -137,8 +135,10 @@ static ssize_t py_parent_recv(struct py_priv *priv,
 	ssize_t nrecv = py_recv(priv->sockfd, buf, len, cdata);
 
 	if (nrecv == 0) { /* child closed sockfd? */
-		ulogd_log(ULOGD_ERROR, "child may have exited\n");
+		/* wait for child core dumping for 1s ;-) */
+		sleep(1);
 		py_parent_waitpid(priv, WNOHANG);
+
 		return -1;
 	} else if (nrecv < 0) {
 		ulogd_log(ULOGD_ERROR, "parent py_recv: %s\n",
@@ -349,6 +349,24 @@ dec_keylist:
 	Py_DECREF(keylist);
 
 	return ret;
+}
+
+static void py_child_undef_handler(int signum)
+{
+	child_log(ULOGD_ERROR, "receive unusal signal: %d\n", signum);
+	/* seems to be required to SOCK_SEQPACKET to invalidate sockfd */
+	shutdown(childfd, SHUT_RDWR);
+	signal(signum, SIG_DFL);
+	kill(getpid(), signum);
+}
+
+static void py_child_set_sighandler(void)
+{
+	signal(SIGBUS, py_child_undef_handler);
+	signal(SIGFPE, py_child_undef_handler);
+	signal(SIGILL, py_child_undef_handler);
+	signal(SIGSEGV, py_child_undef_handler);
+	signal(SIGABRT, py_child_undef_handler);
 }
 
 static int py_child_call_fd_callback(struct nlmsghdr *nlh, int *rc)
@@ -1127,6 +1145,7 @@ static int py_configure(struct py_priv *priv, char *id, int pitype,
 		ulogd_log(ULOGD_ERROR, "fork: %s\n", strerror(errno));
 		return ret;
 	case 0:
+		py_child_set_sighandler();
 		py_child_configure(sv[1], id, modname, pitype);
 		/* NOTREACHED */
 		break;
@@ -1181,6 +1200,7 @@ static int py_start(struct py_priv *priv, char *id, struct ulogd_keyset *input,
 		ulogd_log(ULOGD_ERROR, "fork: %s\n", strerror(errno));
 		return ret;
 	case 0:
+		py_child_set_sighandler();
 		py_child_start(id, input, sv[1], modname, pitype, spi);
 		/* NOTREACHED */
 		break;
