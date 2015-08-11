@@ -54,7 +54,7 @@ def nfq_send_accept(queue_num, qid):
 def nfq_send_repeat(queue_num, qid, mark, payload):
     global nl
 
-    buf = bytearray(mnl.MNL_SOCKET_BUFFER_SIZE)
+    buf = bytearray(mnl.MNL_SOCKET_BUFFER_SIZE + len(payload))
     nlh = nfq_hdr_put(buf, nfqnl.NFQNL_MSG_VERDICT, queue_num)
     nlh.nlmsg_flags |= netlink.NLM_F_ACK
     nfq.nlmsg_verdict_put(nlh, qid, nf.NF_REPEAT)
@@ -93,7 +93,15 @@ def interp(ikset, okset):
         ip = IP(bytes(nfq_payload.get_payload_v()))
 
         if ip[ICMP].seq % 2 == 0:
-            ip[ICMP].payload = ip[ICMP].payload.__class__(bytes(ip[ICMP].payload).replace(b'#', b'$'))
+            # wrong data byte ...
+            # ip[ICMP].payload = bytes(ip[ICMP].payload).replace(b'!', b'@')
+
+            # (truncated)
+            # ip[ICMP].payload = bytes(ip[ICMP].payload)[:4]
+
+            # no error but ``bytes from'' is differ a little?
+            ip[ICMP].payload = bytes(ip[ICMP].payload) + (b'0' * 8192)
+
             ip[ICMP].chksum = 0 # NEED THIS
             ip[ICMP].chksum = utils.checksum(bytes(ip[ICMP]))
 
