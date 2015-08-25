@@ -736,7 +736,7 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 	if (flags) {
 		nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, AF_UNSPEC, group);
 		nlh->nlmsg_flags |= NLM_F_ACK;
-		mnl_attr_put_u16(nlh, NFULA_CFG_FLAGS, flags);
+		mnl_attr_put_u16(nlh, NFULA_CFG_FLAGS, htons(flags));
 		if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 			ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 				  _sys_errlist[errno]);
