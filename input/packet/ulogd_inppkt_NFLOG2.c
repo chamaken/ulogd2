@@ -22,7 +22,6 @@
 #include <endian.h>	/* be64toh */
 
 #include <linux/netlink.h>
-#include <linux/netfilter/nfnetlink_log.h>
 
 #include <libmnl/libmnl.h>
 #include <libnetfilter_log/libnetfilter_log.h>
@@ -372,7 +371,7 @@ static int nflog_cb(const struct nlmsghdr *nlh, void *data)
 	struct nl_mmap_hdr *frame = (void *)nlh - NL_MMAP_HDRLEN;
 	
 	attrs = (struct nlattr **)okey_get_ptr(&ret[NFLOG_KEY_NLATTRS]);
-	if (nflog_nlmsg_parse_attrs(nlh, attrs) == MNL_CB_ERROR) {
+	if (nflog_nlmsg_parse(nlh, attrs) == MNL_CB_ERROR) {
 		ulogd_log(ULOGD_ERROR, "could not parse nflog message: %s\n",
 			  _sys_errlist[errno]);
 		ulogd_put_output_keyset(output);
@@ -537,100 +536,6 @@ static int configure(struct ulogd_source_pluginstance *upi)
 	return config_parse_file(upi->id, upi->config_kset);
 }
 
-static struct nlmsghdr *
-nflog_build_cfg_pf_request(char *buf, uint8_t family, uint8_t command)
-{
-	struct nlmsghdr *nlh = mnl_nlmsg_put_header(buf);
-	nlh->nlmsg_type	= (NFNL_SUBSYS_ULOG << 8) | NFULNL_MSG_CONFIG;
-	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-
-	struct nfgenmsg *nfg = mnl_nlmsg_put_extra_header(nlh, sizeof(*nfg));
-	nfg->nfgen_family = family;
-	nfg->version = NFNETLINK_V0;
-
-	struct nfulnl_msg_config_cmd cmd = {
-		.command = command,
-	};
-	mnl_attr_put(nlh, NFULA_CFG_CMD, sizeof(cmd), &cmd);
-
-	return nlh;
-}
-
-static struct nlmsghdr *
-nflog_build_cfg_request(char *buf, uint8_t command, uint16_t group)
-{
-	struct nlmsghdr *nlh = mnl_nlmsg_put_header(buf);
-	nlh->nlmsg_type	= (NFNL_SUBSYS_ULOG << 8) | NFULNL_MSG_CONFIG;
-	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-
-	struct nfgenmsg *nfg = mnl_nlmsg_put_extra_header(nlh, sizeof(*nfg));
-	nfg->nfgen_family = AF_UNSPEC;
-	nfg->version = NFNETLINK_V0;
-	nfg->res_id = htons(group);
-
-	struct nfulnl_msg_config_cmd cmd = {
-		.command = command,
-	};
-	mnl_attr_put(nlh, NFULA_CFG_CMD, sizeof(cmd), &cmd);
-
-	return nlh;
-}
-
-static struct nlmsghdr *
-nflog_build_cfg_params(char *buf, uint8_t mode, int range, int group)
-{
-	struct nlmsghdr *nlh = mnl_nlmsg_put_header(buf);
-	nlh->nlmsg_type	= (NFNL_SUBSYS_ULOG << 8) | NFULNL_MSG_CONFIG;
-	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-
-	struct nfgenmsg *nfg = mnl_nlmsg_put_extra_header(nlh, sizeof(*nfg));
-	nfg->nfgen_family = AF_UNSPEC;
-	nfg->version = NFNETLINK_V0;
-	nfg->res_id = htons(group);
-
-	struct nfulnl_msg_config_mode params = {
-		.copy_range = htonl(range),
-		.copy_mode = mode,
-	};
-	mnl_attr_put(nlh, NFULA_CFG_MODE, sizeof(params), &params);
-
-	return nlh;
-}
-
-static struct nlmsghdr *
-nflog_build_cfg_u32(char *buf, uint16_t type, uint16_t group, uint32_t val)
-{
-	struct nlmsghdr *nlh = mnl_nlmsg_put_header(buf);
-	nlh->nlmsg_type	= (NFNL_SUBSYS_ULOG << 8) | NFULNL_MSG_CONFIG;
-	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-
-	struct nfgenmsg *nfg = mnl_nlmsg_put_extra_header(nlh, sizeof(*nfg));
-	nfg->nfgen_family = AF_UNSPEC;
-	nfg->version = NFNETLINK_V0;
-	nfg->res_id = htons(group);
-
-	mnl_attr_put_u32(nlh, type, htonl(val));
-
-	return nlh;
-}
-
-static struct nlmsghdr *
-nflog_build_cfg_u16(char *buf, uint16_t type, uint16_t group, uint16_t val)
-{
-	struct nlmsghdr *nlh = mnl_nlmsg_put_header(buf);
-	nlh->nlmsg_type	= (NFNL_SUBSYS_ULOG << 8) | NFULNL_MSG_CONFIG;
-	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-
-	struct nfgenmsg *nfg = mnl_nlmsg_put_extra_header(nlh, sizeof(*nfg));
-	nfg->nfgen_family = AF_UNSPEC;
-	nfg->version = NFNETLINK_V0;
-	nfg->res_id = htons(group);
-
-	mnl_attr_put_u16(nlh, type, htons(val));
-
-	return nlh;
-}
-
 static int nflog_config_response(struct nflog_priv *priv)
 {
 	struct mnl_ring *nlr = priv->nlr;
@@ -662,8 +567,13 @@ static int become_system_logging(struct ulogd_source_pluginstance *upi,
 	if (unbind_ce(upi) > 0) {
 		ulogd_log(ULOGD_NOTICE, "forcing unbind of existing log "
 				"handler for protocol %d\n", family);
-		nlh = nflog_build_cfg_pf_request(buf, family,
-						 NFULNL_CFG_CMD_PF_UNBIND);
+		nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, family, 0);
+		nlh->nlmsg_flags |= NLM_F_ACK;
+		if (nflog_attr_put_cfg_cmd(nlh, NFULNL_CFG_CMD_PF_UNBIND) < 0) {
+			ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_cmd: %s\n",
+				  _sys_errlist[errno]);
+			return ULOGD_IRET_ERR;
+		}
 		if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 			ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 				  _sys_errlist[errno]);
@@ -677,7 +587,13 @@ static int become_system_logging(struct ulogd_source_pluginstance *upi,
 	}
 
 	ulogd_log(ULOGD_DEBUG, "binding to protocol family %d\n", family);
-	nlh = nflog_build_cfg_pf_request(buf, family, NFULNL_CFG_CMD_PF_BIND);
+	nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, family, 0);
+	nlh->nlmsg_flags |= NLM_F_ACK;
+	if (nflog_attr_put_cfg_cmd(nlh, NFULNL_CFG_CMD_PF_BIND) < 0) {
+		ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_cmd: %s\n",
+			  _sys_errlist[errno]);
+		return ULOGD_IRET_ERR;
+	}
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 			  _sys_errlist[errno]);
@@ -711,10 +627,16 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 			return ULOGD_IRET_ERR;
 	}
 
-	ulogd_log(ULOGD_DEBUG, "binding to log group %d\n", group_ce(upi));
-	nlh = nflog_build_cfg_request(buf, NFULNL_CFG_CMD_BIND, group);
+	ulogd_log(ULOGD_DEBUG, "binding to log group %d\n", group);
+	nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, AF_UNSPEC, group);
+	nlh->nlmsg_flags |= NLM_F_ACK;
+	if (nflog_attr_put_cfg_cmd(nlh, NFULNL_CFG_CMD_BIND) < 0) {
+		ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_cmd: %s\n",
+			  _sys_errlist[errno]);
+		return ULOGD_IRET_ERR;
+	}
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
-		ulogd_log(ULOGD_ERROR, "mnl_socket_sendto:: %s\n",
+		ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 			  _sys_errlist[errno]);
 		return ULOGD_IRET_ERR;
 	}
@@ -724,18 +646,31 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 		return ULOGD_IRET_ERR;
 	}
 
+	nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, AF_UNSPEC, group);
+	nlh->nlmsg_flags |= NLM_F_ACK;
 	if (strcasecmp(copy_mode, "packet") == 0) {
-		nlh = nflog_build_cfg_params(buf, NFULNL_COPY_PACKET,
-					     0xFFFF, group);
+		if (nflog_attr_put_cfg_mode(nlh, NFULNL_COPY_PACKET,
+					    0xffff) < 0) {
+			ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_mode: %s\n",
+				  _sys_errlist[errno]);
+			return ULOGD_IRET_ERR;
+		}
 	} else if (strcasecmp(copy_mode, "meta") == 0) {
-		nlh = nflog_build_cfg_params(buf, NFULNL_COPY_META, 0, group);
+		if (nflog_attr_put_cfg_mode(nlh, NFULNL_COPY_META, 0) < 0) {
+			ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_mode: %s\n",
+				  _sys_errlist[errno]);
+			return ULOGD_IRET_ERR;
+		}
 	} else if (strcasecmp(copy_mode, "none") == 0) {
-		nlh = nflog_build_cfg_params(buf, NFULNL_COPY_NONE, 0, group);
+		if (nflog_attr_put_cfg_mode(nlh, NFULNL_COPY_NONE, 0) < 0) {
+			ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_mode: %s\n",
+				  _sys_errlist[errno]);
+			return ULOGD_IRET_ERR;
+		}
 	} else {
 		ulogd_log(ULOGD_ERROR, "unknown copy_mode: %s\n", copy_mode);
 		return ULOGD_IRET_ERR;
 	}
-
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 			  _sys_errlist[errno]);
@@ -748,8 +683,9 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 	}
 
 	if (qthresh_ce(upi) != 0) {
-		nlh = nflog_build_cfg_u32(buf, NFULA_CFG_QTHRESH,
-					  group, qthresh_ce(upi));
+		nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, AF_UNSPEC, group);
+		nlh->nlmsg_flags |= NLM_F_ACK;
+		mnl_attr_put_u32(nlh, NFULA_CFG_QTHRESH, htonl(qthresh_ce(upi)));
 		if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 			ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 				  _sys_errlist[errno]);
@@ -765,8 +701,9 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 	}
 
 	if (qtimeout_ce(upi) != 0) {
-		nlh = nflog_build_cfg_u32(buf, NFULA_CFG_TIMEOUT,
-					  group, qtimeout_ce(upi));		
+		nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, AF_UNSPEC, group);
+		nlh->nlmsg_flags |= NLM_F_ACK;
+		mnl_attr_put_u32(nlh, NFULA_CFG_TIMEOUT, htonl(qtimeout_ce(upi)));
 		if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 			ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 				  _sys_errlist[errno]);
@@ -787,8 +724,9 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 	if (seq_global_ce(upi) != 0)
 		flags |= NFULNL_CFG_F_SEQ_GLOBAL;
 	if (flags) {
-		nlh = nflog_build_cfg_u16(buf, NFULA_CFG_FLAGS,
-					  group, flags);
+		nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, AF_UNSPEC, group);
+		nlh->nlmsg_flags |= NLM_F_ACK;
+		mnl_attr_put_u16(nlh, NFULA_CFG_FLAGS, flags);
 		if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 			ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 				  _sys_errlist[errno]);
@@ -809,32 +747,46 @@ static int unbind_all(struct mnl_socket *nl)
 	char buf[MNL_SOCKET_BUFFER_SIZE * 2];
 	struct nlmsghdr *nlh;
 	struct mnl_nlmsg_batch *b;
+	int ret = ULOGD_IRET_ERR;
 
 	b = mnl_nlmsg_batch_start(buf, MNL_SOCKET_BUFFER_SIZE);
+	nlh = nflog_nlmsg_put_header(mnl_nlmsg_batch_current(b),
+				     NFULNL_MSG_CONFIG, AF_INET, 0);
+	if (nflog_attr_put_cfg_cmd(nlh, NFULNL_CFG_CMD_PF_UNBIND) < 0) {
+		ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_cmd: %s\n",
+			  _sys_errlist[errno]);
+		goto batch_stop;
+	}
 
-	nlh = nflog_build_cfg_pf_request(mnl_nlmsg_batch_current(b),
-					 AF_INET, NFULNL_CFG_CMD_PF_UNBIND);
-	nlh->nlmsg_flags &= ~NLM_F_ACK;
 	mnl_nlmsg_batch_next(b);
+	nlh = nflog_nlmsg_put_header(mnl_nlmsg_batch_current(b),
+				     NFULNL_MSG_CONFIG, AF_INET6, 0);
+	if (nflog_attr_put_cfg_cmd(nlh, NFULNL_CFG_CMD_PF_UNBIND) < 0) {
+		ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_cmd: %s\n",
+			  _sys_errlist[errno]);
+		goto batch_stop;
+	}
 
-	nlh = nflog_build_cfg_pf_request(mnl_nlmsg_batch_current(b),
-					 AF_INET6, NFULNL_CFG_CMD_PF_UNBIND);
-	nlh->nlmsg_flags &= ~NLM_F_ACK;
 	mnl_nlmsg_batch_next(b);
+	nlh = nflog_nlmsg_put_header(mnl_nlmsg_batch_current(b),
+				     NFULNL_MSG_CONFIG, AF_BRIDGE, 0);
+	if (nflog_attr_put_cfg_cmd(nlh, NFULNL_CFG_CMD_PF_UNBIND) < 0) {
+		ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_cmd: %s\n",
+			  _sys_errlist[errno]);
+		goto batch_stop;
+	}
 
-	nlh = nflog_build_cfg_pf_request(mnl_nlmsg_batch_current(b),
-					 AF_BRIDGE, NFULNL_CFG_CMD_PF_UNBIND);
-	nlh->nlmsg_flags &= ~NLM_F_ACK;
 	mnl_nlmsg_batch_next(b);
-
 	if (mnl_socket_sendto(nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_sendto: %s\n",
 			  _sys_errlist[errno]);
-		return ULOGD_IRET_ERR;
+		goto batch_stop;
 	}
+	ret = ULOGD_IRET_OK;
 
+batch_stop:	
 	mnl_nlmsg_batch_stop(b);
-	return ULOGD_IRET_OK;
+	return ret;
 }
 
 static int start(struct ulogd_source_pluginstance *upi)
@@ -908,12 +860,14 @@ static int stop(struct ulogd_source_pluginstance *upi)
 	struct nflog_priv *priv = (struct nflog_priv *)upi->private;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr *nlh;
-	uint16_t group = group_ce(upi);
 
 	ulogd_unregister_fd(&priv->ufd);
-	nlh = nflog_build_cfg_request(buf, NFULNL_CFG_CMD_BIND, group);
-	nlh->nlmsg_flags &= ~NLM_F_ACK;
+	nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG,
+				     AF_UNSPEC, group_ce(upi));
+	nflog_attr_put_cfg_cmd(nlh, NFULNL_CFG_CMD_UNBIND);
 	mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len);
+	if (group_ce(upi) == 0)
+		unbind_all(priv->nl);
 	mnl_socket_unmap(priv->nlr);
 	mnl_socket_close(priv->nl);
 
