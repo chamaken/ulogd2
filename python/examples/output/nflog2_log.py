@@ -10,6 +10,7 @@ import cpylmnl.linux.netfilter.nfnetlinkh as nfnl
 import cpylmnl.linux.netfilter.nfnetlink_logh as nflog
 import cpylmnl.linux.netfilterh as nf
 import cpylmnl as mnl
+import cpylmnfct as nfct
 
 import ulogd
 from scapy.layers.inet import IP
@@ -56,6 +57,13 @@ def interp(ikset, okset):
     ip = IP(bytes(pattrs[nflog.NFULA_PAYLOAD].contents.get_payload_v()))
     log.info(ip.summary())
     log.info("\tseq - local: %r, global: %r, prefix: %r", seq_local, seq_global, prefix)
+
+    if pattrs[nflog.NFULA_CT]:
+        ct = nfct.Conntrack()
+        ct.payload_parse(pattrs[nflog.NFULA_CT].contents.get_payload_v(), family)
+        s = ct.snprintf(4096, nfct.NFCT_T_UNKNOWN, nfct.NFCT_O_DEFAULT, 0)
+        log.info("conntrack: %s", s)
+
     return ulogd.ULOGD_IRET_OK
 
 

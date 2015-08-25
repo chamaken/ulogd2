@@ -51,6 +51,7 @@ enum nflog_conf {
 	NFLOG_CONF_QTHRESH,
 	NFLOG_CONF_QTIMEOUT,
 	NFLOG_CONF_COPY_MODE,		/* NFULNL_COPY_ NONE / META / PACKET */
+	NFLOG_CONF_CONNTRACK,
 	NFLOG_CONF_MAX,
 };
 
@@ -129,6 +130,12 @@ static struct config_keyset nflog_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.string = "packet",
 		},
+		[NFLOG_CONF_CONNTRACK] = {
+			.key     = "conntrack",
+			.type    = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
+		},
 	}
 };
 
@@ -144,6 +151,7 @@ static struct config_keyset nflog_kset = {
 #define qthresh_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_QTHRESH]).u.value)
 #define qtimeout_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_QTIMEOUT]).u.value)
 #define copy_mode_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_COPY_MODE]).u.string)
+#define conntrack_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_CONNTRACK]).u.value)
 
 enum nflog_keys {
 	NFLOG_KEY_RAW_MAC = 0,
@@ -723,6 +731,8 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 		flags = NFULNL_CFG_F_SEQ;
 	if (seq_global_ce(upi) != 0)
 		flags |= NFULNL_CFG_F_SEQ_GLOBAL;
+	if (conntrack_ce(upi) != 0)
+		flags |= NFULNL_CFG_F_CONNTRACK;
 	if (flags) {
 		nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, AF_UNSPEC, group);
 		nlh->nlmsg_flags |= NLM_F_ACK;
