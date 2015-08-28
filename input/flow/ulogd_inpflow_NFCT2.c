@@ -688,6 +688,11 @@ static int handle_valid_frame(struct ulogd_source_pluginstance *spi,
 	struct _cbarg cbarg = {.spi = spi, .recent = tv};
 	int ret;
 
+	if (frame->nm_len == 0) {
+		/* an error may occured in kernel */
+		return ULOGD_IRET_OK;
+	}
+
 	ret = mnl_cb_run(MNL_FRAME_PAYLOAD(frame), frame->nm_len,
 			 priv->dump_request->nlmsg_seq, priv->dumppid,
 			 data_cb, &cbarg);

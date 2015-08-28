@@ -217,6 +217,12 @@ static int handle_valid_frame(struct ulogd_source_pluginstance *upi,
 	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
 	int ret;
 
+	if (frame->nm_len == 0) {
+		/* an error may occured in kernel */
+		frame->nm_status = NL_MMAP_STATUS_UNUSED;
+		return ULOGD_IRET_OK;
+	}
+
 	frame->nm_status = NL_MMAP_STATUS_SKIP;
 	ret = mnl_cb_run(MNL_FRAME_PAYLOAD(frame), frame->nm_len,
 			 0, priv->portid, nfq_cb, upi);

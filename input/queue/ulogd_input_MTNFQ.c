@@ -217,6 +217,12 @@ static int handle_valid_frame(struct ulogd_source_pluginstance *upi,
 	struct mtnfq_priv *priv =	(struct mtnfq_priv *)upi->private;
 	int ret;
 
+	if (frame->nm_len == 0) {
+		/* an error may occured in kernel */
+		frame->nm_status = NL_MMAP_STATUS_UNUSED;
+		return ULOGD_IRET_OK;
+	}
+
 	frame->nm_status = NL_MMAP_STATUS_SKIP;
 	ret = mnl_cb_run(MNL_FRAME_PAYLOAD(frame), frame->nm_len,
 			 0, priv->portid, nfq_cb, upi);
@@ -243,10 +249,8 @@ static int nfq_read_cb(struct ulogd_source_pluginstance *upi)
 		case NL_MMAP_STATUS_VALID:
 			ret = handle_valid_frame(upi, frame);
 			mnl_ring_advance(priv->nlr);
-			if (ret != ULOGD_IRET_OK) {
-				ulogd_log(ULOGD_DEBUG, "---- handle_valid returns: %d\n", ret);
+			if (ret != ULOGD_IRET_OK)
 				return ret;
-			}
 			break;
 		case NL_MMAP_STATUS_RESERVED:
 			/* currently used by the kernel */
