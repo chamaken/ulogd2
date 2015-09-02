@@ -39,7 +39,8 @@ ulogd_output_NACCT_la_LDFLAGS = -avoid-version -module
 ulogd_output_XML_la_SOURCES = ulogd_output_XML.c
 ulogd_output_XML_la_LIBADD  = ${LIBNETFILTER_LOG_LIBS} \
 			      ${LIBNETFILTER_CONNTRACK_LIBS} \
-			      ${LIBNETFILTER_ACCT_LIBS}
+			      ${LIBNETFILTER_ACCT_LIBS} \
+			      ${LIBNFTNL_LIBS}
 ulogd_output_XML_la_LDFLAGS = -avoid-version -module
 
 ulogd_output_GRAPHITE_la_SOURCES = ulogd_output_GRAPHITE.c

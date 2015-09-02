@@ -30,6 +30,15 @@
 #ifdef BUILD_NFACCT
 #include <libnetfilter_acct/libnetfilter_acct.h>
 #endif
+#ifdef BUILD_NFT
+#include <linux/netfilter/nf_tables.h>
+#include <libnftnl/table.h>
+#include <libnftnl/chain.h>
+#include <libnftnl/rule.h>
+#include <libnftnl/set.h>
+#include <libnftnl/gen.h>
+#include <libnftnl/common.h>
+#endif
 #include <ulogd/ulogd.h>
 #include <sys/param.h>
 #include <time.h>
@@ -43,6 +52,13 @@ enum {
 	KEY_CT,
 	KEY_PCKT,
 	KEY_SUM,
+	KEY_NFT_EVENT,
+	KEY_NFT_TABLE,
+	KEY_NFT_RULE,
+	KEY_NFT_CHAIN,
+	KEY_NFT_SET,
+	KEY_NFT_SET_ELEM,
+	KEY_NFT_GEN,
 };
 
 static struct ulogd_key xml_inp[] = {
@@ -60,6 +76,41 @@ static struct ulogd_key xml_inp[] = {
                 .type = ULOGD_RET_RAW,
                 .flags = ULOGD_RETF_NONE | ULOGD_KEYF_OPTIONAL,
                 .name = "sum",
+	},
+	[KEY_NFT_EVENT] = {
+                .type = ULOGD_RET_UINT32,
+                .flags = ULOGD_RETF_NONE | ULOGD_KEYF_OPTIONAL,
+                .name = "nft.event",
+	},
+	[KEY_NFT_TABLE] = {
+                .type = ULOGD_RET_RAW,
+                .flags = ULOGD_RETF_NONE | ULOGD_KEYF_OPTIONAL,
+                .name = "nft.table.object",
+	},
+	[KEY_NFT_RULE] = {
+                .type = ULOGD_RET_RAW,
+                .flags = ULOGD_RETF_NONE | ULOGD_KEYF_OPTIONAL,
+                .name = "nft.rule.object",
+	},
+	[KEY_NFT_CHAIN] = {
+                .type = ULOGD_RET_RAW,
+                .flags = ULOGD_RETF_NONE | ULOGD_KEYF_OPTIONAL,
+                .name = "nft.chain.object",
+	},
+	[KEY_NFT_SET] = {
+                .type = ULOGD_RET_RAW,
+                .flags = ULOGD_RETF_NONE | ULOGD_KEYF_OPTIONAL,
+                .name = "nft.set.object",
+	},
+	[KEY_NFT_SET_ELEM] = {
+                .type = ULOGD_RET_RAW,
+                .flags = ULOGD_RETF_NONE | ULOGD_KEYF_OPTIONAL,
+                .name = "nft.set_elem.object",
+	},
+	[KEY_NFT_GEN] = {
+                .type = ULOGD_RET_RAW,
+                .flags = ULOGD_RETF_NONE | ULOGD_KEYF_OPTIONAL,
+                .name = "nft.gen.object",
 	},
 };
 
@@ -108,6 +159,8 @@ static int source_type(struct ulogd_keyset *input)
 		return KEY_PCKT;
 	if (key[KEY_SUM].u.source != NULL)
 		return KEY_SUM;
+	if (key[KEY_NFT_EVENT].u.source != NULL)
+		return KEY_NFT_EVENT;
 	return -1;
 }
 
@@ -163,6 +216,70 @@ xml_output_sum(struct ulogd_key *inp, char *buf, ssize_t size)
 #endif
 }
 
+#ifdef BUILD_NFT
+static uint32_t event2flag(uint32_t event)
+{
+	switch (event) {
+	case NFT_MSG_NEWTABLE:
+	case NFT_MSG_NEWCHAIN:
+	case NFT_MSG_NEWRULE:
+	case NFT_MSG_NEWSET:
+	case NFT_MSG_NEWSETELEM:
+	case NFT_MSG_NEWGEN:
+		return NFT_OF_EVENT_NEW;
+	case NFT_MSG_DELTABLE:
+	case NFT_MSG_DELCHAIN:
+	case NFT_MSG_DELRULE:
+	case NFT_MSG_DELSET:
+	case NFT_MSG_DELSETELEM:
+		return NFT_OF_EVENT_DEL;
+	}
+
+	return 0;
+}
+#endif
+
+static int
+xml_output_nft(struct ulogd_key *inp, char *buf, ssize_t size)
+{
+#ifdef BUILD_NFT
+	uint32_t event = ikey_get_u32(&inp[KEY_NFT_EVENT]);
+
+	if (pp_is_valid(inp, KEY_NFT_TABLE)) {
+		struct nft_table *t = ikey_get_ptr(&inp[KEY_NFT_TABLE]);
+		return nft_table_snprintf(buf, size, t, NFT_OUTPUT_XML,
+					  event2flag(event));
+	}
+	if (pp_is_valid(inp, KEY_NFT_RULE)) {
+		struct nft_rule *t = ikey_get_ptr(&inp[KEY_NFT_RULE]);
+		return nft_rule_snprintf(buf, size, t, NFT_OUTPUT_XML,
+					 event2flag(event));
+	}
+	if (pp_is_valid(inp, KEY_NFT_CHAIN)) {
+		struct nft_chain *t = ikey_get_ptr(&inp[KEY_NFT_CHAIN]);
+		return nft_chain_snprintf(buf, size, t, NFT_OUTPUT_XML,
+					  event2flag(event));
+	}
+	if (pp_is_valid(inp, KEY_NFT_SET)) {
+		struct nft_set *t = ikey_get_ptr(&inp[KEY_NFT_SET]);
+		return nft_set_snprintf(buf, size, t, NFT_OUTPUT_XML,
+					event2flag(event));
+	}
+	if (pp_is_valid(inp, KEY_NFT_SET_ELEM)) {
+		struct nft_set *t = ikey_get_ptr(&inp[KEY_NFT_SET_ELEM]);
+		return nft_set_snprintf(buf, size, t, NFT_OUTPUT_XML,
+					event2flag(event));
+	}
+	if (pp_is_valid(inp, KEY_NFT_GEN)) {
+		struct nft_gen *t = ikey_get_ptr(&inp[KEY_NFT_GEN]);
+		return nft_gen_snprintf(buf, size, t, NFT_OUTPUT_XML,
+					event2flag(event));
+	}
+	ulogd_log(ULOGD_ERROR, "unknown nft event: %d\n", event);
+#endif
+	return -1;
+}
+
 
 static int xml_output(struct ulogd_pluginstance *upi,
 		      struct ulogd_keyset *input, struct ulogd_keyset *output)
@@ -178,6 +295,8 @@ static int xml_output(struct ulogd_pluginstance *upi,
 		ret = xml_output_packet(inp, buf, sizeof(buf));
 	else if (pp_is_valid(inp, KEY_SUM))
 		ret = xml_output_sum(inp, buf, sizeof(buf));
+	else if (pp_is_valid(inp, KEY_NFT_EVENT))
+		ret = xml_output_nft(inp, buf, sizeof(buf));
 
 	if (ret < 0)
 		return ULOGD_IRET_ERR;
@@ -208,6 +327,9 @@ static int xml_fini(struct ulogd_pluginstance *pi)
 	case KEY_SUM:
 		fprintf(op->of, "</sum>\n");
 		break;
+	case KEY_NFT_EVENT:
+		fprintf(op->of, "</nft>\n");
+		break;
 	default:
 		fprintf(op->of, "</unknown>\n");
 	}
@@ -237,6 +359,9 @@ static int xml_open_file(struct ulogd_pluginstance *upi)
 		break;
 	case KEY_SUM:
 		strcpy(file_infix, "sum");
+		break;
+	case KEY_NFT_EVENT:
+		strcpy(file_infix, "nft");
 		break;
 	default:
 		strcpy(file_infix, "unknown");
@@ -283,6 +408,9 @@ static void xml_print_header(struct ulogd_pluginstance *upi)
 	case KEY_SUM:
 		fprintf(op->of, "<sum>\n");
 		break;
+	case KEY_NFT_EVENT:
+		fprintf(op->of, "<nft>\n");
+		break;
 	default:
 		fprintf(op->of, "<unknown>\n");
 	}
@@ -295,6 +423,12 @@ static int xml_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 {
 	struct xml_priv *op = (struct xml_priv *) &upi->private;
 
+	op->srctype = source_type(input);
+	if (op->srctype == -1) {
+		ulogd_log(ULOGD_ERROR, "unknown source type\n");
+		return ULOGD_IRET_ERR;
+	}
+
 	if (upi->config_kset->ces[CFG_XML_STDOUT].u.value != 0) {
 		op->of = stdout;
 	} else {
@@ -303,12 +437,6 @@ static int xml_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 				  strerror(errno));
 			return -1;
 		}
-	}
-
-	op->srctype = source_type(input);
-	if (op->srctype == -1) {
-		ulogd_log(ULOGD_ERROR, "unknown source type\n");
-		return ULOGD_IRET_ERR;
 	}
 
 	xml_print_header(upi);
