@@ -440,7 +440,7 @@ static struct ulogd_plugin sqlite3_plugin = {
 	.name = "SQLITE3", 
 	.input = {
 		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW
-			| ULOGD_KEYF_WILDCARD,
+			| ULOGD_DTYPE_WILDCARD,
 	},
 	.output = {
 		.type = ULOGD_DTYPE_SINK,

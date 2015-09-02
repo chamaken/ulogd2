@@ -77,7 +77,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 			input = UPI_INPUT_KEYSET(element->pi);
 			element->iksbi = kindex++;
 			ksize += sizeof(struct ulogd_keyset);
-			if (input->type & ULOGD_KEYF_WILDCARD) {
+			if (input->type & ULOGD_DTYPE_WILDCARD) {
 				if (element->list.next != &stack->elements) {
 					ulogd_log(ULOGD_ERROR, "wildcard is only"
 						  " allowed at the end\n");
@@ -142,7 +142,7 @@ ulogd_keysets_bundle_alloc_init(struct ulogd_source_pluginstance *spi)
 		llist_for_each_entry(element, &stack->elements, list) {
 			input = UPI_INPUT_KEYSET(element->pi);
 			keysets->type = input->type;
-			if (input->type & ULOGD_KEYF_WILDCARD) {
+			if (input->type & ULOGD_DTYPE_WILDCARD) {
 				keysets->num_keys = wildcard_num(spi, stack,
 								 element);
 				/* and type should be ULOGD_KEYF_OPTIONAL ? */

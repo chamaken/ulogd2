@@ -1218,7 +1218,6 @@ PyInit_ulogd(void)
 
 	PyModule_AddIntMacro(m, ULOGD_KEYF_OPTIONAL);
 	PyModule_AddIntMacro(m, ULOGD_KEYF_INACTIVE);
-	PyModule_AddIntMacro(m, ULOGD_KEYF_WILDCARD);
 
 	PyModule_AddIntMacro(m, ULOGD_DTYPE_NULL);
 	PyModule_AddIntMacro(m, ULOGD_DTYPE_RAW);
@@ -1226,6 +1225,7 @@ PyInit_ulogd(void)
 	PyModule_AddIntMacro(m, ULOGD_DTYPE_FLOW);
 	PyModule_AddIntMacro(m, ULOGD_DTYPE_SUM);
 	PyModule_AddIntMacro(m, ULOGD_DTYPE_SINK);
+	PyModule_AddIntMacro(m, ULOGD_DTYPE_WILDCARD);
 
 	PyModule_AddIntMacro(m, ULOGD_IRET_ERR);
 	PyModule_AddIntMacro(m, ULOGD_IRET_STOP);

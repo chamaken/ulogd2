@@ -590,7 +590,7 @@ static struct ulogd_plugin ipfix_plugin = {
 	.name = "IPFIX",
 	.input = {
 		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW
-			| ULOGD_KEYF_WILDCARD,
+			| ULOGD_DTYPE_WILDCARD,
 	},
 	.output = {
 		.type = ULOGD_DTYPE_SINK,

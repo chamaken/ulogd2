@@ -242,7 +242,7 @@ static struct ulogd_plugin gprint_plugin = {
 	.name = "GPRINT",
 	.input = {
 		.type = ULOGD_DTYPE_PACKET | ULOGD_DTYPE_FLOW
-			| ULOGD_DTYPE_SUM | ULOGD_KEYF_WILDCARD,
+			| ULOGD_DTYPE_SUM | ULOGD_DTYPE_WILDCARD,
 	},
 	.output = {
 		.type = ULOGD_DTYPE_SINK,

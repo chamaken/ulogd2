@@ -62,8 +62,7 @@
 
 #define ULOGD_KEYF_OPTIONAL	0x0100	/* this key is optional */
 #define ULOGD_KEYF_INACTIVE	0x0200	/* marked as inactive (i.e. totally
-					   to be ignored by everyone */
-#define ULOGD_KEYF_WILDCARD	0x0400
+					   to be ignored by everyone) */
 
 
 /* maximum length of ulogd key */
@@ -83,11 +82,12 @@ enum ulogd_dtype {
 	ULOGD_DTYPE_FLOW	= 0x0008, /* flow metadata */
 	ULOGD_DTYPE_SUM		= 0x0010, /* sum metadata */
 	ULOGD_DTYPE_SINK	= 0x0020, /* sink of data, no output keys */
+	ULOGD_DTYPE_WILDCARD	= 0x0040,
 };
 
 /* structure describing an input  / output parameter of a plugin */
 struct ulogd_key {
-	/* length of the returned value (only for lengthed types */
+	/* length of the returned value (only for lengthed types) */
 	uint32_t len;
 	/* type of the returned value (ULOGD_DTYPE_...) */
 	uint16_t type;

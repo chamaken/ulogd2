@@ -1134,7 +1134,7 @@ static int configure_netflow9(struct ulogd_pluginstance *pi)
 static struct ulogd_plugin netflow9_plugin = {
 	.name = "NFLOW9",
 	.input = {
-		.type = ULOGD_DTYPE_FLOW | ULOGD_KEYF_WILDCARD,
+		.type = ULOGD_DTYPE_FLOW | ULOGD_DTYPE_WILDCARD,
 	},
 	.output = {
 		.type = ULOGD_DTYPE_SINK,
