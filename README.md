@@ -41,10 +41,11 @@ implementation note
 TODO
 ----
 
-* naming a good one.
+* naming a good one. (unflow, nfflow, nchute, nhute, nfute, nfcat, untin...)
 * would it be better to make source pluginstance to multi-thread?  
   multi-threaded source plugin can be implemented, see MTNFQ.
-* nft output
+* nft output (propagate object only now)
+* introduce ULOGD_KEYF_MMAPED? SHARED? flag to indicate python can access
 * source plugin stacking
 * delete or fix unavailable plugins (use static variable as key ptr)
 
