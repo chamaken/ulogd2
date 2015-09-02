@@ -181,7 +181,20 @@ if [! test "x$enable_nfq" = "xyes" -a "x$ac_cv_mmaped_netlink" = "xyes"]; then
 	enable_nfq="no"
 fi
 
+AC_ARG_ENABLE(nfctst,
+       AS_HELP_STRING([--enable-nfctst], [Enable nfct stat module [default=yes]]),[enable_nfctst=$enableval],[enable_nfctst=yes])
 AM_CONDITIONAL([BUILD_NFCTST], [test "x$enable_nfctst" = "xyes"])
+
+AC_ARG_ENABLE(nft,
+       AS_HELP_STRING([--enable-nft], [Enable nft module [default=yes]]),[enable_nft=$enableval],[enable_nft=yes])
+AS_IF([test "x$enable_nft" = "xyes"], [
+    PKG_CHECK_MODULES([LIBNFTNL], [libnftnl >= 1.0.0])
+    AC_DEFINE([BUILD_NFT], [1], [Building nft module])
+])
+AM_CONDITIONAL([BUILD_NFT], [test "x$enable_nft" = "xyes"])
+if [! test "x$enable_nft" = "xyes"]; then
+	enable_nft="no"
+fi
 
 AC_ARG_WITH([pgsql], AS_HELP_STRING([--without-pgsql], [Build without postgresql output plugin [default=test]]))
 AS_IF([test "x$with_pgsql" != "xno"], [
@@ -312,7 +325,7 @@ AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile include/libipulog/Makefi
 	  include/linux/netfilter_ipv4/Makefile libipulog/Makefile \
 	  util/Makefile \
 	  input/Makefile input/packet/Makefile input/flow/Makefile \
-	  input/sum/Makefile input/queue/Makefile input/stats/Makefile \
+	  input/sum/Makefile input/queue/Makefile input/stats/Makefile input/table/Makefile \
 	  filter/Makefile filter/raw2packet/Makefile filter/packet2flow/Makefile \
 	  output/Makefile output/pcap/Makefile output/mysql/Makefile output/pgsql/Makefile output/sqlite3/Makefile \
 	  output/dbi/Makefile python/Makefile python/module/Makefile \
@@ -331,6 +344,7 @@ Ulogd configuration:
     ULOG plugin:			${enable_ulog}
     NFQ plugin:				${enable_nfq}
     NFCTST plugin:			${enable_nfctst}
+    NFT plugin:				${enable_nft}
   Output plugins:
     PCAP plugin:			${enable_pcap}
     PGSQL plugin:			${enable_pgsql}
