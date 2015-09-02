@@ -241,12 +241,12 @@ static int start_nfctst(struct ulogd_source_pluginstance *spi)
 	if (priv->nls == NULL) {
 		ulogd_log(ULOGD_FATAL, "mnl_socket_open: %s\n",
 			  _sys_errlist[errno]);
-		goto err_open;
+		goto err_exit;
 	}
 	if (mnl_socket_bind(priv->nls, 0, MNL_SOCKET_AUTOPID) < 0) {
 		ulogd_log(ULOGD_FATAL, "mnl_socket_bind: %s\n",
 			  _sys_errlist[errno]);
-		goto err_bind;
+		goto err_close;
 	}
 	priv->portid = mnl_socket_get_portid(priv->nls);
 	priv->seq = time(NULL);
@@ -261,29 +261,47 @@ static int start_nfctst(struct ulogd_source_pluginstance *spi)
 	nfh->version = NFNETLINK_V0;
 	nfh->res_id = 0;
 
-	ulogd_init_timer(&priv->timer, spi, polling_timer_cb);
-	ulogd_add_itimer(&priv->timer, pollint, pollint);
+	if (ulogd_init_timer(&priv->timer, spi, polling_timer_cb) < 0) {
+		ulogd_log(ULOGD_ERROR, "ulogd_init_timer: %s\n",
+			  _sys_errlist[errno]);
+		goto err_close;
+	}
+	if (ulogd_add_itimer(&priv->timer, pollint, pollint) < 0) {
+		ulogd_log(ULOGD_ERROR, "ulogd_add_timer: %s\n",
+			  _sys_errlist[errno]);
+		goto err_close;
+	}
 
 	priv->fd.fd = mnl_socket_get_fd(priv->nls);
 	priv->fd.cb = &read_cb_nfctst;
 	priv->fd.data = spi;
 	priv->fd.when = ULOGD_FD_READ;
-	ulogd_register_fd(&priv->fd);
+	if (ulogd_register_fd(&priv->fd) < 0) {
+		ulogd_log(ULOGD_ERROR, "ulogd_register_fd: %s\n",
+			  _sys_errlist[errno]);
+		goto err_del_timer;
+	}
 
 	return ULOGD_IRET_OK;
 
-err_bind:
+err_del_timer:
+	ulogd_del_timer(&priv->timer);
+err_close:
 	mnl_socket_close(priv->nls);
-err_open:
+err_exit:
 	return ULOGD_IRET_ERR;
 }
 
 static int stop_nfctst(struct ulogd_source_pluginstance *spi)
 {
 	struct nfctst_priv *priv = (struct nfctst_priv *)spi->private;
+	int ret = 0;
 
-	ulogd_del_timer(&priv->timer);
-	if (mnl_socket_close(priv->nls) == 0)
+	ret |= ulogd_del_timer(&priv->timer);
+	ret |= ulogd_unregister_fd(&priv->fd);
+	ret |= mnl_socket_close(priv->nls);
+	
+	if (ret == 0)
 		return ULOGD_IRET_OK;
 
 	return ULOGD_IRET_ERR;
