@@ -188,8 +188,8 @@ AM_CONDITIONAL([BUILD_NFCTST], [test "x$enable_nfctst" = "xyes"])
 AC_ARG_ENABLE(nft,
        AS_HELP_STRING([--enable-nft], [Enable nft module [default=yes]]),[enable_nft=$enableval],[enable_nft=yes])
 AS_IF([test "x$enable_nft" = "xyes"], [
-    PKG_CHECK_MODULES([LIBNFTNL], [libnftnl >= 1.0.0])
-    AC_DEFINE([BUILD_NFT], [1], [Building nft module])
+    PKG_CHECK_MODULES([LIBNFTNL], [libnftnl >= 1.0.0],
+                      [AC_DEFINE([BUILD_NFT], [1], [Building nft module])], [enable_nft=no])
 ])
 AM_CONDITIONAL([BUILD_NFT], [test "x$enable_nft" = "xyes"])
 if [! test "x$enable_nft" = "xyes"]; then
