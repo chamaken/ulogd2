@@ -827,8 +827,8 @@ static struct nlmsghdr *alloc_init_dump_request(uint32_t mark, uint32_t mask)
 	nfh->res_id = 0;
 
 	if (mark != 0 && mask != 0) {
-		mnl_attr_put_u32(nlh, CTA_MARK, mark);
-		mnl_attr_put_u32(nlh, CTA_MARK_MASK, mask);
+		mnl_attr_put_u32(nlh, CTA_MARK, htonl(mark));
+		mnl_attr_put_u32(nlh, CTA_MARK_MASK, htonl(mask));
 	}
 
 	ret = calloc(1, nlh->nlmsg_len);
