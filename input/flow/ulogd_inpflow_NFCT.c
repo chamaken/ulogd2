@@ -78,98 +78,115 @@ struct nfct_pluginstance {
 #define MAX_ENTRIES	(4 * HTABLE_SIZE)
 #define EVENT_MASK	NF_NETLINK_CONNTRACK_NEW | NF_NETLINK_CONNTRACK_DESTROY
 
+enum {
+	NFCT_CONF_POLLINTERVAL,
+	NFCT_CONF_HASH_ENABLE,
+	NFCT_CONF_HASH_BUCHETS,
+	NFCT_CONF_HASH_MAX,
+	NFCT_CONF_EVENT_MASK,
+	NFCT_CONF_SOCK_BUFSIZE,
+	NFCT_CONF_SOCK_MAXBUF,
+	NFCT_CONF_RECYNC_TIMEOUT,
+	NFCT_CONF_RELIABLE,
+	NFCT_CONF_SRC_FILTER,
+	NFCT_CONF_DST_FILTER,
+	NFCT_CONF_PROTO_FILTER,
+	NFCT_CONF_MARK_FILTER,
+	NFCT_CONF_MAX,
+};
+
 static struct config_keyset nfct_kset = {
-	.num_ces = 13,
+	.num_ces = NFCT_CONF_MAX,
 	.ces = {
-		{
+		[NFCT_CONF_POLLINTERVAL] = {
 			.key	 = "pollinterval",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFCT_CONF_HASH_ENABLE] = {
 			.key	 = "hash_enable",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 1,
 		},
-		{
+		[NFCT_CONF_HASH_BUCHETS] = {
 			.key	 = "hash_buckets",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = HTABLE_SIZE,
 		},
-		{
+		[NFCT_CONF_HASH_MAX] = {
 			.key	 = "hash_max_entries",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = MAX_ENTRIES,
 		},
-		{
+		[NFCT_CONF_EVENT_MASK] = {
 			.key	 = "event_mask",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = EVENT_MASK,
 		},
-		{
+		[NFCT_CONF_SOCK_BUFSIZE] = {
 			.key	 = "netlink_socket_buffer_size",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFCT_CONF_SOCK_MAXBUF] = {
 			.key	 = "netlink_socket_buffer_maxsize",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFCT_CONF_RECYNC_TIMEOUT] = {
 			.key	 = "netlink_resync_timeout",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 60,
 		},
-		{
+		[NFCT_CONF_RELIABLE] = {
 			.key	 = "reliable",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFCT_CONF_SRC_FILTER] = {
 			.key	 = "accept_src_filter",
 			.type	 = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 		},
-		{
+		[NFCT_CONF_DST_FILTER] = {
 			.key	 = "accept_dst_filter",
 			.type	 = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 		},
-		{
+		[NFCT_CONF_PROTO_FILTER] = {
 			.key	 = "accept_proto_filter",
 			.type	 = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 		},
-		{
+		[NFCT_CONF_MARK_FILTER] = {
 			.key	 = "accept_mark_filter",
 			.type	 = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 		},
 	},
 };
-#define pollint_ce(x)	(x->ces[0])
-#define usehash_ce(x)	(x->ces[1])
-#define buckets_ce(x)	(x->ces[2])
-#define maxentries_ce(x) (x->ces[3])
-#define eventmask_ce(x) (x->ces[4])
-#define nlsockbufsize_ce(x) (x->ces[5])
-#define nlsockbufmaxsize_ce(x) (x->ces[6])
-#define nlresynctimeout_ce(x) (x->ces[7])
-#define reliable_ce(x)	(x->ces[8])
-#define src_filter_ce(x)	((x)->ces[9])
-#define dst_filter_ce(x)	((x)->ces[10])
-#define proto_filter_ce(x)	((x)->ces[11])
-#define mark_filter_ce(x)	((x)->ces[12])
+#define pollint_ce(x)		(((x)->config_kset->ces[NFCT_CONF_POLLINTERVAL]).u.value)
+#define usehash_ce(x)		(((x)->config_kset->ces[NFCT_CONF_HASH_ENABLE]).u.value)
+#define buckets_ce(x)		(((x)->config_kset->ces[NFCT_CONF_HASH_BUCHETS]).u.value)
+#define maxentries_ce(x) 	(((x)->config_kset->ces[NFCT_CONF_HASH_MAX]).u.value)
+#define eventmask_ce(x) 	(((x)->config_kset->ces[NFCT_CONF_EVENT_MASK]).u.value)
+#define nlsockbufsize_ce(x) 	(((x)->config_kset->ces[NFCT_CONF_SOCK_BUFSIZE]).u.value)
+#define nlsockbufmaxsize_ce(x)	(((x)->config_kset->ces[NFCT_CONF_SOCK_MAXBUF]).u.value)
+#define nlresynctimeout_ce(x)	(((x)->config_kset->ces[NFCT_CONF_RECYNC_TIMEOUT]).u.value)
+#define reliable_ce(x)		(((x)->config_kset->ces[NFCT_CONF_RELIABLE]).u.value)
+#define src_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_SRC_FILTER]).u.string)
+#define dst_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_DST_FILTER]).u.string)
+#define proto_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_PROTO_FILTER]).u.string)
+#define mark_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_MARK_FILTER]).u.string)
 
 enum nfct_keys {
 	NFCT_ORIG_IP_SADDR = 0,
@@ -829,7 +846,7 @@ static int setnlbufsiz(struct ulogd_source_pluginstance *upi, int size)
 			(struct nfct_pluginstance *)upi->private;
 	static int warned = 0;
 
-	if (size < nlsockbufmaxsize_ce(upi->config_kset).u.value) {
+	if (size < nlsockbufmaxsize_ce(upi)) {
 		cpi->nlbufsiz = nfnl_rcvbufsiz(nfct_nfnlh(cpi->cth), size);
 		return 1;
 	}
@@ -860,7 +877,7 @@ static int read_cb_nfct(int fd, unsigned int what, void *param)
 
 	if (nfct_catch(cpi->cth) == -1) {
 		if (errno == ENOBUFS) {
-			if (nlsockbufmaxsize_ce(upi->config_kset).u.value) {
+			if (nlsockbufmaxsize_ce(upi)) {
 				int s = cpi->nlbufsiz * 2;
 				if (setnlbufsiz(upi, s)) {
 					ulogd_log(ULOGD_NOTICE,
@@ -878,14 +895,14 @@ static int read_cb_nfct(int fd, unsigned int what, void *param)
 			}
 
 			/* internal hash can deal with refresh */
-			if (usehash_ce(upi->config_kset).u.value != 0) {
+			if (usehash_ce(upi) != 0) {
 				/* schedule a resynchronization in N
 				 * seconds, this parameter is configurable
 				 * via config. Note that we don't re-schedule
 				 * a resync if it's already in progress. */
 				if (!ulogd_timer_pending(&cpi->ov_timer)) {
 					ulogd_add_timer(&cpi->ov_timer,
-							nlresynctimeout_ce(upi->config_kset).u.value);
+							nlresynctimeout_ce(upi));
 				}
 			}
 		}
@@ -970,7 +987,7 @@ static int read_cb_ovh(int fd, unsigned int what, void *param)
 		if (errno == ENOBUFS) {
 			if (!ulogd_timer_pending(&cpi->ov_timer)) {
 				ulogd_add_timer(&cpi->ov_timer,
-						nlresynctimeout_ce(upi->config_kset).u.value);
+						nlresynctimeout_ce(upi));
 			}
 		}
 	}
@@ -1048,7 +1065,7 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 
 	nfct_query(cpi->pgh, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
 	hashtable_iterate(cpi->ct_active, upi, do_purge);
-	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
+	ulogd_add_timer(&cpi->timer, pollint_ce(upi));
 }
 
 static int configure_nfct(struct ulogd_source_pluginstance *upi)
@@ -1316,24 +1333,24 @@ static int build_nfct_filter(struct ulogd_source_pluginstance *upi)
 		goto err_init;
 	}
 
-	if (strlen(src_filter_ce(upi->config_kset).u.string) != 0) {
-		char *filter_string = src_filter_ce(upi->config_kset).u.string;
+	if (strlen(src_filter_ce(upi)) != 0) {
+		char *filter_string = src_filter_ce(upi);
 		if (build_nfct_filter_dir(filter, filter_string, NFCT_SRC_DIR) != 0) {
 			ulogd_log(ULOGD_FATAL,
 					"Unable to create src filter\n");
 			goto err_filter;
 		}
 	}
-	if (strlen(dst_filter_ce(upi->config_kset).u.string) != 0) {
-		char *filter_string = dst_filter_ce(upi->config_kset).u.string;
+	if (strlen(dst_filter_ce(upi)) != 0) {
+		char *filter_string = dst_filter_ce(upi);
 		if (build_nfct_filter_dir(filter, filter_string, NFCT_DST_DIR) != 0) {
 			ulogd_log(ULOGD_FATAL,
 					"Unable to create dst filter\n");
 			goto err_filter;
 		}
 	}
-	if (strlen(proto_filter_ce(upi->config_kset).u.string) != 0) {
-		char *filter_string = proto_filter_ce(upi->config_kset).u.string;
+	if (strlen(proto_filter_ce(upi)) != 0) {
+		char *filter_string = proto_filter_ce(upi);
 		if (build_nfct_filter_proto(filter, filter_string) != 0) {
 			ulogd_log(ULOGD_FATAL,
 					"Unable to create proto filter\n");
@@ -1341,8 +1358,8 @@ static int build_nfct_filter(struct ulogd_source_pluginstance *upi)
 		}
 	}
 
-	if (strlen(mark_filter_ce(upi->config_kset).u.string) != 0) {
-		char *filter_string = mark_filter_ce(upi->config_kset).u.string;
+	if (strlen(mark_filter_ce(upi)) != 0) {
+		char *filter_string = mark_filter_ce(upi);
 		if (build_nfct_filter_mark(filter, filter_string, cpi->filter_dump) != 0) {
 			ulogd_log(ULOGD_FATAL,
 					"Unable to create mark filter\n");
@@ -1374,16 +1391,16 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 
 
 	cpi->cth = nfct_open(NFNL_SUBSYS_CTNETLINK,
-			     eventmask_ce(upi->config_kset).u.value);
+			     eventmask_ce(upi));
 	if (!cpi->cth) {
 		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
 		goto err_cth;
 	}
 
-	if ((strlen(src_filter_ce(upi->config_kset).u.string) != 0) ||
-		(strlen(dst_filter_ce(upi->config_kset).u.string) != 0) ||
-		(strlen(proto_filter_ce(upi->config_kset).u.string) != 0) ||
-		(strlen(mark_filter_ce(upi->config_kset).u.string) != 0)
+	if ((strlen(src_filter_ce(upi)) != 0) ||
+	    (strlen(dst_filter_ce(upi)) != 0) ||
+	    (strlen(proto_filter_ce(upi)) != 0) ||
+	    (strlen(mark_filter_ce(upi)) != 0)
 	   ) {
 		if (build_nfct_filter(upi) != 0) {
 			ulogd_log(ULOGD_FATAL, "error creating NFCT filter\n");
@@ -1392,7 +1409,7 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 	}
 
 
-	if (usehash_ce(upi->config_kset).u.value != 0) {
+	if (usehash_ce(upi) != 0) {
 		nfct_callback_register(cpi->cth, NFCT_T_ALL,
 				&event_handler_hashtable, upi);
 	} else {
@@ -1400,13 +1417,13 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 				       &event_handler_no_hashtable, upi);
 	}
 
-	if (nlsockbufsize_ce(upi->config_kset).u.value) {
-		setnlbufsiz(upi, nlsockbufsize_ce(upi->config_kset).u.value);
+	if (nlsockbufsize_ce(upi)) {
+		setnlbufsiz(upi, nlsockbufsize_ce(upi));
 		ulogd_log(ULOGD_NOTICE, "NFCT netlink buffer size has been "
 					"set to %d\n", cpi->nlbufsiz);
 	}
 
-	if (reliable_ce(upi->config_kset).u.value != 0) {
+	if (reliable_ce(upi) != 0) {
 		int on = 1;
 
 		setsockopt(nfct_fd(cpi->cth), SOL_NETLINK,
@@ -1423,15 +1440,15 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 
 	ulogd_register_fd(&cpi->nfct_fd);
 
-	if (usehash_ce(upi->config_kset).u.value != 0) {
+	if (usehash_ce(upi) != 0) {
 		struct nfct_handle *h;
 
 		/* we use a hashtable to cache entries in userspace. */
 		cpi->ct_active =
-		     hashtable_create(buckets_ce(upi->config_kset).u.value,
-				      maxentries_ce(upi->config_kset).u.value,
-				      hash,
-				      compare);
+			hashtable_create(buckets_ce(upi),
+					 maxentries_ce(upi),
+					 hash,
+					 compare);
 		if (!cpi->ct_active) {
 			ulogd_log(ULOGD_FATAL, "error allocating hash\n");
 			goto err_hashtable;
@@ -1498,7 +1515,7 @@ static int constructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
 
-	if (usehash_ce(upi->config_kset).u.value == 0) {
+	if (usehash_ce(upi) == 0) {
 		ulogd_log(ULOGD_FATAL, "NFCT polling mode requires "
 				       "the hashtable\n");
 		goto err;
@@ -1509,8 +1526,8 @@ static int constructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 		ulogd_log(ULOGD_FATAL, "error opening ctnetlink\n");
 		goto err;
 	}
-	if (strlen(mark_filter_ce(upi->config_kset).u.string) != 0) {
-		char *filter_string = mark_filter_ce(upi->config_kset).u.string;
+	if (strlen(mark_filter_ce(upi)) != 0) {
+		char *filter_string = mark_filter_ce(upi);
 		if (build_nfct_filter_mark(NULL, filter_string,
 					   cpi->filter_dump) != 0) {
 			ulogd_log(ULOGD_FATAL, "error creating NFCT mark filter\n");
@@ -1520,19 +1537,19 @@ static int constructor_nfct_polling(struct ulogd_source_pluginstance *upi)
 	nfct_callback_register(cpi->pgh, NFCT_T_ALL, &polling_handler, upi);
 
 	cpi->ct_active =
-	     hashtable_create(buckets_ce(upi->config_kset).u.value,
-			      maxentries_ce(upi->config_kset).u.value,
-			      hash,
-			      compare);
+		hashtable_create(buckets_ce(upi),
+				 maxentries_ce(upi),
+				 hash,
+				 compare);
 	if (!cpi->ct_active) {
 		ulogd_log(ULOGD_FATAL, "error allocating hash\n");
 		goto err_hashtable;
 	}
 
 	ulogd_init_timer(&cpi->timer, upi, polling_timer_cb);
-	if (pollint_ce(upi->config_kset).u.value != 0)
+	if (pollint_ce(upi) != 0)
 		ulogd_add_timer(&cpi->timer,
-				pollint_ce(upi->config_kset).u.value);
+				pollint_ce(upi));
 
 	ulogd_log(ULOGD_NOTICE, "NFCT working in polling mode\n");
 	return 0;
@@ -1554,7 +1571,7 @@ static int constructor_nfct(struct ulogd_source_pluginstance *upi)
 		return -1;
 	}
 
-	if (pollint_ce(upi->config_kset).u.value == 0) {
+	if (pollint_ce(upi) == 0) {
 		/* listen to ctnetlink events. */
 		return constructor_nfct_events(upi);
 	} else {
@@ -1577,7 +1594,7 @@ static int destructor_nfct_events(struct ulogd_source_pluginstance *upi)
 	if (rc < 0)
 		return rc;
 
-	if (usehash_ce(upi->config_kset).u.value != 0) {
+	if (usehash_ce(upi) != 0) {
 		rc = ulogd_fini_timer(&cpi->ov_timer);
 		if (rc < 0)
 			return rc;
@@ -1621,7 +1638,7 @@ static int destructor_nfct(struct ulogd_source_pluginstance *upi)
 			(struct nfct_pluginstance *) upi->private;
 	int ret = -1;
 
-	if (pollint_ce(upi->config_kset).u.value == 0) {
+	if (pollint_ce(upi) == 0) {
 		ret = destructor_nfct_events(upi);
 	} else {
 		ret = destructor_nfct_polling(upi);
