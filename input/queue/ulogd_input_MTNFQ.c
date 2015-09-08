@@ -58,6 +58,7 @@ enum nfq_conf {
 	NFQ_CONF_FRAME_SIZE,		/* 8192 */
 	NFQ_CONF_QUEUE_NUM,
 	NFQ_CONF_COPY_MODE,		/* NFQNL_COPY_META / NFQNL_COPY_PACKET */
+	NFQ_CONF_COPY_RANGE,
 	NFQ_CONF_FAIL_OPEN,		/* NFQA_CFG_F_FAIL_OPEN */
 	NFQ_CONF_CONNTRACK,		/* NFQA_CFG_F_CONNTRACK */
 	NFQ_CONF_GSO,			/* NFQA_CFG_F_GSO */
@@ -98,6 +99,12 @@ static struct config_keyset nfq_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.string = "packet",
 		},
+		[NFQ_CONF_COPY_RANGE] = {
+			.key	 = "copy_range",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0xFFFF - NLA_HDRLEN,
+			},
 		[NFQ_CONF_FAIL_OPEN] = {
 			.key	 = "fail_open",
 			.type	 = CONFIG_TYPE_INT,
@@ -137,6 +144,7 @@ static struct config_keyset nfq_kset = {
 #define frame_size_ce(x)	(((x)->config_kset->ces[NFQ_CONF_FRAME_SIZE]).u.value)
 #define queue_num_ce(x)		(((x)->config_kset->ces[NFQ_CONF_QUEUE_NUM]).u.value)
 #define copy_mode_ce(x)		(((x)->config_kset->ces[NFQ_CONF_COPY_MODE]).u.string)
+#define copy_range_ce(x)	(((x)->config_kset->ces[NFQ_CONF_COPY_RANGE]).u.value)
 #define fail_open_ce(x)		(((x)->config_kset->ces[NFQ_CONF_FAIL_OPEN]).u.value)
 #define conntrack_ce(x)		(((x)->config_kset->ces[NFQ_CONF_CONNTRACK]).u.value)
 #define gso_ce(x)		(((x)->config_kset->ces[NFQ_CONF_GSO]).u.value)
@@ -408,9 +416,13 @@ static int nfq_put_config(struct nlmsghdr *nlh,
 	uint32_t flags = 0;
 
 	if (strcasecmp(copy_mode, "packet") == 0) {
-		/* copy_range is determined by frame size in mmaped socket.
-		 * set max size to show the size at NL_MMAP_STATUS_COPY */
-		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_PACKET, 0xffff);
+		uint32_t copy_range;
+		if (frame_size_ce(upi) < copy_range_ce(upi))
+			ulogd_log(ULOGD_NOTICE, "may cause COPY status"
+				  " - frame size: %d, copy_range: %d\n",
+				  frame_size_ce(upi), copy_range_ce(upi));
+		copy_range = htonl(copy_range_ce(upi));
+		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_PACKET, copy_range);
 	} else if (strcasecmp(copy_mode, "meta") == 0) {
 		nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_META, 0);
 	} else if (strcasecmp(copy_mode, "none") == 0) {

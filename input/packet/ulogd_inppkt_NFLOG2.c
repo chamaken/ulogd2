@@ -52,6 +52,7 @@ enum nflog_conf {
 	NFLOG_CONF_QTHRESH,
 	NFLOG_CONF_QTIMEOUT,
 	NFLOG_CONF_COPY_MODE,		/* NFULNL_COPY_ NONE / META / PACKET */
+	NFLOG_CONF_COPY_RANGE,
 	NFLOG_CONF_CONNTRACK,
 	NFLOG_CONF_MAX,
 };
@@ -137,6 +138,12 @@ static struct config_keyset nflog_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.string = "packet",
 		},
+		[NFLOG_CONF_COPY_RANGE] = {
+			.key	 = "copy_range",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0xFFFF - NLA_HDRLEN,
+		},
 		[NFLOG_CONF_CONNTRACK] = {
 			.key     = "conntrack",
 			.type    = CONFIG_TYPE_INT,
@@ -159,6 +166,7 @@ static struct config_keyset nflog_kset = {
 #define qthresh_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_QTHRESH]).u.value)
 #define qtimeout_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_QTIMEOUT]).u.value)
 #define copy_mode_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_COPY_MODE]).u.string)
+#define copy_range_ce(x)	(((x)->config_kset->ces[NFLOG_CONF_COPY_RANGE]).u.value)
 #define conntrack_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_CONNTRACK]).u.value)
 
 enum nflog_keys {
@@ -680,8 +688,14 @@ static int nflog_prepare_request(struct ulogd_source_pluginstance *upi)
 	nlh = nflog_nlmsg_put_header(buf, NFULNL_MSG_CONFIG, AF_UNSPEC, group);
 	nlh->nlmsg_flags |= NLM_F_ACK;
 	if (strcasecmp(copy_mode, "packet") == 0) {
+		uint32_t copy_range;
+		if (frame_size_ce(upi) < copy_range_ce(upi))
+			ulogd_log(ULOGD_NOTICE, "may cause COPY status"
+				  " - frame size: %d, copy_range: %d\n",
+				  frame_size_ce(upi), copy_range_ce(upi));
+		copy_range = htonl(copy_range_ce(upi));
 		if (nflog_attr_put_cfg_mode(nlh, NFULNL_COPY_PACKET,
-					    0xffff) < 0) {
+					    copy_range) < 0) {
 			ulogd_log(ULOGD_ERROR, "nflog_attr_put_cfg_mode: %s\n",
 				  _sys_errlist[errno]);
 			return ULOGD_IRET_ERR;
