@@ -140,15 +140,15 @@ static struct config_keyset nfct_kset = {
 	},
 };
 
-#define block_size_ce(x)	((x)->ces[NFCT_CONF_BLOCK_SIZE])
-#define block_nr_ce(x)		((x)->ces[NFCT_CONF_BLOCK_NR])
-#define frame_size_ce(x)	((x)->ces[NFCT_CONF_FRAME_SIZE])
-#define active_timeout_ce(x)	((x)->ces[NFCT_CONF_ACTIVE_TIMEOUT])
-#define reliable_ce(x)		((x)->ces[NFCT_CONF_RELIABLE])
-#define mark_filter_ce(x)	((x)->ces[NFCT_CONF_MARK_FILTER])
-#define destroy_only_ce(x)	((x)->ces[NFCT_CONF_DESTROY_ONLY])
-#define event_bufsiz_ce(x)	((x)->ces[NFCT_CONF_EVENT_BUFSIZ])
-#define event_bufmax_ce(x)	((x)->ces[NFCT_CONF_EVENT_BUFMAX])
+#define block_size_ce(x)	(((x)->config_kset->ces[NFCT_CONF_BLOCK_SIZE]).u.value)
+#define block_nr_ce(x)		(((x)->config_kset->ces[NFCT_CONF_BLOCK_NR]).u.value)
+#define frame_size_ce(x)	(((x)->config_kset->ces[NFCT_CONF_FRAME_SIZE]).u.value)
+#define active_timeout_ce(x)	(((x)->config_kset->ces[NFCT_CONF_ACTIVE_TIMEOUT]).u.value)
+#define reliable_ce(x)		(((x)->config_kset->ces[NFCT_CONF_RELIABLE]).u.value)
+#define mark_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_MARK_FILTER]).u.string)
+#define destroy_only_ce(x)	(((x)->config_kset->ces[NFCT_CONF_DESTROY_ONLY]).u.value)
+#define event_bufsiz_ce(x)	(((x)->config_kset->ces[NFCT_CONF_EVENT_BUFSIZ]).u.value)
+#define event_bufmax_ce(x)	(((x)->config_kset->ces[NFCT_CONF_EVENT_BUFMAX]).u.value)
 
 enum nfct_keys {
 	NFCT_ORIG_IP_SADDR = 0,
@@ -615,7 +615,7 @@ static int setnlbufsiz(struct mnl_socket *nl, int size)
 static int update_bufsize(struct ulogd_source_pluginstance *upi)
 {
 	struct nfct_priv *priv = (struct nfct_priv *)upi->private;
-	int maxbufsiz = event_bufmax_ce(upi->config_kset).u.value;
+	int maxbufsiz = event_bufmax_ce(upi);
 	int size;
 	static int warned = 0;
 
@@ -845,7 +845,7 @@ static int build_nfct_filter_mark(struct ulogd_source_pluginstance *spi,
 	struct nfct_priv *priv = (struct nfct_priv *)spi->private;
 	char *p, *endptr;
 	uintmax_t v;
-	char *filter_string = mark_filter_ce(spi->config_kset).u.string;
+	char *filter_string = mark_filter_ce(spi);
 	struct nfct_filter_dump_mark attr;
 
 	if (strlen(filter_string) == 0) {
@@ -964,7 +964,7 @@ static int init_eventnl(struct ulogd_source_pluginstance *spi)
 	}
 	priv->eventpid = mnl_socket_get_portid(priv->eventnl);
 
-	if (reliable_ce(spi->config_kset).u.value != 0) {
+	if (reliable_ce(spi) != 0) {
 		if (set_reliable(priv->eventnl)) {
 			ulogd_log(ULOGD_ERROR, "set_reliable: %s\n",
 				  _sys_errlist[errno]);
@@ -988,12 +988,12 @@ static int init_dumpnl(struct ulogd_source_pluginstance *spi)
 {
 	struct nfct_priv *priv = (struct nfct_priv *)spi->private;
 	struct nl_mmap_req req = {
-		.nm_block_size	= block_size_ce(spi->config_kset).u.value,
-		.nm_block_nr	= block_nr_ce(spi->config_kset).u.value,
-		.nm_frame_size	= frame_size_ce(spi->config_kset).u.value,
-		.nm_frame_nr	= block_size_ce(spi->config_kset).u.value
-				/ frame_size_ce(spi->config_kset).u.value
-				* block_nr_ce(spi->config_kset).u.value,
+		.nm_block_size	= block_size_ce(spi),
+		.nm_block_nr	= block_nr_ce(spi),
+		.nm_frame_size	= frame_size_ce(spi),
+		.nm_frame_nr	= block_size_ce(spi)
+				/ frame_size_ce(spi)
+				* block_nr_ce(spi),
 	};
 
 	priv->dumpnl = mnl_socket_open(NETLINK_NETFILTER);
@@ -1017,7 +1017,7 @@ static int init_dumpnl(struct ulogd_source_pluginstance *spi)
 	}
 	priv->dumppid = mnl_socket_get_portid(priv->dumpnl);
 
-	if (reliable_ce(spi->config_kset).u.value != 0) {
+	if (reliable_ce(spi) != 0) {
 		if (set_reliable(priv->dumpnl)) {
 			ulogd_log(ULOGD_ERROR, "set_reliable: %s\n",
 				  _sys_errlist[errno]);
@@ -1042,7 +1042,7 @@ error_close:
 static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 {
 	struct nfct_priv *priv = (struct nfct_priv *)spi->private;
-	unsigned long interval = active_timeout_ce(spi->config_kset).u.value;
+	unsigned long interval = active_timeout_ce(spi);
 	int event_bufsiz, event_bufmax;
 	socklen_t socklen = sizeof(int);
 
@@ -1053,7 +1053,7 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 		goto error_close_event;
 	}
 
-	if (!destroy_only_ce(spi->config_kset).u.value) {
+	if (!destroy_only_ce(spi)) {
 		if (clear_counters(priv) == -1) {
 			ulogd_log(ULOGD_ERROR, "could not clear counters: %s\n",
 				  _sys_errlist[errno]);
@@ -1061,13 +1061,13 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 		}
 	}
 
-	event_bufsiz = event_bufsiz_ce(spi->config_kset).u.value;
-	event_bufmax = event_bufmax_ce(spi->config_kset).u.value;
+	event_bufsiz = event_bufsiz_ce(spi);
+	event_bufmax = event_bufmax_ce(spi);
 	if (event_bufsiz) {
 		if (event_bufsiz > event_bufmax) {
 			ulogd_log(ULOGD_INFO, "set event buffer size to: %d\n",
 				  event_bufsiz);
-			event_bufsiz_ce(spi->config_kset).u.value
+			event_bufsiz_ce(spi)
 				= event_bufsiz = event_bufmax;
 		}
 		priv->event_bufsize = setnlbufsiz(priv->eventnl, event_bufsiz);
@@ -1083,7 +1083,7 @@ static int constructor_nfct(struct ulogd_source_pluginstance *spi)
 		goto error_close_event;
 	}
 
-	if (destroy_only_ce(spi->config_kset).u.value)
+	if (destroy_only_ce(spi))
 		return ULOGD_IRET_OK;
 
 	if (init_dumpnl(spi))
@@ -1128,7 +1128,7 @@ static int destructor_nfct(struct ulogd_source_pluginstance *spi)
 
 	free(priv->dump_request);
 
-	if (!destroy_only_ce(spi->config_kset).u.value) {
+	if (!destroy_only_ce(spi)) {
 		if (ulogd_del_timer(&priv->timer) != 0) {
 			ulogd_log(ULOGD_ERROR, "ulogd_del_timer: %s\n",
 				  _sys_errlist[errno]);

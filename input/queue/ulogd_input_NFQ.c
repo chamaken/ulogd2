@@ -138,17 +138,17 @@ static struct config_keyset nfq_kset = {
 	.num_ces = NFQ_CONF_MAX,
 };
 
-#define block_size_ce(x)	(((x)->ces[NFQ_CONF_BLOCK_SIZE]).u.value)
-#define block_nr_ce(x)		(((x)->ces[NFQ_CONF_BLOCK_NR]).u.value)
-#define frame_size_ce(x)	(((x)->ces[NFQ_CONF_FRAME_SIZE]).u.value)
-#define oneshot_ce(x)		(((x)->ces[NFQ_CONF_ONESHOT]).u.value)
-#define queue_num_ce(x)		(((x)->ces[NFQ_CONF_QUEUE_NUM]).u.value)
-#define copy_mode_ce(x)		(((x)->ces[NFQ_CONF_COPY_MODE]).u.string)
-#define fail_open_ce(x)		(((x)->ces[NFQ_CONF_FAIL_OPEN]).u.value)
-#define conntrack_ce(x)		(((x)->ces[NFQ_CONF_CONNTRACK]).u.value)
-#define gso_ce(x)		(((x)->ces[NFQ_CONF_GSO]).u.value)
-#define uid_gid_ce(x)		(((x)->ces[NFQ_CONF_UID_GID]).u.value)
-#define secctx_ce(x)		(((x)->ces[NFQ_CONF_SECCTX]).u.value)
+#define block_size_ce(x)	(((x)->config_kset->ces[NFQ_CONF_BLOCK_SIZE]).u.value)
+#define block_nr_ce(x)		(((x)->config_kset->ces[NFQ_CONF_BLOCK_NR]).u.value)
+#define frame_size_ce(x)	(((x)->config_kset->ces[NFQ_CONF_FRAME_SIZE]).u.value)
+#define oneshot_ce(x)		(((x)->config_kset->ces[NFQ_CONF_ONESHOT]).u.value)
+#define queue_num_ce(x)		(((x)->config_kset->ces[NFQ_CONF_QUEUE_NUM]).u.value)
+#define copy_mode_ce(x)		(((x)->config_kset->ces[NFQ_CONF_COPY_MODE]).u.string)
+#define fail_open_ce(x)		(((x)->config_kset->ces[NFQ_CONF_FAIL_OPEN]).u.value)
+#define conntrack_ce(x)		(((x)->config_kset->ces[NFQ_CONF_CONNTRACK]).u.value)
+#define gso_ce(x)		(((x)->config_kset->ces[NFQ_CONF_GSO]).u.value)
+#define uid_gid_ce(x)		(((x)->config_kset->ces[NFQ_CONF_UID_GID]).u.value)
+#define secctx_ce(x)		(((x)->config_kset->ces[NFQ_CONF_SECCTX]).u.value)
 
 
 enum ulogd_nfq_keys {
@@ -301,7 +301,7 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 			return ULOGD_IRET_ERR;
 		}
 		nproc++;
-	} while (oneshot_ce(upi->config_kset));
+	} while (oneshot_ce(upi));
 
 	return ret;
 }
@@ -322,9 +322,10 @@ nfq_hdr_put(char *buf, int type, uint32_t queue_num)
 	return nlh;
 }
 
-static int nfq_put_config(struct nlmsghdr *nlh, struct config_keyset *config)
+static int nfq_put_config(struct nlmsghdr *nlh,
+			  struct ulogd_source_pluginstance *upi)
 {
-	char *copy_mode = copy_mode_ce(config);
+	char *copy_mode = copy_mode_ce(upi);
 	uint32_t flags = 0;
 
 	if (strcasecmp(copy_mode, "packet") == 0) {
@@ -340,16 +341,16 @@ static int nfq_put_config(struct nlmsghdr *nlh, struct config_keyset *config)
 		return -1;
 	}
 
-	if (fail_open_ce(config))
+	if (fail_open_ce(upi))
 		flags |= NFQA_CFG_F_FAIL_OPEN;
-	if (conntrack_ce(config))
+	if (conntrack_ce(upi))
 		flags |= NFQA_CFG_F_CONNTRACK;
-	if (gso_ce(config))
+	if (gso_ce(upi))
 		flags |= NFQA_CFG_F_GSO;
-	if (uid_gid_ce(config))
+	if (uid_gid_ce(upi))
 		flags |= NFQA_CFG_F_UID_GID;
 #if defined(NFQA_CFG_F_SECCTX)
-	if (secctx_ce(config))
+	if (secctx_ce(upi))
 		flags |= NFQA_CFG_F_SECCTX;
 #endif
 	mnl_attr_put_u32(nlh, NFQA_CFG_FLAGS, htonl(flags));
@@ -384,7 +385,7 @@ static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
 	struct nlmsghdr *nlh;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
-	int queue_num = queue_num_ce(upi->config_kset);
+	int queue_num = queue_num_ce(upi);
 
 	/* kernels 3.8 and later is required to omit PF_(UN)BIND */
 	nlh = nfq_hdr_put(buf, NFQNL_MSG_CONFIG, 0);
@@ -417,7 +418,7 @@ static int nfq_send_request(struct ulogd_source_pluginstance *upi)
 
 	nlh = nfq_hdr_put(buf, NFQNL_MSG_CONFIG, queue_num);
 	nlh->nlmsg_flags |= NLM_F_ACK;	
-	if (nfq_put_config(nlh, upi->config_kset) == -1)
+	if (nfq_put_config(nlh, upi) == -1)
 		return ULOGD_IRET_ERR;
 	if (mnl_socket_sendto(priv->nl, nlh, nlh->nlmsg_len) < 0) {
 		ulogd_log(ULOGD_ERROR, "mnl_socket_send: %s\n",
@@ -442,12 +443,12 @@ static int constructor_nfq(struct ulogd_source_pluginstance *upi)
 {
 	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
 	struct nl_mmap_req req = {
-		.nm_block_size	= block_size_ce(upi->config_kset),
-		.nm_block_nr	= block_nr_ce(upi->config_kset),
-		.nm_frame_size	= frame_size_ce(upi->config_kset),
-		.nm_frame_nr	= block_size_ce(upi->config_kset)
-				/ frame_size_ce(upi->config_kset)
-				* block_nr_ce(upi->config_kset),
+		.nm_block_size	= block_size_ce(upi),
+		.nm_block_nr	= block_nr_ce(upi),
+		.nm_frame_size	= frame_size_ce(upi),
+		.nm_frame_nr	= block_size_ce(upi)
+				/ frame_size_ce(upi)
+				* block_nr_ce(upi),
 	};
 	int optval = 1;
 
