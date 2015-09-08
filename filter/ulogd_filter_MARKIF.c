@@ -186,15 +186,18 @@ static int configure_markif(struct ulogd_pluginstance *upi)
 static int extract_param(char *s, uint32_t *mask, uint32_t *shift)
 {
 	char *t = NULL;
+	uintmax_t v;
 
 	if ((t = strstr(s, ">>")) != NULL) {
 		*t = '\0';
 		t += 2;
-		*shift = strtoul(t, NULL, 0);
+		v = strtoumax(t, NULL, 0);
 	} else {
-		*shift = 0;
+		v = 0;
 	}
-	*mask = strtoul(s, NULL, 0);
+	*shift = v;
+	v = strtoumax(s, NULL, 0);
+	*mask = v;
 	return 0;
 }
 
