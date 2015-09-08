@@ -241,6 +241,7 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 	struct ulogd_source_pluginstance *upi = param;
 	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
 	struct nl_mmap_hdr *frame;
+	char buf[65535 + 4096]; /* max IP total len + some nla */
 	int ret, nproc = 0;
 
 	if (!(what & ULOGD_FD_READ))
@@ -259,10 +260,10 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 			/* currently used by the kernel */
 			return ULOGD_IRET_OK;
 		case NL_MMAP_STATUS_COPY:
-			/* XXX: only consuming message, may cause segfault */
-			recv(fd, alloca(frame->nm_len), frame->nm_len,
-			     MSG_DONTWAIT);
-			ulogd_log(ULOGD_ERROR, "exceeded the frame size: %d\n",
+			/* only consuming message */
+			/* assert(frame->nm_len < sizeof(buf)); */
+			recv(fd, buf, frame->nm_len, MSG_DONTWAIT);
+			ulogd_log(ULOGD_ERROR, "recv frame exceeded size: %d\n",
 				  frame->nm_len);
 			frame->nm_status = NL_MMAP_STATUS_UNUSED;
 			mnl_ring_advance(priv->nlr);
