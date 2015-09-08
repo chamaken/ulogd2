@@ -55,6 +55,7 @@ enum nfq_conf {
 	NFQ_CONF_BLOCK_SIZE = 0,	/* 8192 */
 	NFQ_CONF_BLOCK_NR,		/* 32 */
 	NFQ_CONF_FRAME_SIZE,		/* 8192 */
+	NFQ_CONF_ONESHOT,
 	NFQ_CONF_QUEUE_NUM,
 	NFQ_CONF_COPY_MODE,		/* NFQNL_COPY_META / NFQNL_COPY_PACKET */
 	NFQ_CONF_FAIL_OPEN,		/* NFQA_CFG_F_FAIL_OPEN */
@@ -84,6 +85,12 @@ static struct config_keyset nfq_kset = {
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 8192,
+		},
+		[NFQ_CONF_ONESHOT] = {
+			.key	 = "oneshot",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
 		},
 		[NFQ_CONF_QUEUE_NUM] = {
 			.key	 = "queue_num",
@@ -134,6 +141,7 @@ static struct config_keyset nfq_kset = {
 #define block_size_ce(x)	(((x)->ces[NFQ_CONF_BLOCK_SIZE]).u.value)
 #define block_nr_ce(x)		(((x)->ces[NFQ_CONF_BLOCK_NR]).u.value)
 #define frame_size_ce(x)	(((x)->ces[NFQ_CONF_FRAME_SIZE]).u.value)
+#define oneshot_ce(x)		(((x)->ces[NFQ_CONF_ONESHOT]).u.value)
 #define queue_num_ce(x)		(((x)->ces[NFQ_CONF_QUEUE_NUM]).u.value)
 #define copy_mode_ce(x)		(((x)->ces[NFQ_CONF_COPY_MODE]).u.string)
 #define fail_open_ce(x)		(((x)->ces[NFQ_CONF_FAIL_OPEN]).u.value)
@@ -242,12 +250,12 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 	struct nfq_priv *priv =	(struct nfq_priv *)upi->private;
 	struct nl_mmap_hdr *frame;
 	char buf[65535 + 4096]; /* max IP total len + some nla */
-	int ret, nproc = 0;
+	int ret = ULOGD_IRET_ERR, nproc = 0;
 
 	if (!(what & ULOGD_FD_READ))
 		return 0;
 
-	while (1) {
+	do {
 		frame = mnl_ring_get_frame(priv->nlr);
 		switch (frame->nm_status) {
 		case NL_MMAP_STATUS_VALID:
@@ -258,7 +266,9 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 			break;
 		case NL_MMAP_STATUS_RESERVED:
 			/* currently used by the kernel */
-			return ULOGD_IRET_OK;
+			if (nproc > 0)
+				return ULOGD_IRET_OK;
+			return ULOGD_IRET_ERR;
 		case NL_MMAP_STATUS_COPY:
 			/* only consuming message */
 			/* assert(frame->nm_len < sizeof(buf)); */
@@ -267,26 +277,33 @@ static int nfq_read_cb(int fd, unsigned int what, void *param)
 				  frame->nm_len);
 			frame->nm_status = NL_MMAP_STATUS_UNUSED;
 			mnl_ring_advance(priv->nlr);
-			return ULOGD_IRET_ERR;
+			break;
 		case NL_MMAP_STATUS_UNUSED:
 			if (nproc > 0)
 				return ULOGD_IRET_OK;
-			if (mnl_ring_lookup_frame(priv->nlr,
-						  NL_MMAP_STATUS_VALID) == NULL)
+			if (!mnl_ring_lookup_frame(priv->nlr,
+						   NL_MMAP_STATUS_VALID)) {
+				ulogd_log(ULOGD_ERROR,
+					  "could not found valid frame\n");
 				return ULOGD_IRET_ERR;
-			break;
+			}
+			continue;
 		case NL_MMAP_STATUS_SKIP:
 			if (!priv->skipped) {
 				priv->skipped = true;
 				ulogd_log(ULOGD_ERROR, "found SKIP status"
 					  " frame, ENOBUFS maybe\n");
 			}
-			return ULOGD_IRET_OK;
+			return ULOGD_IRET_ERR;
+		default:
+			ulogd_log(ULOGD_ERROR, "unknown frame_status: %d\n",
+				  frame->nm_status);
+			return ULOGD_IRET_ERR;
 		}
 		nproc++;
-	}
+	} while (oneshot_ce(upi->config_kset));
 
-	return ULOGD_IRET_ERR;
+	return ret;
 }
 
 /* copy from library examples */

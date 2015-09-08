@@ -42,6 +42,7 @@ enum nflog_conf {
 	NFLOG_CONF_BLOCK_SIZE	= 0,
 	NFLOG_CONF_BLOCK_NR,
 	NFLOG_CONF_FRAME_SIZE,
+	NFLOG_CONF_ONESHOT,
 	NFLOG_CONF_BIND,
 	NFLOG_CONF_UNBIND,
 	NFLOG_CONF_GROUP,
@@ -75,6 +76,12 @@ static struct config_keyset nflog_kset = {
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 8192,
+		},
+		[NFLOG_CONF_ONESHOT] = {
+			.key	 = "oneshot",
+			.type	 = CONFIG_TYPE_INT,
+			.options = CONFIG_OPT_NONE,
+			.u.value = 0,
 		},
 		[NFLOG_CONF_BIND] = {
 			.key	 = "bind",
@@ -142,6 +149,7 @@ static struct config_keyset nflog_kset = {
 #define block_size_ce(x)	(((x)->config_kset->ces[NFLOG_CONF_BLOCK_SIZE]).u.value)
 #define block_nr_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_BLOCK_NR]).u.value)
 #define frame_size_ce(x)	(((x)->config_kset->ces[NFLOG_CONF_FRAME_SIZE]).u.value)
+#define oneshot_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_ONESHOT]).u.value)
 #define bind_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_BIND]).u.value)
 #define unbind_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_UNBIND]).u.value)
 #define group_ce(x)		(((x)->config_kset->ces[NFLOG_CONF_GROUP]).u.value)
@@ -499,50 +507,59 @@ static int nflog_read_cb(int fd, unsigned int what, void *param)
 	struct nflog_priv *priv = (struct nflog_priv *)upi->private;
 	struct nl_mmap_hdr *frame;
 	char buf[65535 + 4096]; /* max IP total len + some nla */
-	int ret;
+	int ret = ULOGD_IRET_ERR, nproc = 0;
 
 	if (!(what & ULOGD_FD_READ))
 		return 0;
 
-	/* we don't have a while loop here, since we don't want to
-	 * grab all the processing time just for us.  there might be other
-	 * sockets that have pending work */
-handle_frame:
-	frame = mnl_ring_get_frame(priv->nlr);
-	switch (frame->nm_status) {
-	case NL_MMAP_STATUS_VALID:
-		ret = handle_valid_frame(upi, frame);
-		mnl_ring_advance(priv->nlr);
-		return ret;
-	case NL_MMAP_STATUS_RESERVED:
-		/* currently used by the kernel */
-		return ULOGD_IRET_OK;
-	case NL_MMAP_STATUS_COPY:
-		/* assert(frame->nm_len < sizeof(buf)); */
-		recv(fd, buf, frame->nm_len, MSG_DONTWAIT);
-		ulogd_log(ULOGD_ERROR, "recv frame exceeded size: %d\n",
-			  frame->nm_len);
-		frame->nm_status = NL_MMAP_STATUS_UNUSED;
-		mnl_ring_advance(priv->nlr);
-		return ULOGD_IRET_ERR;
-	case NL_MMAP_STATUS_UNUSED:
-		if (mnl_ring_lookup_frame(priv->nlr,
-					  NL_MMAP_STATUS_VALID) == NULL) {
-			ulogd_log(ULOGD_ERROR, "could not found valid frame\n");
+	do {
+		frame = mnl_ring_get_frame(priv->nlr);
+		switch (frame->nm_status) {
+		case NL_MMAP_STATUS_VALID:
+			ret = handle_valid_frame(upi, frame);
+			mnl_ring_advance(priv->nlr);
+			if (ret != ULOGD_IRET_OK)
+				return ret;
+			break;
+		case NL_MMAP_STATUS_RESERVED:
+			/* currently used by the kernel */
+			if (nproc > 0)
+				return ULOGD_IRET_OK;
+			return ULOGD_IRET_ERR;
+		case NL_MMAP_STATUS_COPY:
+			/* assert(frame->nm_len < sizeof(buf)); */
+			recv(fd, buf, frame->nm_len, MSG_DONTWAIT);
+			ulogd_log(ULOGD_ERROR, "recv frame exceeded size: %d\n",
+				  frame->nm_len);
+			frame->nm_status = NL_MMAP_STATUS_UNUSED;
+			mnl_ring_advance(priv->nlr);
+			break;
+		case NL_MMAP_STATUS_UNUSED:
+			if (nproc > 0)
+				return ULOGD_IRET_OK;
+			if (!mnl_ring_lookup_frame(priv->nlr,
+						   NL_MMAP_STATUS_VALID)) {
+				ulogd_log(ULOGD_ERROR,
+					  "could not found valid frame\n");
+				return ULOGD_IRET_ERR;
+			}
+			continue;
+		case NL_MMAP_STATUS_SKIP:
+			if (!priv->skipped) {
+				priv->skipped = true;
+				ulogd_log(ULOGD_ERROR, "found SKIP status"
+					  " frame, ENOBUFS maybe\n");
+			}
+			return ULOGD_IRET_ERR;
+		default:
+			ulogd_log(ULOGD_ERROR, "unknown frame_status: %d\n",
+				  frame->nm_status);
 			return ULOGD_IRET_ERR;
 		}
-		goto handle_frame;
-	case NL_MMAP_STATUS_SKIP:
-		if (!priv->skipped) {
-			priv->skipped = true;
-			ulogd_log(ULOGD_ERROR, "found SKIP status"
-				  " frame, ENOBUFS maybe\n");
-		}
-		return ULOGD_IRET_OK;
-	}
+		nproc++;
+	} while (oneshot_ce(upi));
 
-	ulogd_log(ULOGD_ERROR, "unknown frame_status: %d\n", frame->nm_status);
-	return ULOGD_IRET_ERR;
+	return ret;
 }
 
 static int configure(struct ulogd_source_pluginstance *upi)

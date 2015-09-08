@@ -242,7 +242,7 @@ static int nfq_read_cb(struct ulogd_source_pluginstance *upi)
 	struct nl_mmap_hdr *frame;
 	int fd = mnl_socket_get_fd(priv->nl);
 	char buf[65535 + 4096]; /* max IP total len + some nla */
-	int ret, nproc = 0;
+	int ret = ULOGD_IRET_ERR, nproc = 0;
 
 	while (1) {
 		frame = mnl_ring_get_frame(priv->nlr);
@@ -255,7 +255,9 @@ static int nfq_read_cb(struct ulogd_source_pluginstance *upi)
 			break;
 		case NL_MMAP_STATUS_RESERVED:
 			/* currently used by the kernel */
-			return ULOGD_IRET_OK;
+			if (nproc > 0)
+				return ULOGD_IRET_OK;
+			return ULOGD_IRET_ERR;
 		case NL_MMAP_STATUS_COPY:
 			/* only consuming message */
 			/* assert(frame->nm_len < sizeof(buf)); */
@@ -264,12 +266,12 @@ static int nfq_read_cb(struct ulogd_source_pluginstance *upi)
 				  frame->nm_len);
 			frame->nm_status = NL_MMAP_STATUS_UNUSED;
 			mnl_ring_advance(priv->nlr);
-			return ULOGD_IRET_ERR;
+			break;
 		case NL_MMAP_STATUS_UNUSED:
 			if (nproc > 0)
 				return ULOGD_IRET_OK;
-			if (mnl_ring_lookup_frame(priv->nlr,
-						  NL_MMAP_STATUS_VALID) == NULL)
+			if (!mnl_ring_lookup_frame(priv->nlr,
+						   NL_MMAP_STATUS_VALID))
 				return ULOGD_IRET_ERR;
 			break;
 		case NL_MMAP_STATUS_SKIP:
@@ -278,7 +280,11 @@ static int nfq_read_cb(struct ulogd_source_pluginstance *upi)
 				ulogd_log(ULOGD_ERROR, "found SKIP status"
 					  " frame, ENOBUFS maybe\n");
 			}
-			return ULOGD_IRET_OK;
+			return ULOGD_IRET_ERR;
+		default:
+			ulogd_log(ULOGD_ERROR, "unknown frame_status: %d\n",
+				  frame->nm_status);
+			return ULOGD_IRET_ERR;
 		}
 		nproc++;
 	}
