@@ -71,6 +71,7 @@ static LLIST_HEAD(py_ulogd_cbdatas);
 
 enum py_conf {
 	PY_CONF_MODNAME = 0,
+	PY_CONF_PATH_APPEND,
 	PY_CONF_MAX,
 };
 
@@ -82,8 +83,16 @@ static struct config_keyset py_kset = {
 			.type = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_NONE,
 		},
+		[PY_CONF_PATH_APPEND] = {
+			.key = "path_append",
+			.type = CONFIG_TYPE_STRING,
+			.options = CONFIG_OPT_NONE,
+		},
 	},
 };
+
+#define modname_ce(x)		(((x)->ces[PY_CONF_MODNAME]).u.string)
+#define path_append_ce(x)	(((x)->ces[PY_CONF_PATH_APPEND]).u.string)
 
 static int py_parent_session(struct py_priv *priv, uint16_t fin_type);
 
@@ -646,12 +655,59 @@ static int py_child_call_signal(struct nlmsghdr *nlh, int *rc)
 	return ULOGD_IRET_OK;
 }
 
+static int py_child_append_path(char *apath)
+{
+	PyObject *sys_path, *str;
+	char ebuf[ERRBUF_SIZE + 1];
+	char *tok;
+
+	sys_path = PySys_GetObject("path");
+	if (sys_path == NULL) {
+		child_log(ULOGD_ERROR, "could not get sys.path\n");
+		return -1;
+	}
+	if (!PyList_Check(sys_path)) {
+		child_log(ULOGD_ERROR, "sys.path is not a list\n");
+		return -1;
+	}
+
+	while ((tok = strtok(apath, ":")) != NULL) {
+		str = PyUnicode_FromString(tok);
+		if (str == NULL) {
+			child_log(ULOGD_ERROR, "%s\n",
+				  py_strerror(ebuf, ERRBUF_SIZE));
+			return -1;
+		}
+		if (PyList_Append(sys_path, str) < 0) {
+			child_log(ULOGD_ERROR, "%s\n",
+				  py_strerror(ebuf, ERRBUF_SIZE));
+			Py_DECREF(str);
+			return -1;
+		}
+		Py_DECREF(str);
+		apath = NULL;
+	}
+
+	return 0;
+}
+
 /* child call python configure() and exit */
 __attribute__ ((noreturn))
-static void py_child_configure(int sockfd, char *id, char *modname, int pitype)
+static void py_child_configure(int sockfd, char *id,
+			       char *modname, char *apath, int pitype)
 {
 	childfd = sockfd;
 	Py_Initialize();
+
+	if (apath != NULL && py_child_append_path(apath) < 0) {
+		child_log(ULOGD_ERROR, "%s could not append sys.path: %s\n",
+			  id, apath);
+		py_child_sendargs(ULOGD_PY_RETURN_CONFIGURE,
+				  0, "I", ULOGD_IRET_ERR);
+		py_child_exit(EXIT_FAILURE, NULL);
+		/* NOTREACHED */
+	}
+
 	if (prepare_pyobj(modname, pitype) != 0) {
 		child_log(ULOGD_ERROR, "failed to %s.prepare_pyobj()\n", id);
 		py_child_sendargs(ULOGD_PY_RETURN_CONFIGURE,
@@ -692,8 +748,8 @@ static struct child_func {
 /* child call python start() and wait message until receiving STOP */
 __attribute__ ((noreturn))
 static void py_child_start(char *id, struct ulogd_keyset *input,
-			   int sockfd, char *modname, int pitype,
-			   struct ulogd_source_pluginstance *spi)
+			   int sockfd, char *modname, char *apath,
+			   int pitype, struct ulogd_source_pluginstance *spi)
 {
 	int ret = ULOGD_IRET_ERR, rc = ULOGD_IRET_ERR;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
@@ -702,6 +758,16 @@ static void py_child_start(char *id, struct ulogd_keyset *input,
 
 	childfd = sockfd;
 	Py_Initialize();
+
+	if (apath != NULL && py_child_append_path(apath) < 0) {
+		child_log(ULOGD_ERROR, "%s could not append sys.path: %s\n",
+			  id, apath);
+		py_child_sendargs(ULOGD_PY_RETURN_START,
+				  0, "I", ULOGD_IRET_ERR);
+		py_child_exit(EXIT_FAILURE, NULL);
+		/* NOTREACHED */
+	}
+
 	if (prepare_pyobj(modname, pitype) != 0) {
 		child_log(ULOGD_ERROR, "failed to %s.prepare_pyobj()\n", id);
 		py_child_sendargs(ULOGD_PY_RETURN_START,
@@ -1127,7 +1193,7 @@ static int py_configure(struct py_priv *priv, char *id, int pitype,
 
 	if (config_parse_file(id, config_kset) < 0)
 		return ret;
-	modname = config_kset->ces[PY_CONF_MODNAME].u.string;
+	modname = modname_ce(config_kset);
 	if (modname == NULL) {
 		ulogd_log(ULOGD_ERROR, "no py_module specified\n");
 		return ret;
@@ -1146,7 +1212,8 @@ static int py_configure(struct py_priv *priv, char *id, int pitype,
 		return ret;
 	case 0:
 		py_child_set_sighandler();
-		py_child_configure(sv[1], id, modname, pitype);
+		py_child_configure(sv[1], id, modname,
+				   path_append_ce(config_kset), pitype);
 		/* NOTREACHED */
 		break;
 	default:
@@ -1182,7 +1249,7 @@ static int py_start(struct py_priv *priv, char *id, struct ulogd_keyset *input,
 	char *modname;
 	int sv[2], ret = ULOGD_IRET_ERR;
 
-	modname = config_kset->ces[PY_CONF_MODNAME].u.string;
+	modname = modname_ce(config_kset);
 	if (modname == NULL) {
 		ulogd_log(ULOGD_ERROR, "no py_module specified\n");
 		return ret;
@@ -1201,7 +1268,8 @@ static int py_start(struct py_priv *priv, char *id, struct ulogd_keyset *input,
 		return ret;
 	case 0:
 		py_child_set_sighandler();
-		py_child_start(id, input, sv[1], modname, pitype, spi);
+		py_child_start(id, input, sv[1], modname,
+			       path_append_ce(config_kset), pitype, spi);
 		/* NOTREACHED */
 		break;
 	default:
