@@ -379,7 +379,7 @@ void get_plugin_infos(struct ulogd_plugin *me, int has_input)
 /* the function called by all plugins for registering themselves */
 void ulogd_register_plugin(struct ulogd_plugin *me)
 {
-	if (strcmp(me->version, VERSION)) {
+	if (me->version == NULL || strcmp(me->version, VERSION)) {
 		ulogd_log(ULOGD_NOTICE,
 			  "plugin `%s' has incompatible version %s\n",
 			  me->name, me->version);
@@ -611,6 +611,7 @@ static int load_plugin(const char *file)
 {
 	void * handle;
 	struct ulogd_plugin_handle *ph;
+
 	if ((handle = dlopen(file, RTLD_NOW)) == NULL) {
 		ulogd_log(ULOGD_ERROR, "load_plugin: '%s': %s\n", file,
 			  dlerror());
