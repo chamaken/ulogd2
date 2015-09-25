@@ -1295,14 +1295,9 @@ static int build_nfct_filter_mark(struct nfct_filter *filter, char* filter_strin
 	}
 
 	if (filter != NULL) {
-#if defined HAVE_NFCT_FILTER_MARK
 		nfct_filter_add_attr(filter, NFCT_FILTER_MARK, &filter_mark);
 		ulogd_log(ULOGD_NOTICE, "adding mark to event filter: \"%u/%u\"\n",
 			  filter_mark.val, filter_mark.mask);
-#else
-		ulogd_log(ULOGD_FATAL, "mark event filter is not supported\n");
-		return -1;
-#endif
 	}
 	nfct_filter_dump_set_attr(filter_dump, NFCT_FILTER_DUMP_MARK,
 					&filter_mark);

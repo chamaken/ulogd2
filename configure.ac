@@ -71,16 +71,18 @@ AM_CONDITIONAL([HAVE_NLMMAP], [test "x$ac_cv_mmaped_netlink" = "xyes"])
 
 dnl Check for the right nfnetlink version
 PKG_CHECK_MODULES([LIBNFNETLINK], [libnfnetlink >= 1.0.1])
+
+dnl Check for the right libmnl version
+PKG_CHECK_MODULES([LIBMNL], [libmnl >= 1.0.3])
+
 AC_ARG_ENABLE(nflog,
        AS_HELP_STRING([--enable-nflog], [Enable nflog module [default=yes]]),[enable_nflog=$enableval],[enable_nflog=yes])
 AS_IF([test "x$enable_nflog" = "xyes"], [
-    PKG_CHECK_MODULES([LIBNETFILTER_LOG], [libnetfilter_log >= 1.0.0])
-    AC_DEFINE([BUILD_NFLOG], [1], [Building nflog module])
+    PKG_CHECK_MODULES([LIBNETFILTER_LOG], [libnetfilter_log >= 1.0.0],
+                      AC_DEFINE([BUILD_NFLOG], [1], [Building nflog module]),
+                      enable_nflog="no")
 ])
 AM_CONDITIONAL([BUILD_NFLOG], [test "x$enable_nflog" = "xyes"])
-if [! test "x$enable_nflog" = "xyes"]; then
-	enable_nflog="no"
-fi
 
 AC_ARG_ENABLE(nflog2,
        AS_HELP_STRING([--enable-nflog2], [Enable nflog2 module [default=yes]]),[enable_nflog2=$enableval],[enable_nflog2=yes])
@@ -98,88 +100,44 @@ AS_IF([test "x$enable_nflog2" = "xyes"], [
 	LIBS=$SAVE_LIBS)
     AC_MSG_RESULT($ac_cv_nflog_nlmsg_parse)
     AS_IF([test "x$ac_cv_mmaped_netlink" = "xyes" -a "x$ac_cv_nflog_nlmsg_parse" = "xyes" -a "x$enable_nflog2" = "xyes"],
-        [AC_DEFINE([BUILD_NFLOG2], [1], [Building nflog2 module])],
-	[enable_nflog2=no])
+        AC_DEFINE([BUILD_NFLOG2], [1], [Building nflog2 module]),
+	enable_nflog2="no")
 ])
 AM_CONDITIONAL([BUILD_NFLOG2], [test "x$enable_nflog2" = "xyes"])
-if [! test "x$enable_nflog2" = "xyes"]; then
-	enable_nflog2="no"
-fi
 
 AC_ARG_ENABLE(nfct,
        AS_HELP_STRING([--enable-nfct], [Enable nfct module [default=yes]]),[enable_nfct=$enableval],[enable_nfct=yes])
 AS_IF([test "x$enable_nfct" = "xyes"], [
-    PKG_CHECK_MODULES([LIBNETFILTER_CONNTRACK], [libnetfilter_conntrack >= 1.0.2])
-    AC_DEFINE([BUILD_NFCT], [1], [Building nfct module])
-
-    AC_MSG_CHECKING([does nfct_bitmask have clear and equal])
-    AC_CACHE_VAL(ac_cv_nfct_bitmask_20140910,
-        SAVE_LIBS=$LIBS
-        LIBS="$LIBS -lnetfilter_conntrack"
-        AC_TRY_LINK(
-	    [ #include <libnetfilter_conntrack/libnetfilter_conntrack.h> ],
-            [ struct nfct_bitmask *b = nfct_bitmask_new(8);
-              nfct_bitmask_clear(b); nfct_bitmask_equal(b, b); ],
-            ac_cv_nfct_bitmask_20140910=yes,
-            ac_cv_nfct_bitmask_20140910=no)
-	LIBS=$SAVE_LIBS)
-    AC_MSG_RESULT($ac_cv_nfct_bitmask_20140910)
-    AM_CONDITIONAL([BUILD_NFLOW9], [test "x$ac_cv_nfct_bitmask_20140910" = "xyes"])
-    AM_CONDITIONAL([BUILD_IPFIX], [test "x$ac_cv_nfct_bitmask_20140910" = "xyes"])
+    PKG_CHECK_MODULES([LIBNETFILTER_CONNTRACK], [libnetfilter_conntrack >= 1.0.5],
+		      AC_DEFINE([BUILD_NFCT], [1], [Building nfct module]),
+                      enable_nfct="no")
 ])
 AM_CONDITIONAL([BUILD_NFCT], [test "x$enable_nfct" = "xyes"])
-if [! test "x$enable_nfct" = "xyes"]; then
-	enable_nfct="no"
-fi
-
-AS_IF([test "x$enable_nfct" = "xyes"], [
-    AC_MSG_CHECKING([for enable mark filter for event])
-    AC_CACHE_VAL(ac_cv_nfct_filter_mark,
-    AC_TRY_COMPILE(
-        [ #include <libnetfilter_conntrack/libnetfilter_conntrack.h>],
-        [ int i = NFCT_FILTER_MARK; ],
-        ac_cv_nfct_filter_mark=yes,
-        ac_cv_nfct_filter_mark=no))
-    AC_MSG_RESULT($ac_cv_nfct_filter_mark)
-    AS_IF([test "x$ac_cv_nfct_filter_mark" = "xyes"], [
-        AC_DEFINE([HAVE_NFCT_FILTER_MARK], [1], [Building nfct mark event filter])
-    ])
-])
 
 AC_ARG_ENABLE(nfct2,
        AS_HELP_STRING([--enable-nfct2], [Enable nfct2 module [default=yes]]),[enable_nfct2=$enableval],[enable_nfct2=yes])
-AS_IF([test "x$enable_nfct2" = "xyes"], [
-    AS_IF([test "x$ac_cv_mmaped_netlink" = "xyes" -a "x$ac_cv_nfct_filter_mark" = "xyes"],
-        [AC_DEFINE([BUILD_NFCT2], [1], [Building nfct2 module])],
-	[enable_nfct2=no])
-])
+AS_IF([test "x$enable_nfct2" = "xyes" -a "x$enable_nfct" = "xyes" -a "x$ac_cv_mmaped_netlink" = "xyes"],
+      AC_DEFINE([BUILD_NFCT2], [1], [Building nfct2 module]),
+      enable_nfct2="no")
 AM_CONDITIONAL([BUILD_NFCT2], [test "x$enable_nfct2" = "xyes"])
-if [! test "x$enable_nfct2" = "xyes"]; then
-	enable_nfct2="no"
-fi
 
 AC_ARG_ENABLE(nfacct,
        AS_HELP_STRING([--enable-nfacct], [Enable nfacct module [default=yes]]),[enable_nfacct=$enableval],[enable_nfacct=yes])
 AS_IF([test "x$enable_nfacct" = "xyes"], [
-    PKG_CHECK_MODULES([LIBMNL], [libmnl >= 1.0.3])
-    PKG_CHECK_MODULES([LIBNETFILTER_ACCT], [libnetfilter_acct >= 1.0.1])
-    AC_DEFINE([BUILD_NFACCT], [1], [Building nfacct module])
+    PKG_CHECK_MODULES([LIBNETFILTER_ACCT], [libnetfilter_acct >= 1.0.1],
+                      AC_DEFINE([BUILD_NFACCT], [1], [Building nfacct module]),
+                      enable_nfacct="no")
 ])
 AM_CONDITIONAL([BUILD_NFACCT], [test "x$enable_nfacct" = "xyes"])
-if [! test "x$enable_nfacct" = "xyes"]; then
-	enable_nfacct="no"
-fi
 
 AC_ARG_ENABLE(nfq,
 	AS_HELP_STRING([--enable-nfq], [Enable nfq module [default=yes]]),[enable_nfq=$enableval],[enable_nfq=yes])
 AS_IF([test "x$enable_nfq" = "xyes"], [
     PKG_CHECK_MODULES([LIBNETFILTER_QUEUE], [libnetfilter_queue >= 1.0.2],
-                      [AC_DEFINE([BUILD_NFQ], [1], [Building nfq module])], [enable_nfq=no])
+                      AC_DEFINE([BUILD_NFQ], [1], [Building nfq module]),
+		      enable_nfq="no")
 ])
 AM_CONDITIONAL([BUILD_NFQ], [test "x$enable_nfq" = "xyes"])
-if [! test "x$enable_nfq" = "xyes" -a "x$ac_cv_mmaped_netlink" = "xyes"]; then
-	enable_nfq="no"
-fi
 
 AC_ARG_ENABLE(nfctst,
        AS_HELP_STRING([--enable-nfctst], [Enable nfct stat module [default=yes]]),[enable_nfctst=$enableval],[enable_nfctst=yes])
@@ -189,12 +147,10 @@ AC_ARG_ENABLE(nft,
        AS_HELP_STRING([--enable-nft], [Enable nft module [default=yes]]),[enable_nft=$enableval],[enable_nft=yes])
 AS_IF([test "x$enable_nft" = "xyes"], [
     PKG_CHECK_MODULES([LIBNFTNL], [libnftnl >= 1.0.0],
-                      [AC_DEFINE([BUILD_NFT], [1], [Building nft module])], [enable_nft=no])
+                      AC_DEFINE([BUILD_NFT], [1], [Building nft module]),
+		      enable_nft="no")
 ])
 AM_CONDITIONAL([BUILD_NFT], [test "x$enable_nft" = "xyes"])
-if [! test "x$enable_nft" = "xyes"]; then
-	enable_nft="no"
-fi
 
 AC_ARG_WITH([pgsql], AS_HELP_STRING([--without-pgsql], [Build without postgresql output plugin [default=test]]))
 AS_IF([test "x$with_pgsql" != "xno"], [
@@ -338,7 +294,6 @@ Ulogd configuration:
     NFLOG plugin:			${enable_nflog}
     NFLOG2 plugin:			${enable_nflog2}
     NFCT plugin:			${enable_nfct}
-      with MARK event filter		${ac_cv_nfct_filter_mark}
     NFCT2 plugin:			${enable_nfct2}
     NFACCT plugin:			${enable_nfacct}
     ULOG plugin:			${enable_ulog}
@@ -352,8 +307,8 @@ Ulogd configuration:
     SQLITE3 plugin:			${enable_sqlite3}
     DBI plugin:				${enable_dbi}
     JSON plugin:			${enable_jansson}
-    NetFlow v9 plugin:			${ac_cv_nfct_bitmask_20140910}
-    IPFIX plugin:			${ac_cv_nfct_bitmask_20140910}
+    NetFlow v9 plugin:			${enable_nfct}
+    IPFIX plugin:			${enable_nfct}
   PYTHON plugin:			${enable_python}
 "
 echo "You can now run 'make' and 'make install'"

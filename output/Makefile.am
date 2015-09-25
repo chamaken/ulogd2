@@ -13,11 +13,8 @@ if HAVE_JANSSON
 pkglib_LTLIBRARIES += ulogd_output_JSON.la
 endif
 
-if BUILD_NFLOW9
+if BUILD_NFCT
 pkglib_LTLIBRARIES += ulogd_output_NFLOW9.la
-endif
-
-if BUILD_IPFIX
 pkglib_LTLIBRARIES += ulogd_output_IPFIX.la
 endif
 
@@ -52,13 +49,10 @@ ulogd_output_JSON_la_LIBADD  = ${libjansson_LIBS}
 ulogd_output_JSON_la_LDFLAGS = -avoid-version -module
 endif
 
-if BUILD_NFLOW9
+if BUILD_NFCT
 ulogd_output_NFLOW9_la_SOURCES = ulogd_output_NFLOW9.c
 ulogd_output_NFLOW9_la_LDFLAGS = -avoid-version -module
 ulogd_output_NFLOW9_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS} $(top_srcdir)/util/libutil.la
-endif
-
-if BUILD_IPFIX
 ulogd_output_IPFIX_la_SOURCES = ulogd_output_IPFIX.c 
 ulogd_output_IPFIX_la_LDFLAGS = -avoid-version -module
 ulogd_output_IPFIX_la_LIBADD = ${LIBNETFILTER_CONNTRACK_LIBS} $(top_srcdir)/util/libutil.la
