@@ -72,6 +72,9 @@ PKG_CHECK_MODULES([LIBNFNETLINK], [libnfnetlink >= 1.0.1])
 dnl Check for the right libmnl version
 PKG_CHECK_MODULES([LIBMNL], [libmnl >= 1.0.3])
 
+dnl Check for the right jansson version
+PKG_CHECK_MODULES([JANSSON], [jansson >= 2.6])
+
 AC_ARG_ENABLE(nflog,
        AS_HELP_STRING([--enable-nflog], [Enable nflog module [default=yes]]),[enable_nflog=$enableval],[enable_nflog=yes])
 AS_IF([test "x$enable_nflog" = "xyes"], [
@@ -160,17 +163,6 @@ else
 	enable_sqlite3="no"
 fi
 
-AC_ARG_WITH([jansson], AS_HELP_STRING([--without-jansson], [Build without JSON output plugin [default=test]]))
-AS_IF([test "x$with_jansson" != "xno"], [
-    PKG_CHECK_MODULES([libjansson], [jansson], [], [:])
-])
-AM_CONDITIONAL([HAVE_JANSSON], [test -n "$libjansson_LIBS"])
-if test "x$libjansson_LIBS" != "x"; then
-	enable_jansson="yes"
-else
-	enable_jansson="no"
-fi
-
 dnl Check for urcu lib (uatomic only now)
 AC_CHECK_HEADER(urcu/uatomic.h,[],[AC_MSG_ERROR(requires urcu).])
 
@@ -237,7 +229,6 @@ Ulogd configuration:
     NFT plugin:				${enable_nft}
   Output plugins:
     SQLITE3 plugin:			${enable_sqlite3}
-    JSON plugin:			${enable_jansson}
     NetFlow v9 plugin:			${enable_nfct}
     IPFIX plugin:			${enable_nfct}
   PYTHON plugin:			${enable_python}

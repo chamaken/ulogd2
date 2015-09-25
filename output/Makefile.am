@@ -5,11 +5,8 @@ AM_CFLAGS = ${regular_CFLAGS}
 SUBDIRS= sqlite3
 
 pkglib_LTLIBRARIES = ulogd_output_LOGEMU.la ulogd_output_SYSLOG.la \
-			 ulogd_output_GPRINT.la ulogd_output_XML2.la
-
-if HAVE_JANSSON
-pkglib_LTLIBRARIES += ulogd_output_JSON.la
-endif
+			ulogd_output_GPRINT.la ulogd_output_XML2.la \
+			ulogd_output_JSON.la
 
 if BUILD_NFCT
 pkglib_LTLIBRARIES += ulogd_output_NFLOW9.la
@@ -25,11 +22,9 @@ ulogd_output_LOGEMU_la_LDFLAGS = -avoid-version -module
 ulogd_output_SYSLOG_la_SOURCES = ulogd_output_SYSLOG.c
 ulogd_output_SYSLOG_la_LDFLAGS = -avoid-version -module
 
-if HAVE_JANSSON
 ulogd_output_JSON_la_SOURCES = ulogd_output_JSON.c
-ulogd_output_JSON_la_LIBADD  = ${libjansson_LIBS}
+ulogd_output_JSON_la_LIBADD  = ${JANSSON_LIBS}
 ulogd_output_JSON_la_LDFLAGS = -avoid-version -module
-endif
 
 if BUILD_NFCT
 ulogd_output_NFLOW9_la_SOURCES = ulogd_output_NFLOW9.c
