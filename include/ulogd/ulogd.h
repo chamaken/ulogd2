@@ -15,6 +15,7 @@
 #include <ulogd/conffile.h>
 #include <ulogd/ipfix_protocol.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <signal.h>	/* need this because of extension-sighandler */
 #include <sys/types.h>
 #include <inttypes.h>
@@ -67,6 +68,7 @@
 
 /* maximum length of ulogd key */
 #define ULOGD_MAX_KEYLEN 31
+#define ULOGD_MAX_VERLEN 15
 
 #define ULOGD_DEBUG	1	/* debugging information */
 #define ULOGD_INFO	3
@@ -85,6 +87,34 @@ enum ulogd_dtype {
 	ULOGD_DTYPE_WILDCARD	= 0x0040,
 };
 
+struct ulogd_pluginstance;
+struct ulogd_source_pluginstance;
+struct ulogd_keyset;
+
+/*
+ * function type definition
+ */
+typedef void (*key_destructor_t)(void *);
+
+typedef int (*pl_configure_t)(struct ulogd_pluginstance *);
+typedef int (*sp_configure_t)(struct ulogd_source_pluginstance *);
+
+/* function to construct a new pluginstance
+ * input may be specific to sink plugin which use wildcard */
+typedef	int (*pl_start_t)(struct ulogd_pluginstance *, struct ulogd_keyset *);
+typedef	int (*sp_start_t)(struct ulogd_source_pluginstance *);
+
+/* function to destruct an existing pluginstance */
+typedef int (*pl_stop_t)(struct ulogd_pluginstance *);
+typedef int (*sp_stop_t)(struct ulogd_source_pluginstance *);
+
+/* function to receive a signal */
+typedef void (*pl_signal_t)(struct ulogd_pluginstance *, int);
+typedef void (*sp_signal_t)(struct ulogd_source_pluginstance *, int);
+
+/* function to call for each packet */
+typedef int (*pl_interp_t)(struct ulogd_pluginstance *, struct ulogd_keyset *, struct ulogd_keyset *);
+
 /* structure describing an input  / output parameter of a plugin */
 struct ulogd_key {
 	/* length of the returned value (only for lengthed types) */
@@ -94,7 +124,7 @@ struct ulogd_key {
 	/* flags (i.e. free, ...) */
 	uint16_t flags;
 	/* name of this key */
-	char name[ULOGD_MAX_KEYLEN+1];
+	char name[ULOGD_MAX_KEYLEN + 1];
 	/* IETF IPFIX attribute ID */
 	struct {
 		uint32_t	vendor;
@@ -102,7 +132,7 @@ struct ulogd_key {
 	} ipfix;
 
 	/* Store field name for Common Information Model */
-	char cim_name[ULOGD_MAX_KEYLEN+1];
+	char cim_name[ULOGD_MAX_KEYLEN + 1];
 
 	/* destructor for this key */
 	void (*destruct)(void *u_value_ptr);
@@ -182,6 +212,7 @@ static inline void *okey_get_ptr(struct ulogd_key *key)
 {
 	return key->u.value.ptr;
 }
+
 static inline void okey_set_valid(struct ulogd_key *key)
 {
 	key->flags |= ULOGD_RETF_VALID;
@@ -217,9 +248,6 @@ static inline void *ikey_get_ptr(struct ulogd_key *key)
 	return key->u.source->u.value.ptr;
 }
 
-struct ulogd_pluginstance;
-struct ulogd_source_pluginstance;
-
 struct ulogd_plugin_handle {
 	/* global list of plugins */
 	struct llist_head list;
@@ -234,9 +262,9 @@ struct ulogd_plugin {
 	/* global list of plugins */
 	struct llist_head list;
 	/* version */
-	char *version;
+	char version[ULOGD_MAX_VERLEN + 1];
 	/* name of this plugin (predefined by plugin) */
-	char name[ULOGD_MAX_KEYLEN+1];
+	char name[ULOGD_MAX_KEYLEN + 1];
 	/* how many stacks are using this plugin? initially set to zero. */
 	unsigned int usage;
 
@@ -248,30 +276,25 @@ struct ulogd_plugin {
 	/* size of instance->priv */
 	unsigned int priv_size;
 
-	/* followings are plugin (not source)  specific */
+	/*
+	 * followings are plugin (not source) specific
+	 */
 	struct ulogd_keyset input;
 
-	int (*configure)(struct ulogd_pluginstance *instance);
-	/* function to construct a new pluginstance
-	 * input may be specific to sink plugin which use wildcard */
-	int (*start)(struct ulogd_pluginstance *pi,
-		     struct ulogd_keyset *input);
-	/* function to destruct an existing pluginstance */
-	int (*stop)(struct ulogd_pluginstance *pi);
-	/* function to receive a signal */
-	void (*signal)(struct ulogd_pluginstance *pi, int signal);
-	/* function to call for each packet */
-	int (*interp)(struct ulogd_pluginstance *instance,
-		      struct ulogd_keyset *input, struct ulogd_keyset *output);
+	pl_configure_t configure;
+	pl_start_t start;
+	pl_stop_t stop;
+	pl_signal_t signal;
+	pl_interp_t interp;
 
-	/* protect interp by mutex */
-	int mtsafe;
+	/* protect interp mutex */
+	bool mtsafe;
 };
 
 struct ulogd_source_plugin {
 	struct llist_head list;
 	char *version;
-	char name[ULOGD_MAX_KEYLEN+1];
+	char name[ULOGD_MAX_KEYLEN + 1];
 	unsigned int usage;
 
 	struct ulogd_keyset output;
@@ -279,11 +302,13 @@ struct ulogd_source_plugin {
 	struct config_keyset *config_kset;
 	unsigned int priv_size;
 
-	/* followings are source plugin specific */
-	int (*configure)(struct ulogd_source_pluginstance *instance);
-	int (*start)(struct ulogd_source_pluginstance *pi);
-	int (*stop)(struct ulogd_source_pluginstance *pi);
-	void (*signal)(struct ulogd_source_pluginstance *pi, int signal);
+	/*
+	 *  followings are source plugin specific
+	 */
+	sp_configure_t configure;
+	sp_start_t start;
+	sp_stop_t stop;
+	sp_signal_t signal;
 };
 
 #define ULOGD_IRET_ERR		-1

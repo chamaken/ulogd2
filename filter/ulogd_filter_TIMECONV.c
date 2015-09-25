@@ -305,7 +305,7 @@ static struct ulogd_plugin timeconv_plugin = {
 	.configure	= &configure_timeconv,
 	.start		= &start_timeconv,
 	.priv_size	= sizeof(struct timeconv_priv),
-	.mtsafe		= 1,
+	.mtsafe		= true,
 	.version = VERSION,
 };
 

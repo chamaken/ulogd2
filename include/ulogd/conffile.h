@@ -25,7 +25,7 @@ enum {
 #define LINE_LEN 		255
 
 /* maximum length of config key name */
-#define CONFIG_KEY_LEN		30
+#define CONFIG_KEY_LEN		31
 
 /* maximum length of string config value */
 #define CONFIG_VAL_STRING_LEN	225
@@ -44,7 +44,7 @@ enum {
 #define CONFIG_FLAG_VAL_PROTECTED	(1<<0)
 
 struct config_entry {
-	char key[CONFIG_KEY_LEN];	/* name of config directive */
+	char key[CONFIG_KEY_LEN + 1];	/* name of config directive */
 	uint8_t type;			/* type; see above */
 	uint8_t options;		/* options; see above  */
 	uint8_t hit;			/* found? */
