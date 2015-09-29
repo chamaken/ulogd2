@@ -28,7 +28,7 @@ enum {
 #define CONFIG_KEY_LEN		31
 
 /* maximum length of string config value */
-#define CONFIG_VAL_STRING_LEN	225
+#define CONFIG_VAL_STRING_LEN	255
 
 /* valid config types */
 #define CONFIG_TYPE_INT		0x0001
@@ -43,6 +43,9 @@ enum {
 /* valid flag part */
 #define CONFIG_FLAG_VAL_PROTECTED	(1<<0)
 
+/* return negative errno on error */
+typedef int (*config_parser_t)(const char *const argstr);
+
 struct config_entry {
 	char key[CONFIG_KEY_LEN + 1];	/* name of config directive */
 	uint8_t type;			/* type; see above */
@@ -50,14 +53,14 @@ struct config_entry {
 	uint8_t hit;			/* found? */
 	uint8_t flag;			/* tune setup of option */
 	union {
-		char string[CONFIG_VAL_STRING_LEN];
+		char string[CONFIG_VAL_STRING_LEN + 1];
 		int value;
-		int (*parser)(const char *argstr);
+		config_parser_t parser;
 	} u;
 };
 
 struct config_keyset {
-	unsigned int num_ces;
+	uint8_t num_ces;
 	struct config_entry ces[];
 };
 
