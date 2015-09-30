@@ -26,23 +26,22 @@
 #include <limits.h>
 
 struct hashtable *
-hashtable_create(int hashsize, int limit,
+hashtable_create(uint32_t hashsize, uint32_t limit,
 		 uint32_t (*hash)(const void *data,
 		 		  const struct hashtable *table),
 		 int (*compare)(const void *data1, const void *data2))
 {
-	int i;
 	struct hashtable *h;
-	int size = sizeof(struct hashtable)
-		   + hashsize * sizeof(struct llist_head);
+	size_t i, size = sizeof(struct hashtable)
+		+ hashsize * sizeof(struct llist_head);
 
-	h = (struct hashtable *) calloc(size, 1);
+	h = (struct hashtable *) calloc(1, size);
 	if (h == NULL) {
 		errno = ENOMEM;
 		return NULL;
 	}
 
-	for (i=0; i<hashsize; i++)
+	for (i = 0; i < hashsize; i++)
 		INIT_LLIST_HEAD(&h->members[i]);
 
 	h->hashsize = hashsize;
@@ -58,13 +57,13 @@ void hashtable_destroy(struct hashtable *h)
 	free(h);
 }
 
-int hashtable_hash(const struct hashtable *table, const void *data)
+uint32_t hashtable_hash(const struct hashtable *table, const void *data)
 {
 	return table->hash(data, table);
 }
 
 struct hashtable_node *
-hashtable_find(const struct hashtable *table, const void *data, int id)
+hashtable_find(const struct hashtable *table, const void *data, uint32_t id)
 {
 	struct llist_head *e;
 	struct hashtable_node *n;
@@ -79,7 +78,7 @@ hashtable_find(const struct hashtable *table, const void *data, int id)
 	return NULL;
 }
 
-int hashtable_add(struct hashtable *table, struct hashtable_node *n, int id)
+int hashtable_add(struct hashtable *table, struct hashtable_node *n, uint32_t id)
 {
 	/* hash table is full */
 	if (table->count >= table->limit) {
@@ -112,6 +111,7 @@ int hashtable_flush(struct hashtable *table)
 	return 0;
 }
 
+/* returns -1 on error */
 int
 hashtable_iterate_limit(struct hashtable *table, void *data,
 			uint32_t from, uint32_t steps,
@@ -121,14 +121,14 @@ hashtable_iterate_limit(struct hashtable *table, void *data,
 	struct llist_head *e, *tmp;
 	struct hashtable_node *n;
 
-	for (i=from; i < table->hashsize && i < from+steps; i++) {
+	for (i = from; i < table->hashsize && i < from + steps; i++) {
 		llist_for_each_safe(e, tmp, &table->members[i]) {
 			n = llist_entry(e, struct hashtable_node, head);
 			if (iterate(data, n) == -1)
 				return -1;
 		}
 	}
-	return i;
+	return 0;
 }
 
 int hashtable_iterate(struct hashtable *table, void *data,

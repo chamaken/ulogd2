@@ -465,11 +465,11 @@ __hash4(const struct nf_conntrack *ct, const struct hashtable *table)
 	unsigned int a, b;
 
 	a = jhash(nfct_get_attr(ct, ATTR_ORIG_IPV4_SRC), sizeof(uint32_t),
-		  ((nfct_get_attr_u8(ct, ATTR_ORIG_L3PROTO) << 16) |
+		  (((uint32_t)nfct_get_attr_u8(ct, ATTR_ORIG_L3PROTO) << 16) |
 		   (nfct_get_attr_u8(ct, ATTR_ORIG_L4PROTO))));
 
 	b = jhash(nfct_get_attr(ct, ATTR_ORIG_IPV4_DST), sizeof(uint32_t),
-		  ((nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC) << 16) |
+		  (((uint32_t)nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC) << 16) |
 		   (nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST))));
 
 	/*
@@ -479,7 +479,7 @@ __hash4(const struct nf_conntrack *ct, const struct hashtable *table)
 	 * but using a multiply, less expensive than a divide. See:
 	 * http://www.mail-archive.com/netdev@vger.kernel.org/msg56623.html
 	 */
-	return ((uint64_t)jhash_2words(a, b, 0) * table->hashsize) >> 32;
+	return (uint32_t)(((uint64_t)jhash_2words(a, b, 0) * table->hashsize) >> 32);
 }
 
 static uint32_t
@@ -488,19 +488,19 @@ __hash6(const struct nf_conntrack *ct, const struct hashtable *table)
 	unsigned int a, b;
 
 	a = jhash(nfct_get_attr(ct, ATTR_ORIG_IPV6_SRC), sizeof(uint32_t)*4,
-		  ((nfct_get_attr_u8(ct, ATTR_ORIG_L3PROTO) << 16) |
+		  (((uint32_t)nfct_get_attr_u8(ct, ATTR_ORIG_L3PROTO) << 16) |
 		   (nfct_get_attr_u8(ct, ATTR_ORIG_L4PROTO))));
 
 	b = jhash(nfct_get_attr(ct, ATTR_ORIG_IPV6_DST), sizeof(uint32_t)*4,
-		  ((nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC) << 16) |
+		  (((uint32_t)nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC) << 16) |
 		   (nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST))));
 
-	return ((uint64_t)jhash_2words(a, b, 0) * table->hashsize) >> 32;
+	return (uint32_t)(((uint64_t)jhash_2words(a, b, 0) * table->hashsize) >> 32);
 }
 
 static uint32_t hash(const void *data, const struct hashtable *table)
 {
-	int ret = 0;
+	uint32_t ret = 0;
 	const struct nf_conntrack *ct = data;
 
 	switch(nfct_get_attr_u8(ct, ATTR_L3PROTO)) {
@@ -529,7 +529,7 @@ static int compare(const void *data1, const void *data2)
 static int propagate_ct(struct ulogd_source_pluginstance *upi,
 			struct nf_conntrack *ct,
 			struct nf_conntrack *destroy_ct,
-			int type,
+			uint32_t type,
 			struct ct_timestamp *ts)
 {
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
@@ -638,7 +638,7 @@ static void
 do_propagate_ct(struct ulogd_source_pluginstance *upi,
 		struct nf_conntrack *ct,
 		struct nf_conntrack *destroy_ct,
-		int type,
+		uint32_t type,
 		struct ct_timestamp *ts)
 {
 	propagate_ct(upi, ct, destroy_ct, type, ts);
@@ -679,7 +679,8 @@ event_handler_hashtable(enum nf_conntrack_msg_type type,
 	struct nfct_pluginstance *cpi =
 				(struct nfct_pluginstance *) upi->private;
 	struct ct_timestamp *ts;
-	int ret, id;
+	uint32_t id;
+	int ret;
 
 	switch(type) {
 	case NFCT_T_NEW:
@@ -785,7 +786,8 @@ polling_handler(enum nf_conntrack_msg_type type,
 	struct nfct_pluginstance *cpi =
 				(struct nfct_pluginstance *) upi->private;
 	struct ct_timestamp *ts;
-	int ret, id;
+	uint32_t id;
+	int ret;
 
 	switch(type) {
 	case NFCT_T_UPDATE:
@@ -925,7 +927,8 @@ static int overrun_handler(enum nf_conntrack_msg_type type,
 	struct nfct_pluginstance *cpi =
 				(struct nfct_pluginstance *) upi->private;
 	struct ct_timestamp *ts;
-	int id, ret;
+	uint32_t id;
+	int ret;
 
 	id = hashtable_hash(cpi->ct_active, ct);
 	ts = (struct ct_timestamp *)
@@ -983,7 +986,8 @@ dump_reset_handler(enum nf_conntrack_msg_type type,
 	struct ulogd_source_pluginstance *upi = data;
 	struct nfct_pluginstance *cpi =
 			(struct nfct_pluginstance *)upi->private;
-	int ret = NFCT_CB_CONTINUE, rc, id;
+	uint32_t id;
+	int ret = NFCT_CB_CONTINUE, rc;
 	struct ct_timestamp *ts;
 
 	switch(type) {

@@ -26,14 +26,14 @@ struct hashtable_node {
 };
 
 struct hashtable *
-hashtable_create(int hashsize, int limit,
+hashtable_create(uint32_t hashsize, uint32_t limit,
 		 uint32_t (*hash)(const void *data,
 		 		  const struct hashtable *table),
 		 int (*compare)(const void *data1, const void *data2));
 void hashtable_destroy(struct hashtable *h);
-int hashtable_hash(const struct hashtable *table, const void *data);
-struct hashtable_node *hashtable_find(const struct hashtable *table, const void *data, int id);
-int hashtable_add(struct hashtable *table, struct hashtable_node *n, int id);
+uint32_t hashtable_hash(const struct hashtable *table, const void *data);
+struct hashtable_node *hashtable_find(const struct hashtable *table, const void *data, uint32_t id);
+int hashtable_add(struct hashtable *table, struct hashtable_node *n, uint32_t id);
 void hashtable_del(struct hashtable *table, struct hashtable_node *node);
 int hashtable_flush(struct hashtable *table);
 int hashtable_iterate(struct hashtable *table, void *data,
