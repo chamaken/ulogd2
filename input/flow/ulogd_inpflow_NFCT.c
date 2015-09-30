@@ -45,7 +45,6 @@
 #include <ulogd/ulogd.h>
 #include <ulogd/timer.h>
 #include <ulogd/ipfix_protocol.h>
-#include <ulogd/addr.h>
 
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 
@@ -88,9 +87,6 @@ enum {
 	NFCT_CONF_SOCK_MAXBUF,
 	NFCT_CONF_RECYNC_TIMEOUT,
 	NFCT_CONF_RELIABLE,
-	NFCT_CONF_SRC_FILTER,
-	NFCT_CONF_DST_FILTER,
-	NFCT_CONF_PROTO_FILTER,
 	NFCT_CONF_MARK_FILTER,
 	NFCT_CONF_MAX,
 };
@@ -152,21 +148,6 @@ static struct config_keyset nfct_kset = {
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		[NFCT_CONF_SRC_FILTER] = {
-			.key	 = "accept_src_filter",
-			.type	 = CONFIG_TYPE_STRING,
-			.options = CONFIG_OPT_NONE,
-		},
-		[NFCT_CONF_DST_FILTER] = {
-			.key	 = "accept_dst_filter",
-			.type	 = CONFIG_TYPE_STRING,
-			.options = CONFIG_OPT_NONE,
-		},
-		[NFCT_CONF_PROTO_FILTER] = {
-			.key	 = "accept_proto_filter",
-			.type	 = CONFIG_TYPE_STRING,
-			.options = CONFIG_OPT_NONE,
-		},
 		[NFCT_CONF_MARK_FILTER] = {
 			.key	 = "accept_mark_filter",
 			.type	 = CONFIG_TYPE_STRING,
@@ -183,9 +164,6 @@ static struct config_keyset nfct_kset = {
 #define nlsockbufmaxsize_ce(x)	(((x)->config_kset->ces[NFCT_CONF_SOCK_MAXBUF]).u.value)
 #define nlresynctimeout_ce(x)	(((x)->config_kset->ces[NFCT_CONF_RECYNC_TIMEOUT]).u.value)
 #define reliable_ce(x)		(((x)->config_kset->ces[NFCT_CONF_RELIABLE]).u.value)
-#define src_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_SRC_FILTER]).u.string)
-#define dst_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_DST_FILTER]).u.string)
-#define proto_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_PROTO_FILTER]).u.string)
 #define mark_filter_ce(x)	(((x)->config_kset->ces[NFCT_CONF_MARK_FILTER]).u.string)
 
 enum nfct_keys {
@@ -1082,182 +1060,6 @@ static void overrun_timeout(struct ulogd_timer *a, void *data)
 	nfct_send(cpi->ovh, NFCT_Q_DUMP_FILTER, cpi->filter_dump);
 }
 
-
-#define NFCT_SRC_DIR 1
-#define NFCT_DST_DIR 2
-
-static inline int nfct_set_dir(int dir, int *filter_dir_ipv4, int *filter_dir_ipv6)
-{
-	switch (dir) {
-		case NFCT_DST_DIR:
-			*filter_dir_ipv4 = NFCT_FILTER_DST_IPV4;
-			*filter_dir_ipv6 = NFCT_FILTER_DST_IPV6;
-			break;
-		case NFCT_SRC_DIR:
-			*filter_dir_ipv4 = NFCT_FILTER_SRC_IPV4;
-			*filter_dir_ipv6 = NFCT_FILTER_SRC_IPV6;
-			break;
-		default:
-			ulogd_log(ULOGD_FATAL,
-					"Invalid direction %d\n",
-					dir);
-			return -1;
-	}
-	return 0;
-}
-
-static int nfct_add_to_filter(struct nfct_filter *filter,
-			      struct ulogd_addr *addr,
-			      int l3, int dir)
-{
-	int filter_dir_ipv4;
-	int filter_dir_ipv6;
-
-	if (nfct_set_dir(dir, &filter_dir_ipv4, &filter_dir_ipv6) == -1)
-		return -1;
-
-	switch (l3) {
-		case AF_INET6:
-			{
-				struct nfct_filter_ipv6 filter_ipv6;
-				/* BSF always wants data in host-byte order */
-				ulogd_ipv6_addr2addr_host(addr->in.ipv6, filter_ipv6.addr);
-				ulogd_ipv6_cidr2mask_host(addr->netmask, filter_ipv6.mask);
-
-				nfct_filter_set_logic(filter,
-						filter_dir_ipv6,
-						NFCT_FILTER_LOGIC_POSITIVE);
-				nfct_filter_add_attr(filter,
-						filter_dir_ipv6,
-						&filter_ipv6);
-			}
-			break;
-		case AF_INET:
-			{
-				/* BSF always wants data in host-byte order */
-				struct nfct_filter_ipv4 filter_ipv4 = {
-					.addr = ntohl(addr->in.ipv4),
-					.mask = ulogd_bits2netmask(addr->netmask),
-				};
-
-				nfct_filter_set_logic(filter,
-						filter_dir_ipv4,
-						NFCT_FILTER_LOGIC_POSITIVE);
-				nfct_filter_add_attr(filter, filter_dir_ipv4,
-						&filter_ipv4);
-			}
-			break;
-		default:
-			ulogd_log(ULOGD_FATAL, "Invalid protocol %d\n", l3);
-			return -1;
-	}
-	return 0;
-}
-
-static int build_nfct_filter_dir(struct nfct_filter *filter, char* filter_string, int dir)
-{
-	char *from = filter_string;
-	char *comma;
-	struct ulogd_addr addr;
-	int has_ipv4 = 0;
-	int has_ipv6 = 0;
-
-	while ((comma = strchr(from, ',')) != NULL) {
-		size_t len = comma - from;
-		switch(ulogd_parse_addr(from, len, &addr)) {
-			case AF_INET:
-				nfct_add_to_filter(filter, &addr, AF_INET, dir);
-				has_ipv4 = 1;
-				break;
-			case AF_INET6:
-				nfct_add_to_filter(filter, &addr, AF_INET6, dir);
-				has_ipv6 = 1;
-				break;
-			default:
-				return -1;
-		}
-		from += len + 1;
-	}
-	switch(ulogd_parse_addr(from, strlen(from), &addr)) {
-		case AF_INET:
-			nfct_add_to_filter(filter, &addr, AF_INET, dir);
-			has_ipv4 = 1;
-			break;
-		case AF_INET6:
-			nfct_add_to_filter(filter, &addr, AF_INET6, dir);
-			has_ipv6 = 1;
-			break;
-		default:
-			return -1;
-	}
-
-	if (!has_ipv6) {
-		struct nfct_filter_ipv6 filter_ipv6;
-		int filter_dir_ipv4;
-		int filter_dir_ipv6;
-		if (nfct_set_dir(dir, &filter_dir_ipv4, &filter_dir_ipv6) == -1)
-			return -1;
-		nfct_filter_set_logic(filter,
-				filter_dir_ipv6,
-				NFCT_FILTER_LOGIC_NEGATIVE);
-		nfct_filter_add_attr(filter, filter_dir_ipv6,
-				&filter_ipv6);
-	}
-	if (!has_ipv4) {
-		struct nfct_filter_ipv4 filter_ipv4;
-		int filter_dir_ipv4;
-		int filter_dir_ipv6;
-		if (nfct_set_dir(dir, &filter_dir_ipv4, &filter_dir_ipv6) == -1)
-			return -1;
-		nfct_filter_set_logic(filter,
-				filter_dir_ipv4,
-				NFCT_FILTER_LOGIC_NEGATIVE);
-		nfct_filter_add_attr(filter, filter_dir_ipv4,
-				&filter_ipv4);
-	}
-
-	return 0;
-}
-
-static int build_nfct_filter_proto(struct nfct_filter *filter, char* filter_string)
-{
-	char *from = filter_string;
-	char *comma;
-	struct protoent * pent = NULL;
-
-	while ((comma = strchr(from, ',')) != NULL) {
-		size_t len = comma - from;
-		*comma = 0;
-		pent = getprotobyname(from);
-		if (pent == NULL) {
-			ulogd_log(ULOGD_FATAL, "Unknown protocol\n");
-			endprotoent();
-			return -1;
-		}
-		ulogd_log(ULOGD_NOTICE, "adding proto to filter: \"%s\" (%d)\n",
-			  pent->p_name, pent->p_proto
-		 );
-		nfct_filter_add_attr_u32(filter, NFCT_FILTER_L4PROTO,
-					 pent->p_proto);
-		from += len + 1;
-	}
-	pent = getprotobyname(from);
-	if (pent == NULL) {
-		ulogd_log(ULOGD_FATAL, "Unknown protocol %s\n", from);
-		endprotoent();
-		return -1;
-	}
-	ulogd_log(ULOGD_NOTICE, "adding proto to filter: \"%s (%d)\"\n",
-			pent->p_name, pent->p_proto
-		 );
-	nfct_filter_add_attr_u32(filter, NFCT_FILTER_L4PROTO,
-			pent->p_proto);
-
-
-	endprotoent();
-	return 0;
-}
-
 static int build_nfct_filter_mark(struct nfct_filter *filter, char* filter_string,
 				struct nfct_filter_dump *filter_dump)
 {
@@ -1328,31 +1130,6 @@ static int build_nfct_filter(struct ulogd_source_pluginstance *upi)
 		goto err_init;
 	}
 
-	if (strlen(src_filter_ce(upi)) != 0) {
-		char *filter_string = src_filter_ce(upi);
-		if (build_nfct_filter_dir(filter, filter_string, NFCT_SRC_DIR) != 0) {
-			ulogd_log(ULOGD_FATAL,
-					"Unable to create src filter\n");
-			goto err_filter;
-		}
-	}
-	if (strlen(dst_filter_ce(upi)) != 0) {
-		char *filter_string = dst_filter_ce(upi);
-		if (build_nfct_filter_dir(filter, filter_string, NFCT_DST_DIR) != 0) {
-			ulogd_log(ULOGD_FATAL,
-					"Unable to create dst filter\n");
-			goto err_filter;
-		}
-	}
-	if (strlen(proto_filter_ce(upi)) != 0) {
-		char *filter_string = proto_filter_ce(upi);
-		if (build_nfct_filter_proto(filter, filter_string) != 0) {
-			ulogd_log(ULOGD_FATAL,
-					"Unable to create proto filter\n");
-			goto err_filter;
-		}
-	}
-
 	if (strlen(mark_filter_ce(upi)) != 0) {
 		char *filter_string = mark_filter_ce(upi);
 		if (build_nfct_filter_mark(filter, filter_string, cpi->filter_dump) != 0) {
@@ -1392,17 +1169,12 @@ static int constructor_nfct_events(struct ulogd_source_pluginstance *upi)
 		goto err_cth;
 	}
 
-	if ((strlen(src_filter_ce(upi)) != 0) ||
-	    (strlen(dst_filter_ce(upi)) != 0) ||
-	    (strlen(proto_filter_ce(upi)) != 0) ||
-	    (strlen(mark_filter_ce(upi)) != 0)
-	   ) {
+	if (strlen(mark_filter_ce(upi)) != 0) {
 		if (build_nfct_filter(upi) != 0) {
 			ulogd_log(ULOGD_FATAL, "error creating NFCT filter\n");
 			goto err_cth;
 		}
 	}
-
 
 	if (usehash_ce(upi) != 0) {
 		nfct_callback_register(cpi->cth, NFCT_T_ALL,
