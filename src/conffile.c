@@ -17,11 +17,11 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include <limits.h>
 #include <ulogd/ulogd.h>
 #include <ulogd/common.h>
 #include <ulogd/conffile.h>
 #include <unistd.h>
-
 
 /* points to config entry with error */
 struct config_entry *config_errce = NULL;
@@ -120,6 +120,7 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 	char *args;
 	int err = 0;
 	int found = 0;
+	long val;
 	unsigned int i;
 	char linebuf[LINE_LEN+1];
 	char *line = linebuf;
@@ -198,8 +199,7 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 			wordend = get_word(wordend, " =\t\n\r", (char *) &wordbuf);
 			args = (char *)&wordbuf;
 
-			if (ce->hit && !(ce->options & CONFIG_OPT_MULTI))
-			{
+			if (ce->hit && !(ce->options & CONFIG_OPT_MULTI)) {
 				pr_debug("->ce-hit and option not multi!\n");
 				config_errce = ce;
 				err = -ERRMULT;
@@ -208,29 +208,38 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 			ce->hit++;
 
 			switch (ce->type) {
-				case CONFIG_TYPE_STRING:
-					if (strlen(args) < 
-					    CONFIG_VAL_STRING_LEN ) {
-						strcpy(ce->u.string, args);
-					} else {
-						config_errce = ce;
-						err = -ERRTOOLONG;
-						goto cpf_error;
-					}
-					break;
-				case CONFIG_TYPE_INT:
-					ce->u.value = strtoul(args, NULL, 0);
-					break;
-				case CONFIG_TYPE_CALLBACK:
-					(ce->u.parser)(args);
-					break;
+			case CONFIG_TYPE_STRING:
+				if (strlen(args) < 
+				    CONFIG_VAL_STRING_LEN ) {
+					strcpy(ce->u.string, args);
+				} else {
+					config_errce = ce;
+					err = -ERRTOOLONG;
+					goto cpf_error;
+				}
+				break;
+			case CONFIG_TYPE_INT:
+				val = strtol(args, NULL, 0);
+				if (val >= INT_MAX || val <= INT_MIN) {
+					err = -ERANGE;
+					goto cpf_error;
+				}
+				if (errno != 0 && val == 0) {
+ 					err = -errno;
+ 					goto cpf_error;
+ 				}
+				ce->u.value = (int)val;
+ 				break;
+			case CONFIG_TYPE_CALLBACK:
+				(ce->u.parser)(args);
+				break;
 			}
 			break;
 		}
 		pr_debug("parse_file: exiting main loop\n");
 	}
 
-
+	/* check mandatory */
 	for (i = 0; i < kset->num_ces; i++) {
 		struct config_entry *ce = &kset->ces[i];
 		pr_debug("ce post loop, ce=%s\n", ce->key);
@@ -249,7 +258,7 @@ cpf_error:
 	return err;
 }
 
-void config_stop()
+void config_stop(void)
 {
 	free(fname);
 }
