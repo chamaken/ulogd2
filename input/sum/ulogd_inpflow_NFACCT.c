@@ -120,7 +120,8 @@ propagate_nfacct(struct ulogd_source_pluginstance *upi,
 		= (struct nfacct_pluginstance *) upi->private;
 
 	okey_set_ptr(&ret[ULOGD_NFACCT_NAME],
-			(void *)nfacct_attr_get_str(nfacct, NFACCT_ATTR_NAME));
+			(void *)(uintptr_t)
+			nfacct_attr_get_str(nfacct, NFACCT_ATTR_NAME));
 	okey_set_u64(&ret[ULOGD_NFACCT_PKTS],
 			nfacct_attr_get_u64(nfacct, NFACCT_ATTR_PKTS));
 	okey_set_u64(&ret[ULOGD_NFACCT_BYTES],

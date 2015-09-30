@@ -36,7 +36,11 @@ dnl Checks for library functions.
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS(socket strerror)
 
-regular_CFLAGS="-Wall -Wextra -Wno-unused-parameter -Wstrict-prototypes -Wmissing-prototypes -Wshadow"
+regular_CFLAGS="-Wall -Wextra -Wundef -Waggregate-return \
+	-Wno-unused-parameter -Wmissing-declarations \
+	-Wstrict-prototypes -Wmissing-prototypes \
+	-Wshadow -Wcast-align -Wcast-qual -Wformat=2 -pipe"
+# "-Wpointer-arith -Wconversion"
 # regular_CFLAGS="-Wall -Wextra -Wno-unused-parameter -fno-omit-frame-pointer -fstack-protector-all -fsanitize=address"
 AC_SUBST([regular_CFLAGS])
 
