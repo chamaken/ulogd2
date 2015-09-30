@@ -392,7 +392,7 @@ static int nflog_cb(const struct nlmsghdr *nlh, void *data)
 	struct ulogd_keyset *output = ulogd_get_output_keyset(spi);
 	struct ulogd_key *ret = output->keys;
 	struct nlattr **attrs;
-	struct nl_mmap_hdr *frame = (void *)nlh - NL_MMAP_HDRLEN;
+	struct nl_mmap_hdr *frame = MNL_NLMSG_FRAME(nlh);
 	
 	attrs = (struct nlattr **)okey_get_ptr(&ret[NFLOG_KEY_NLATTRS]);
 	if (nflog_nlmsg_parse(nlh, attrs) == MNL_CB_ERROR) {

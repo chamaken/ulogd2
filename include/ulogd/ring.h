@@ -1,6 +1,7 @@
 #ifndef _ULOGD_RING_H_
 #define _ULOGD_RING_H_
 
+#include <stdint.h>
 #include <linux/netlink.h>
 #include <libmnl/libmnl.h>
 
@@ -12,7 +13,12 @@ struct mnl_ring {
 	unsigned int		block_size;
 };
 
-#define MNL_FRAME_PAYLOAD(frame) ((void *)(frame) + NL_MMAP_HDRLEN)
+#ifndef MNL_FRAME_PAYLOAD
+#define MNL_FRAME_PAYLOAD(frame) ((struct nlmsghdr *)((uintptr_t)(frame) + NL_MMAP_HDRLEN))
+#endif
+#ifndef MNL_NLMSG_FRAME
+#define MNL_NLMSG_FRAME(nlh) ((struct nl_mmap_hdr *)((uintptr_t)(nlh) - NL_MMAP_HDRLEN))
+#endif
 
 struct mnl_ring *
 mnl_socket_rx_mmap(struct mnl_socket *nls, struct nl_mmap_req *req, int flags);

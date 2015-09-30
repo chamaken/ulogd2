@@ -200,7 +200,7 @@ static int nfq_cb(const struct nlmsghdr *nlh, void *data)
 	struct ulogd_keyset *output = ulogd_get_output_keyset(upi);
 	struct ulogd_key *ret = output->keys;
 	struct nlattr **attrs;
-	struct nl_mmap_hdr *frame = (void *)nlh - NL_MMAP_HDRLEN;
+	struct nl_mmap_hdr *frame = MNL_NLMSG_FRAME(nlh);
 	
 	okey_set_u8(&ret[ULOGD_NFQ_OKEY_FAMILY], nfg->nfgen_family);
 	okey_set_u16(&ret[ULOGD_NFQ_OKEY_RES_ID], ntohs(nfg->res_id));
