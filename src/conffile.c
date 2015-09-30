@@ -162,9 +162,7 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 	}
 
 	/* Parse this section until next section */
-	while (fgets(line, LINE_LEN, cfile))
-	{
-		unsigned int i;
+	while (fgets(line, LINE_LEN, cfile)) {
 		char wordbuf[LINE_LEN];
 		char *wordend;
 		

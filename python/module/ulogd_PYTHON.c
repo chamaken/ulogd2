@@ -991,11 +991,11 @@ static int py_parent_propagate_results(struct py_priv *priv,
 				       struct nlmsghdr *nlh, int fd)
 {
 	struct nlattr *nla = mnl_nlmsg_get_payload(nlh);
-	struct ulogd_keyset *okeyset;
+	struct ulogd_keyset *rkeyset;
 	int ret;
 
-	okeyset = (struct ulogd_keyset *)*(void **)mnl_attr_get_payload(nla);
-	ret = ulogd_propagate_results(okeyset);
+	rkeyset = (struct ulogd_keyset *)*(void **)mnl_attr_get_payload(nla);
+	ret = ulogd_propagate_results(rkeyset);
 	if (py_parent_sendargs(priv, ULOGD_PY_RETURN_PROPAGATE_RESULTS,
 			       0, "I", ret) != 0) {
 		ulogd_log(ULOGD_ERROR, "parent_propagate_results sendmsg\n");
