@@ -33,32 +33,40 @@ struct nfacct_pluginstance {
 	struct timeval tv;
 };
 
+enum {
+	NFACCT_CONFIG_POLLINTERVAL,
+	NFACCT_CONFIG_ZEROCOUNTER,
+	NFACCT_CONFIG_TIMESTAMP,
+	NFACCT_CONFIG_MAX,
+};
+
 static struct config_keyset nfacct_kset = {
 	.ces = {
-		{
+		[NFACCT_CONFIG_POLLINTERVAL] = {
 			.key	 = "pollinterval",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFACCT_CONFIG_ZEROCOUNTER] = {
 			.key	 = "zerocounter",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 1,
 		},
-		{
+		[NFACCT_CONFIG_TIMESTAMP] = {
 			.key	 = "timestamp",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		}
 	},
-	.num_ces = 3,
+	.num_ces = NFACCT_CONFIG_MAX,
 };
-#define pollint_ce(x)	(x->ces[0])
-#define zerocounter_ce(x) (x->ces[1])
-#define timestamp_ce(x) (x->ces[2])
+
+#define pollint_ce(x)		((x)->config_kset->ces[NFACCT_CONFIG_POLLINTERVAL].u.value)
+#define zerocounter_ce(x)	((x)->config_kset->ces[NFACCT_CONFIG_ZEROCOUNTER].u.value)
+#define timestamp_ce(x)		((x)->config_kset->ces[NFACCT_CONFIG_TIMESTAMP].u.value)
 
 enum ulogd_nfacct_keys {
 	ULOGD_NFACCT_NAME,
@@ -119,7 +127,7 @@ propagate_nfacct(struct ulogd_source_pluginstance *upi,
 			nfacct_attr_get_u64(nfacct, NFACCT_ATTR_BYTES));
 	okey_set_valid(&ret[ULOGD_NFACCT_RAW]);
 
-	if (timestamp_ce(upi->config_kset).u.value != 0) {
+	if (timestamp_ce(upi) != 0) {
 		okey_set_u32(&ret[ULOGD_NFACCT_TIME_SEC], cpi->tv.tv_sec);
 		okey_set_u32(&ret[ULOGD_NFACCT_TIME_USEC], cpi->tv.tv_usec);
 	}
@@ -183,7 +191,7 @@ static int nfacct_send_request(struct ulogd_source_pluginstance *upi)
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	int flushctr;
 
-	if (zerocounter_ce(upi->config_kset).u.value != 0)
+	if (zerocounter_ce(upi) != 0)
 		flushctr = NFNL_MSG_ACCT_GET_CTRZERO;
 	else
 		flushctr = NFNL_MSG_ACCT_GET;
@@ -195,7 +203,7 @@ static int nfacct_send_request(struct ulogd_source_pluginstance *upi)
 		ulogd_log(ULOGD_ERROR, "Cannot send netlink message\n");
 		return -1;
 	}
-	if (timestamp_ce(upi->config_kset).u.value != 0) {
+	if (timestamp_ce(upi) != 0) {
 		/* Compute time of query */
 		gettimeofday(&cpi->tv, NULL);
 	}
@@ -210,7 +218,7 @@ static void polling_timer_cb(struct ulogd_timer *t, void *data)
 
 	nfacct_send_request(upi);
 
-	ulogd_add_timer(&cpi->timer, pollint_ce(upi->config_kset).u.value);
+	ulogd_add_timer(&cpi->timer, pollint_ce(upi));
 }
 
 static int configure_nfacct(struct ulogd_source_pluginstance *upi)
@@ -221,7 +229,7 @@ static int configure_nfacct(struct ulogd_source_pluginstance *upi)
 	if (ret < 0)
 		return ret;
 
-	if (pollint_ce(upi->config_kset).u.value <= 0) {
+	if (pollint_ce(upi) <= 0) {
 		ulogd_log(ULOGD_FATAL, "You have to set pollint\n");
 		return ULOGD_IRET_ERR;
 	}
@@ -233,7 +241,7 @@ static int constructor_nfacct(struct ulogd_source_pluginstance *upi)
 	struct nfacct_pluginstance *cpi =
 		(struct nfacct_pluginstance *)upi->private;
 
-	if (pollint_ce(upi->config_kset).u.value == 0)
+	if (pollint_ce(upi) == 0)
 		return -1;
 
 	cpi->nl = mnl_socket_open(NETLINK_NETFILTER);
@@ -255,8 +263,7 @@ static int constructor_nfacct(struct ulogd_source_pluginstance *upi)
 
 	ulogd_register_fd(&cpi->ufd);
 	ulogd_init_timer(&cpi->timer, upi, polling_timer_cb);
-	ulogd_add_timer(&cpi->timer,
-			 pollint_ce(upi->config_kset).u.value);
+	ulogd_add_timer(&cpi->timer, pollint_ce(upi));
 
 	return 0;
 }
