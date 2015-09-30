@@ -31,6 +31,10 @@ enum runnable_workers_status {
 static enum runnable_workers_status
 ulogd_runnable_workers_status = WORKERS_RUNNABLE;
 
+int ulogd_suspend_propagation(void);
+int ulogd_resume_propagation(void);
+int ulogd_stop_propagation(void);
+
 /* push back worker */
 static int put_worker(struct ulogd_interp_thread *worker)
 {

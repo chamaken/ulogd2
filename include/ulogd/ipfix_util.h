@@ -30,4 +30,5 @@
 
 int open_connect_descriptor(const char *dest);
 int ulogd_key_putn(struct ulogd_key *key, void *buf, int buflen);
+uint8_t event_ct_to_firewall(uint32_t ct_event);
 #endif

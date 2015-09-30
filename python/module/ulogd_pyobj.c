@@ -29,6 +29,8 @@
 extern int childfd;
 extern char *_pyulogd_nl_typestr[];
 
+PyMODINIT_FUNC PyInit_ulogd(void);
+
 static PyObject *py_ulogd_set_childfd(PyObject *self, PyObject *args)
 {
 	if (!PyArg_ParseTuple(args, "i", &childfd))
@@ -693,7 +695,7 @@ static PyTypeObject py_ulogd_keylist_type = {
 /****
  * struct ulogd_keyset
  */
-struct ulogd_key *find_key_by_name(struct ulogd_keyset *kset, char *name)
+static struct ulogd_key *find_key_by_name(struct ulogd_keyset *kset, char *name)
 {
 	unsigned int i;
 
@@ -1131,8 +1133,7 @@ static PyModuleDef ulogd_module = {
 	NULL, NULL, NULL, NULL, NULL,
 };
 
-PyMODINIT_FUNC
-PyInit_ulogd(void)
+PyMODINIT_FUNC PyInit_ulogd(void)
 {
 	PyObject *m;
 

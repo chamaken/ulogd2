@@ -122,7 +122,7 @@ extern int ulogd_stop_propagation(void);
 static int load_plugin(const char *file);
 static int create_stack(const char *file);
 static int logfile_open(const char *name);
-static void cleanup_pidfile();
+static void cleanup_pidfile(void);
 
 static struct config_keyset ulogd_kset = {
 	.num_ces = 4,
@@ -254,7 +254,7 @@ static struct ulogd_source_plugin *find_source_plugin(const char *name)
 	return NULL;
 }
 
-char *type_to_string(int type)
+static char *type_to_string(int type)
 {
 	switch (type) {
 	case ULOGD_RET_INT8:
@@ -302,7 +302,7 @@ char *type_to_string(int type)
 }
 
 /* XXX: handle both plugin and source_plugin */
-void get_plugin_infos(struct ulogd_plugin *me, int has_input)
+static void get_plugin_infos(struct ulogd_plugin *me, int has_input)
 {
 	unsigned int i;
 	printf("Name: %s\n", me->name);
@@ -723,7 +723,7 @@ static int ulogd_stacks_destroy(struct ulogd_source_pluginstance *spi)
 	return 0;
 }
 
-static int check_stack_keys()
+static int check_stack_keys(void)
 {
 	struct ulogd_source_pluginstance *spi;
 	struct ulogd_pluginstance *prev;
@@ -761,7 +761,7 @@ static int check_stack_keys()
 	return 0;
 }
 
-static int start_pluginstances()
+static int start_pluginstances(void)
 {
 	struct ulogd_pluginstance *pi, *err_pi = NULL;
 	struct ulogd_source_pluginstance *spi, *err_spi = NULL;
@@ -830,7 +830,7 @@ call_stop:
 	return -1;
 }
 
-static int configure_pluginstances()
+static int configure_pluginstances(void)
 {
 	struct ulogd_pluginstance *pi;
 	struct ulogd_source_pluginstance *spi;
@@ -1113,7 +1113,7 @@ static int lock_fd(int fd, int wait)
  * under the GPL2+ license with the following copyright statement:
  * Copyright (C) 1996 Thomas Koenig
  */
-static int create_pidfile()
+static int create_pidfile(void)
 {
 	int fd;
 	FILE *fp;
@@ -1235,7 +1235,7 @@ static int write_pidfile(int daemonize)
 	return 0;
 }
 
-static void cleanup_pidfile()
+static void cleanup_pidfile(void)
 {
 	if (!ulogd_pidfile || !created_pidfile)
 		return;
@@ -1420,7 +1420,7 @@ static int signal_handler(int fd, unsigned int what, void *data)
 
 /* block signals in this function. threads creating after this function
  * has already block the signals */
-static int signal_ufd_init()
+static int signal_ufd_init(void)
 {
 	sigset_t mask;
 

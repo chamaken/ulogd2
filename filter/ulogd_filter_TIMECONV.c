@@ -156,7 +156,7 @@ static inline uint64_t conv_ntp_us(uint32_t sec, uint32_t usec)
 		& ~0x7ff;
 }
 
-void set_ntp(struct ulogd_key *okeys, uint64_t offset,
+static void set_ntp(struct ulogd_key *okeys, uint64_t offset,
 	     uint32_t start_sec, uint32_t start_usec,
 	     uint32_t end_sec, uint32_t end_usec)
 {
@@ -173,7 +173,7 @@ static inline uint32_t conv_uptime(uint64_t offset, uint32_t sec, uint32_t usec)
 		+ usec / 1000 - (offset % NSEC_PER_SEC) / 1000000;
 }
 
-void set_uptime(struct ulogd_key *okeys, uint64_t offset,
+static void set_uptime(struct ulogd_key *okeys, uint64_t offset,
 		uint32_t start_sec, uint32_t start_usec,
 		uint32_t end_sec, uint32_t end_usec)
 {
@@ -183,7 +183,7 @@ void set_uptime(struct ulogd_key *okeys, uint64_t offset,
 		     conv_uptime(offset, end_sec, end_usec));
 }
 
-void set_ntp_uptime(struct ulogd_key *okeys, uint64_t offset,
+static void set_ntp_uptime(struct ulogd_key *okeys, uint64_t offset,
 		    uint32_t start_sec, uint32_t start_usec,
 		    uint32_t end_sec, uint32_t end_usec)
 {

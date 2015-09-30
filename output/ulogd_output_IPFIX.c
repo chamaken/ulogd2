@@ -154,7 +154,7 @@ struct ipfix_instance {
 static int ipfix_fprintf_header(FILE *fd, const struct ipfix_instance *ii);
 #endif
 
-struct ulogd_ipfix_template *
+static struct ulogd_ipfix_template *
 alloc_ulogd_ipfix_template(struct ulogd_pluginstance *upi,
 			   struct ulogd_keyset *input,
 			   struct nfct_bitmask *bm)
@@ -225,7 +225,7 @@ static void reset_counters(struct ipfix_instance *ii)
 }
 
 /* Build the IPFIX template from the input keys */
-struct ulogd_ipfix_template *
+static struct ulogd_ipfix_template *
 build_template_for_bitmask(struct ulogd_pluginstance *upi,
 			   struct ulogd_keyset *input,
 			   struct nfct_bitmask *bm)
