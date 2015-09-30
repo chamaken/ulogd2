@@ -32,72 +32,85 @@ struct nflog_input {
 };
 
 /* configuration entries */
+enum {
+	NFLOG_CONFIG_BUFSIZE,
+	NFLOG_CONFIG_GROUP,
+	NFLOG_CONFIG_UNBIND,
+	NFLOG_CONFIG_BIND,
+	NFLOG_CONFIG_SEQ_LOCAL,
+	NFLOG_CONFIG_SEQ_GLOBAL,
+	NFLOG_CONFIG_NUMERIC_LABEL,
+	NFLOG_CONFIG_SOCKET_BUFSIZE,
+	NFLOG_CONFIG_SOCKET_MAX_BUFSIZE,
+	NFLOG_CONFIG_QTHRESHOLD,
+	NFLOG_CONFIG_QTIMEOUT,
+	NFLOG_CONFIG_MAX,
+};
 
 static struct config_keyset libulog_kset = {
-	.num_ces = 11,
+	.num_ces = NFLOG_CONFIG_MAX,
 	.ces = {
-		{
+		[NFLOG_CONFIG_BUFSIZE] = {
 			.key 	 = "bufsize",
 			.type 	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = NFLOG_BUFSIZE_DEFAULT,
 		},
-		{
+		[NFLOG_CONFIG_GROUP] = {
 			.key	 = "group",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = NFLOG_GROUP_DEFAULT,
 		},
-		{
+		[NFLOG_CONFIG_UNBIND] = {
 			.key	 = "unbind",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 1,
 		},
-		{
+		[NFLOG_CONFIG_BIND] = {
 			.key	 = "bind",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-
-		{
+		[NFLOG_CONFIG_SEQ_LOCAL] = {
 			.key	 = "seq_local",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFLOG_CONFIG_SEQ_GLOBAL] = {
 			.key	 = "seq_global",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFLOG_CONFIG_NUMERIC_LABEL] = {
 			.key	 = "numeric_label",
 			.type	 = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFLOG_CONFIG_SOCKET_BUFSIZE] = {
 			.key     = "netlink_socket_buffer_size",
 			.type    = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFLOG_CONFIG_SOCKET_MAX_BUFSIZE] = {
 			.key     = "netlink_socket_buffer_maxsize",
 			.type    = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFLOG_CONFIG_QTHRESHOLD] = {
 			.key     = "netlink_qthreshold",
 			.type    = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
 			.u.value = 0,
 		},
-		{
+		[NFLOG_CONFIG_QTIMEOUT] = {
 			.key     = "netlink_qtimeout",
 			.type    = CONFIG_TYPE_INT,
 			.options = CONFIG_OPT_NONE,
@@ -106,17 +119,17 @@ static struct config_keyset libulog_kset = {
 	}
 };
 
-#define bufsiz_ce(x)	(x->ces[0])
-#define group_ce(x)	(x->ces[1])
-#define unbind_ce(x)	(x->ces[2])
-#define bind_ce(x)	(x->ces[3])
-#define seq_ce(x)	(x->ces[4])
-#define seq_global_ce(x)	(x->ces[5])
-#define label_ce(x)	(x->ces[6])
-#define nlsockbufsize_ce(x) (x->ces[7])
-#define nlsockbufmaxsize_ce(x) (x->ces[8])
-#define nlthreshold_ce(x) (x->ces[9])
-#define nltimeout_ce(x) (x->ces[10])
+#define bufsiz_ce(x)		((x)->config_kset->ces[NFLOG_CONFIG_BUFSIZE].u.value)
+#define group_ce(x)		((x)->config_kset->ces[NFLOG_CONFIG_GROUP].u.value)
+#define unbind_ce(x)		((x)->config_kset->ces[NFLOG_CONFIG_UNBIND].u.value)
+#define bind_ce(x)		((x)->config_kset->ces[NFLOG_CONFIG_BIND].u.value)
+#define seq_ce(x)		((x)->config_kset->ces[NFLOG_CONFIG_SEQ_LOCAL].u.value)
+#define seq_global_ce(x)	((x)->config_kset->ces[NFLOG_CONFIG_SEQ_GLOBAL].u.value)
+#define label_ce(x)		((x)->config_kset->ces[NFLOG_CONFIG_NUMERIC_LABEL].u.value)
+#define nlsockbufsize_ce(x)	((x)->config_kset->ces[NFLOG_CONFIG_SOCKET_BUFSIZE].u.value)
+#define nlsockbufmaxsize_ce(x)	((x)->config_kset->ces[NFLOG_CONFIG_SOCKET_MAX_BUFSIZE].u.value)
+#define nlthreshold_ce(x)	((x)->config_kset->ces[NFLOG_CONFIG_QTHRESHOLD].u.value)
+#define nltimeout_ce(x)		((x)->config_kset->ces[NFLOG_CONFIG_QTIMEOUT].u.value)
 
 enum nflog_keys {
 	NFLOG_KEY_RAW_MAC = 0,
@@ -335,10 +348,8 @@ interp_packet(struct ulogd_source_pluginstance *upi,
 	uint32_t uid;
 	uint32_t gid;
 
-	okey_set_u8(&ret[NFLOG_KEY_OOB_FAMILY], 
-		    pf_family);
-	okey_set_u8(&ret[NFLOG_KEY_RAW_LABEL],
-		    label_ce(upi->config_kset).u.value);
+	okey_set_u8(&ret[NFLOG_KEY_OOB_FAMILY], pf_family);
+	okey_set_u8(&ret[NFLOG_KEY_RAW_LABEL], label_ce(upi));
 
 	if (ph) {
 		okey_set_u8(&ret[NFLOG_KEY_OOB_HOOK], ph->hook);
@@ -409,7 +420,7 @@ static int setnlbufsiz(struct ulogd_source_pluginstance *upi, int size)
 {
 	struct nflog_input *ui = (struct nflog_input *)upi->private;
 
-	if (size < nlsockbufmaxsize_ce(upi->config_kset).u.value) {
+	if (size < nlsockbufmaxsize_ce(upi)) {
 		ui->nlbufsiz = nfnl_rcvbufsiz(nflog_nfnlh(ui->nful_h), size);
 		return 1;
 	}
@@ -436,10 +447,10 @@ static int nful_read_cb(int fd, unsigned int what, void *param)
 	/* we don't have a while loop here, since we don't want to
 	 * grab all the processing time just for us.  there might be other
 	 * sockets that have pending work */
-	len = recv(fd, ui->nfulog_buf, bufsiz_ce(upi->config_kset).u.value, 0);
+	len = recv(fd, ui->nfulog_buf, bufsiz_ce(upi), 0);
 	if (len < 0) {
 		if (errno == ENOBUFS && !ui->nful_overrun_warned) {
-			if (nlsockbufmaxsize_ce(upi->config_kset).u.value) {
+			if (nlsockbufmaxsize_ce(upi)) {
 				int s = ui->nlbufsiz * 2;
 				if (setnlbufsiz(upi, s)) {
 					ulogd_log(ULOGD_NOTICE,
@@ -492,7 +503,7 @@ static int become_system_logging(struct ulogd_source_pluginstance *upi,
 {
 	struct nflog_input *ui = (struct nflog_input *) upi->private;
 
-	if (unbind_ce(upi->config_kset).u.value > 0) {
+	if (unbind_ce(upi) > 0) {
 		ulogd_log(ULOGD_NOTICE, "forcing unbind of existing log "
 				"handler for protocol %d\n",
 				pf);
@@ -518,7 +529,7 @@ static int start(struct ulogd_source_pluginstance *upi)
 	struct nflog_input *ui = (struct nflog_input *) upi->private;
 	unsigned int flags;
 
-	ui->nfulog_buf = malloc(bufsiz_ce(upi->config_kset).u.value);
+	ui->nfulog_buf = malloc(bufsiz_ce(upi));
 	if (!ui->nfulog_buf)
 		goto out_buf;
 
@@ -528,8 +539,7 @@ static int start(struct ulogd_source_pluginstance *upi)
 		goto out_handle;
 
 	/* This is the system logging (conntrack, ...) facility */
-	if ((group_ce(upi->config_kset).u.value == 0) ||
-			(bind_ce(upi->config_kset).u.value > 0)) {
+	if (group_ce(upi) == 0 || bind_ce(upi) > 0) {
 		if (become_system_logging(upi, AF_INET) == -1)
 			goto out_handle;
 		if (become_system_logging(upi, AF_INET6) == -1)
@@ -538,59 +548,50 @@ static int start(struct ulogd_source_pluginstance *upi)
 			goto out_handle;
 	}
 
-	ulogd_log(ULOGD_DEBUG, "binding to log group %d\n",
-		  group_ce(upi->config_kset).u.value);
-	ui->nful_gh = nflog_bind_group(ui->nful_h,
-				       group_ce(upi->config_kset).u.value);
+	ulogd_log(ULOGD_DEBUG, "binding to log group %d\n", group_ce(upi));
+	ui->nful_gh = nflog_bind_group(ui->nful_h, group_ce(upi));
 	if (!ui->nful_gh) {
 		ulogd_log(ULOGD_ERROR, "unable to bind to log group %d\n",
-			  group_ce(upi->config_kset).u.value);
+			  group_ce(upi));
 		goto out_bind;
 	}
 
 	nflog_set_mode(ui->nful_gh, NFULNL_COPY_PACKET, 0xffff);
 
-	if (nlsockbufsize_ce(upi->config_kset).u.value) {
-		setnlbufsiz(upi, nlsockbufsize_ce(upi->config_kset).u.value);
+	if (nlsockbufsize_ce(upi)) {
+		setnlbufsiz(upi, nlsockbufsize_ce(upi));
 		ulogd_log(ULOGD_NOTICE, "NFLOG netlink buffer size has been "
 					"set to %d\n", ui->nlbufsiz);
 	}
 
-	if (nlthreshold_ce(upi->config_kset).u.value) {
+	if (nlthreshold_ce(upi)) {
 		if (nflog_set_qthresh(ui->nful_gh,
-				  nlthreshold_ce(upi->config_kset).u.value)
-				>= 0)
+				      nlthreshold_ce(upi)) >= 0)
 			ulogd_log(ULOGD_NOTICE,
 				  "NFLOG netlink queue threshold has "
-					"been set to %d\n",
-				  nlthreshold_ce(upi->config_kset).u.value);
+				  "been set to %d\n", nlthreshold_ce(upi));
 		else
 			ulogd_log(ULOGD_NOTICE,
 				  "NFLOG netlink queue threshold can't "
-				  "be set to %d\n",
-				  nlthreshold_ce(upi->config_kset).u.value);
+				  "be set to %d\n", nlthreshold_ce(upi));
 	}
 
-	if (nltimeout_ce(upi->config_kset).u.value) {
-		if (nflog_set_timeout(ui->nful_gh,
-				      nltimeout_ce(upi->config_kset).u.value)
-			>= 0)
+	if (nltimeout_ce(upi)) {
+		if (nflog_set_timeout(ui->nful_gh, nltimeout_ce(upi)) >= 0)
 			ulogd_log(ULOGD_NOTICE,
 				  "NFLOG netlink queue timeout has "
-					"been set to %d\n",
-				  nltimeout_ce(upi->config_kset).u.value);
+				  "been set to %d\n", nltimeout_ce(upi));
 		else
 			ulogd_log(ULOGD_NOTICE,
 				  "NFLOG netlink queue timeout can't "
-				  "be set to %d\n",
-				  nltimeout_ce(upi->config_kset).u.value);
+				  "be set to %d\n", nltimeout_ce(upi));
 	}
 
 	/* set log flags based on configuration */
 	flags = 0;
-	if (seq_ce(upi->config_kset).u.value != 0)
+	if (seq_ce(upi) != 0)
 		flags = NFULNL_CFG_F_SEQ;
-	if (seq_ce(upi->config_kset).u.value != 0)
+	if (seq_global_ce(upi) != 0)
 		flags |= NFULNL_CFG_F_SEQ_GLOBAL;
 	if (flags) {
 		if (nflog_set_flags(ui->nful_gh, flags) < 0)
@@ -613,7 +614,7 @@ static int start(struct ulogd_source_pluginstance *upi)
 	return 0;
 
 out_bind:
-	if (group_ce(upi->config_kset).u.value == 0) {
+	if (group_ce(upi) == 0) {
 		nflog_unbind_pf(ui->nful_h, AF_INET);
 		nflog_unbind_pf(ui->nful_h, AF_INET6);
 		nflog_unbind_pf(ui->nful_h, AF_BRIDGE);
