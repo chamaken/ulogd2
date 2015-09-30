@@ -1355,7 +1355,7 @@ static int py_flow_interp(struct ulogd_pluginstance *upi,
 	return py_parent_session(priv, ULOGD_PY_RETURN_INTERP);
 }
 
-static void py_signal(struct py_priv *priv, char *id, int signal)
+static void py_signal(struct py_priv *priv, char *id, uint32_t signal)
 {
 	if (priv->childpid == 0) {
 		ulogd_log(ULOGD_ERROR, "%s no child running\n", id);
@@ -1370,13 +1370,14 @@ static void py_signal(struct py_priv *priv, char *id, int signal)
 	py_parent_session(priv, ULOGD_PY_RETURN_SIGNAL);
 }
 
-static void py_flow_signal(struct ulogd_pluginstance *upi, int signal)
+static void py_flow_signal(struct ulogd_pluginstance *upi, uint32_t signal)
 {
 	struct py_priv *priv = (struct py_priv *)&upi->private;
 	return py_signal(priv, upi->id, signal);
 }
 
-static void py_source_signal(struct ulogd_source_pluginstance *spi, int signal)
+static void
+py_source_signal(struct ulogd_source_pluginstance *spi, uint32_t signal)
 {
 	struct py_priv *priv = (struct py_priv *)&spi->private;
 	return py_signal(priv, spi->id, signal);

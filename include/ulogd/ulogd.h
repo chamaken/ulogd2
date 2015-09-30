@@ -109,8 +109,8 @@ typedef int (*pl_stop_t)(struct ulogd_pluginstance *);
 typedef int (*sp_stop_t)(struct ulogd_source_pluginstance *);
 
 /* function to receive a signal */
-typedef void (*pl_signal_t)(struct ulogd_pluginstance *, int);
-typedef void (*sp_signal_t)(struct ulogd_source_pluginstance *, int);
+typedef void (*pl_signal_t)(struct ulogd_pluginstance *, uint32_t);
+typedef void (*sp_signal_t)(struct ulogd_source_pluginstance *, uint32_t);
 
 /* function to call for each packet */
 typedef int (*pl_interp_t)(struct ulogd_pluginstance *, struct ulogd_keyset *, struct ulogd_keyset *);

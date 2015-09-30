@@ -1245,7 +1245,7 @@ static void cleanup_pidfile(void)
 			  ulogd_pidfile, errno);
 }
 
-static void deliver_signal_pluginstances(int signal)
+static void deliver_signal_pluginstances(uint32_t signal)
 {
 	struct ulogd_source_pluginstance *spi;
 	struct ulogd_pluginstance *pi;
@@ -1330,7 +1330,7 @@ static int signal_ufd_fini(void)
 	return close(signal_ufd. fd);
 }
 
-static void sigterm_handler(int signal)
+static void sigterm_handler(uint32_t signal)
 {
 
 	ulogd_log(ULOGD_NOTICE, "Terminal signal received, exiting\n");

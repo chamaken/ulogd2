@@ -447,7 +447,7 @@ static int xml_start(struct ulogd_pluginstance *upi, struct ulogd_keyset *input)
 }
 
 static void
-xml_signal_handler(struct ulogd_pluginstance *upi, int signal)
+xml_signal_handler(struct ulogd_pluginstance *upi, uint32_t signal)
 {
 	switch (signal) {
 	case SIGHUP:

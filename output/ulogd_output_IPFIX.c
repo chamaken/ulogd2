@@ -556,7 +556,7 @@ static int stop_ipfix(struct ulogd_pluginstance *pi)
 	return 0;
 }
 
-static void signal_handler_ipfix(struct ulogd_pluginstance *pi, int signal)
+static void signal_handler_ipfix(struct ulogd_pluginstance *pi, uint32_t signal)
 {
 	switch (signal) {
 	default:

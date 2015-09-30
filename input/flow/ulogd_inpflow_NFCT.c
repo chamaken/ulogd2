@@ -1415,7 +1415,7 @@ static int destructor_nfct(struct ulogd_source_pluginstance *upi)
 	return ret;
 }
 
-static void signal_nfct(struct ulogd_source_pluginstance *pi, int signal)
+static void signal_nfct(struct ulogd_source_pluginstance *pi, uint32_t signal)
 {
 	switch (signal) {
 	case SIGUSR2:

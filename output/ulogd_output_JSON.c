@@ -204,7 +204,8 @@ static int json_interp(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 
-static void sighup_handler_print(struct ulogd_pluginstance *upi, int signal)
+static void
+sighup_handler_print(struct ulogd_pluginstance *upi, uint32_t signal)
 {
 	struct json_priv *oi = (struct json_priv *) &upi->private;
 	FILE *old = oi->of;

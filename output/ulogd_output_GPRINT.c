@@ -186,7 +186,8 @@ static int gprint_interp(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 
-static void sighup_handler_print(struct ulogd_pluginstance *upi, int signal)
+static void
+sighup_handler_print(struct ulogd_pluginstance *upi, uint32_t signal)
 {
 	struct gprint_priv *oi = (struct gprint_priv *) &upi->private;
 	FILE *old = oi->of;

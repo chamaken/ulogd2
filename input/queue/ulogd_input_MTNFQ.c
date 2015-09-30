@@ -621,7 +621,7 @@ static int destructor_nfq(struct ulogd_source_pluginstance *upi)
 	return 0;
 }
 
-static void signal_nfq(struct ulogd_source_pluginstance *upi, int signal)
+static void signal_nfq(struct ulogd_source_pluginstance *upi, uint32_t signal)
 {
 	struct mtnfq_priv *priv =	(struct mtnfq_priv *)upi->private;
 	struct nl_mmap_hdr *frame, *sentinel;;

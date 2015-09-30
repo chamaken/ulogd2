@@ -1169,7 +1169,7 @@ static int destructor_nfct(struct ulogd_source_pluginstance *spi)
 	return ret;
 }
 
-static void signal_nfct(struct ulogd_source_pluginstance *spi, int signal)
+static void signal_nfct(struct ulogd_source_pluginstance *spi, uint32_t signal)
 {
 	switch (signal) {
 	default:

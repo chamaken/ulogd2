@@ -283,7 +283,8 @@ static int destructor_nfacct(struct ulogd_source_pluginstance *upi)
 	return 0;
 }
 
-static void signal_nfacct(struct ulogd_source_pluginstance *upi, int signal)
+static void
+signal_nfacct(struct ulogd_source_pluginstance *upi, uint32_t signal)
 {
 	switch (signal) {
 	case SIGUSR2:

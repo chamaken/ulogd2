@@ -111,7 +111,8 @@ static int _output_logemu(struct ulogd_pluginstance *upi,
 	return ULOGD_IRET_OK;
 }
 
-static void signal_handler_logemu(struct ulogd_pluginstance *pi, int signal)
+static void
+signal_handler_logemu(struct ulogd_pluginstance *pi, uint32_t signal)
 {
 	struct logemu_instance *li = (struct logemu_instance *) &pi->private;
 	FILE *old = li->of;
