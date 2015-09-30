@@ -161,9 +161,9 @@ struct ulogd_keyset {
 	/* possible input keys of this interpreter */
 	struct ulogd_key *keys;
 	/* number of input keys */
-	unsigned int num_keys;
+	uint16_t num_keys;
 	/* bitmask of possible types */
-	unsigned int type;
+	uint16_t type;
 };
 
 static inline void okey_set_b(struct ulogd_key *key, uint8_t value)
