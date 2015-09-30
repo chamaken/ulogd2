@@ -1,1 +1,1 @@
-SUBDIRS = ulogd libipulog linux
+SUBDIRS = ulogd linux

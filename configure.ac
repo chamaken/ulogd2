@@ -52,13 +52,6 @@ AC_CHECK_HEADER(sys/signalfd.h,[],[AC_MSG_ERROR(unable to find signalfd header)]
 dnl Check for epoll header.
 AC_CHECK_HEADER(sys/epoll.h,[],[AC_MSG_ERROR(unable to find epoll header)])
 
-AC_ARG_ENABLE(ulog,
-       AS_HELP_STRING([--enable-ulog], [Enable ulog module [default=yes]]),[enable_ulog=$enableval],[enable_ulog=yes])
-AM_CONDITIONAL([BUILD_ULOG], [test "x$enable_ulog" = "xyes"])
-if [! test "x$enable_ulog" = "xyes"]; then
-	enable_ulog="no"
-fi
-
 AC_MSG_CHECKING([for enable mmaped netlink])
 AC_CACHE_VAL(ac_cv_mmaped_netlink,
 AC_TRY_COMPILE(
@@ -152,29 +145,6 @@ AS_IF([test "x$enable_nft" = "xyes"], [
 ])
 AM_CONDITIONAL([BUILD_NFT], [test "x$enable_nft" = "xyes"])
 
-AC_ARG_WITH([pgsql], AS_HELP_STRING([--without-pgsql], [Build without postgresql output plugin [default=test]]))
-AS_IF([test "x$with_pgsql" != "xno"], [
-	CT_CHECK_POSTGRES_DB()
-])
-AM_CONDITIONAL(HAVE_PGSQL, test "x$PQLIBPATH" != "x")
-if test "x$PQLIBPATH" != "x"; then
-	enable_pgsql="yes"
-else
-	enable_pgsql="no"
-fi
-
-AC_ARG_WITH([mysql], AS_HELP_STRING([--without-mysql], [Build without mysql output plugin [default=test]]))
-AS_IF([test "x$with_mysql" != "xno"], [
-	CT_CHECK_MYSQL_DB()
-])
-AM_CONDITIONAL(HAVE_MYSQL, test "x$MYSQL_LIB" != "x")
-if test "x$MYSQL_LIB" != "x"; then
-	enable_mysql="yes"
-else
-	enable_mysql="no"
-fi
-
-
 AC_ARG_WITH([sqlite], AS_HELP_STRING([--without-sqlite], [Build without SQLITE3 output plugin [default=test]]))
 AS_IF([test "x$with_sqlite" != "xno"], [
     PKG_CHECK_MODULES([libsqlite3], [sqlite3], [], [:])
@@ -184,29 +154,6 @@ if test "x$libsqlite3_LIBS" != "x"; then
 	enable_sqlite3="yes"
 else
 	enable_sqlite3="no"
-fi
-
-AC_ARG_WITH([dbi], AS_HELP_STRING([--without-dbi], [Build without DBI output plugin [default=test]]))
-AS_IF([test "x$with_dbi" != "xno"], [
-    CT_CHECK_DBI()
-])
-AM_CONDITIONAL(HAVE_DBI, test "x$DBI_LIB" != "x")
-if test "x$DBI_LIB" != "x"; then
-	enable_dbi="yes"
-else
-	enable_dbi="no"
-fi
-
-AC_ARG_WITH([pcap], AS_HELP_STRING([--without-pcap], [Build without PCAP output plugin [default=test]]))
-AS_IF([test "x$with_pcap" != "xno"], [
-    AC_SEARCH_LIBS([pcap_close], [pcap], [libpcap_LIBS="-lpcap"; LIBS=""])
-    AC_SUBST([libpcap_LIBS])
-])
-AM_CONDITIONAL([HAVE_PCAP], [test -n "$libpcap_LIBS"])
-if test "x$libpcap_LIBS" != "x"; then
-	enable_pcap="yes"
-else
-	enable_pcap="no"
 fi
 
 AC_ARG_WITH([jansson], AS_HELP_STRING([--without-jansson], [Build without JSON output plugin [default=test]]))
@@ -264,28 +211,13 @@ AS_IF([test "x$ac_cv_pr_sctp" = "xyes"],
 ])
 AM_CONDITIONAL([HAVE_PR_SCTP], [test "x$ac_cv_pr_sctp" = "xyes"])
 
-dnl AC_SUBST(DATABASE_DIR)
-dnl AC_SUBST(DATABASE_LIB)
-dnl AC_SUBST(DATABASE_LIB_DIR)
-dnl AC_SUBST(DB_DEF)
-dnl AC_SUBST(EXTRA_MYSQL_DEF)
-dnl AC_SUBST(EXTRA_PGSQL_DEF)
-
-dnl AC_SUBST(DATABASE_DRIVERS)
-
-dnl AM_CONDITIONAL(HAVE_MYSQL, test x$mysqldir != x)
-dnl AM_CONDITIONAL(HAVE_PGSQL, test x$pgsqldir != x)
-
-AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile include/libipulog/Makefile \
-	  include/linux/Makefile include/linux/netfilter/Makefile \
-	  include/linux/netfilter_ipv4/Makefile libipulog/Makefile \
-	  util/Makefile \
+AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile \
+ 	  include/linux/Makefile include/linux/netfilter/Makefile \
+	  include/linux/netfilter_ipv4/Makefile util/Makefile \
 	  input/Makefile input/packet/Makefile input/flow/Makefile \
 	  input/sum/Makefile input/queue/Makefile input/stats/Makefile input/table/Makefile \
-	  filter/Makefile filter/raw2packet/Makefile filter/packet2flow/Makefile \
-	  output/Makefile output/pcap/Makefile output/mysql/Makefile output/pgsql/Makefile output/sqlite3/Makefile \
-	  output/dbi/Makefile python/Makefile python/module/Makefile \
-	  src/Makefile Makefile Rules.make)
+	  filter/Makefile output/Makefile output/sqlite3/Makefile \
+	  python/Makefile python/module/Makefile src/Makefile Makefile Rules.make)
 AC_OUTPUT
 
 echo "
@@ -296,16 +228,11 @@ Ulogd configuration:
     NFCT plugin:			${enable_nfct}
     NFCT2 plugin:			${enable_nfct2}
     NFACCT plugin:			${enable_nfacct}
-    ULOG plugin:			${enable_ulog}
     NFQ plugin:				${enable_nfq}
     NFCTST plugin:			${enable_nfctst}
     NFT plugin:				${enable_nft}
   Output plugins:
-    PCAP plugin:			${enable_pcap}
-    PGSQL plugin:			${enable_pgsql}
-    MySQL plugin:			${enable_mysql}
     SQLITE3 plugin:			${enable_sqlite3}
-    DBI plugin:				${enable_dbi}
     JSON plugin:			${enable_jansson}
     NetFlow v9 plugin:			${enable_nfct}
     IPFIX plugin:			${enable_nfct}

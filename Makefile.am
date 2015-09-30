@@ -6,7 +6,7 @@ man_MANS = ulogd.8
 EXTRA_DIST = $(man_MANS) ulogd.logrotate ulogd.spec ulogd.conf.in doc
 
 AM_CPPFLAGS = -I$(top_srcdir)/include
-SUBDIRS = include libipulog src util input filter output python
+SUBDIRS = include src util input filter output python
 
 noinst_DATA = ulogd.conf
 
