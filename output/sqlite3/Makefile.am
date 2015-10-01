@@ -5,7 +5,7 @@ if HAVE_SQLITE3
 
 pkglib_LTLIBRARIES = ulogd_output_SQLITE3.la
 
-ulogd_output_SQLITE3_la_SOURCES = ulogd_output_SQLITE3.c $(top_srcdir)/util/libutil.la
+ulogd_output_SQLITE3_la_SOURCES = ulogd_output_SQLITE3.c
 ulogd_output_SQLITE3_la_LIBADD  = ${libsqlite3_LIBS}
 ulogd_output_SQLITE3_la_LDFLAGS = -avoid-version -module
 
