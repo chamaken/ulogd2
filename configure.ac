@@ -213,7 +213,7 @@ AC_CONFIG_FILES(include/Makefile include/ulogd/Makefile \
 	  input/Makefile input/packet/Makefile input/flow/Makefile \
 	  input/sum/Makefile input/queue/Makefile input/stats/Makefile input/table/Makefile \
 	  filter/Makefile output/Makefile output/sqlite3/Makefile \
-	  python/Makefile python/module/Makefile src/Makefile Makefile Rules.make)
+	  bindings/Makefile bindings/python/Makefile src/Makefile Makefile Rules.make)
 AC_OUTPUT
 
 echo "

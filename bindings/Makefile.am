@@ -1,3 +1,3 @@
 if HAVE_PYTHON
-SUBDIRS = module
+SUBDIRS = python
 endif
