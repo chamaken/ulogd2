@@ -72,14 +72,14 @@ static char *get_word(char *line, char *not, char *buf)
 	if (!stop)
 		return NULL;
 
-	strncpy(buf, start, (size_t) (stop-start));
-	*(buf + (stop-start)) = '\0';
+	strncpy(buf, start, (size_t)(stop - start));
+	*(buf + (stop - start)) = '\0';
 
 	/* skip quote character */
 	if (inquote)
 		/* yes, we can return stop + 1. If " was the last 
 		 * character in string, it now points to NULL-term */
-		return (stop + 1);
+		return stop + 1;
 
 	return stop;
 }
@@ -104,7 +104,7 @@ int config_register_file(const char *file)
 
 	pr_debug("%s: registered config file '%s'\n", __func__, file);
 
-	fname = (char *) malloc(strlen(file)+1);
+	fname = (char *)malloc(strlen(file) + 1);
 	if (!fname)
 		return -ERROOM;
 
@@ -122,7 +122,7 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 	int found = 0;
 	long val;
 	unsigned int i;
-	char linebuf[LINE_LEN+1];
+	char linebuf[LINE_LEN + 1];
 	char *line = linebuf;
 	int linenum = 0;
 
@@ -147,7 +147,8 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 			return -ERRTOOLONG;
 		}
 
-		if (!(wordend = get_word(line, " \t\n\r[]", (char *) wordbuf)))
+		wordend = get_word(line, " \t\n\r[]", (char *)wordbuf);
+		if (wordend == NULL)
 			continue;
 		pr_debug("word: \"%s\"\n", wordbuf);
 		if (!strcmp(wordbuf, section)) {
@@ -177,7 +178,8 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 			return -ERRTOOLONG;
 		}
 
-		if (!(wordend = get_word(line, " =\t\n\r", (char *) &wordbuf)))
+		wordend = get_word(line, " =\t\n\r", (char *)&wordbuf);
+		if (wordend == NULL)
 			continue;
 
 		if (wordbuf[0] == '[' ) {
@@ -194,7 +196,7 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 				continue;
 			}
 
-			wordend = get_word(wordend, " =\t\n\r", (char *) &wordbuf);
+			wordend = get_word(wordend, " =\t\n\r", (char *)&wordbuf);
 			args = (char *)&wordbuf;
 
 			if (ce->hit && !(ce->options & CONFIG_OPT_MULTI)) {
@@ -207,8 +209,7 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 
 			switch (ce->type) {
 			case CONFIG_TYPE_STRING:
-				if (strlen(args) < 
-				    CONFIG_VAL_STRING_LEN ) {
+				if (strlen(args) < CONFIG_VAL_STRING_LEN ) {
 					strcpy(ce->u.string, args);
 				} else {
 					config_errce = ce;
