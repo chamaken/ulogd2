@@ -92,7 +92,8 @@ static char *ulogd_logfile = NULL;
 static const char *ulogd_configfile = ULOGD_CONFIGFILE;
 static const char *ulogd_pidfile = NULL;
 static int ulogd_pidfile_fd = -1;
-static FILE *syslog_dummy;
+static FILE *syslog_dummy = (FILE *)-1;	/* for comparison to logfile before
+					 * assigning first time */
 
 static int info_mode = 0;
 
