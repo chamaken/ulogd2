@@ -76,9 +76,17 @@ int config_parse_file(const char *section, struct config_keyset *kset);
 /* release ressource allocated by config file handling */
 void config_stop(void);
 
+
 struct ulogd_plugin *
 ulogd_plugin_json_config(const char *const fname);
 struct ulogd_source_plugin *
 ulogd_source_plugin_json_config(const char *const fname);
+
+int ulogd_config_int(const struct config_keyset *configs,
+		     const char *const name);
+const char *ulogd_config_str(const struct config_keyset *configs,
+			     const char *const name);
+int ulogd_config_id_int(const struct config_keyset *configs, uint8_t id);
+const char *ulogd_config_id_str(const struct config_keyset *configs, uint8_t id);
 
 #endif /* ifndef _CONFFILE_H */

@@ -278,3 +278,95 @@ void config_stop(void)
 	free(ulogd_config_fname);
 	ulogd_config_fname = NULL;
 }
+
+static const struct config_entry *
+config_keyset_lookup(const struct config_keyset *configs,
+		     const char *name)
+{
+	uint8_t i;
+
+	for (i = 0; i < configs->num_ces; i++)
+		if (strncmp(configs->ces[i].key, name, CONFIG_KEY_LEN) == 0)
+			return &configs->ces[i];
+
+	return NULL;
+}
+
+/*
+ * return INT_MAX and set errno on error
+ */
+int ulogd_config_int(const struct config_keyset *configs,
+		     const char *name)
+{
+	const struct config_entry *const ces
+		= config_keyset_lookup(configs, name);
+
+	if (ces == NULL) {
+		errno = ENOENT;
+		return INT_MAX;
+	}
+	if (ces->type != CONFIG_TYPE_INT) {
+		errno = EINVAL;
+		return INT_MAX;
+	}
+
+	return ces->u.value;
+}
+
+const char *ulogd_config_str(const struct config_keyset *configs,
+			     const char *const name)
+{
+	const struct config_entry *const ces
+		= config_keyset_lookup(configs, name);
+
+	if (ces == NULL) {
+		errno = ENOENT;
+		return NULL;
+	}
+	if (ces->type != CONFIG_TYPE_STRING) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	return ces->u.string;
+}
+
+/*
+ * return INT_MAX and set errno on error
+ */
+int ulogd_config_id_int(const struct config_keyset *configs, uint8_t id)
+{
+	const struct config_entry *ces;
+
+	if (id >= configs->num_ces) {
+		errno = ENOENT;
+		return INT_MAX;
+	}
+
+	ces = &configs->ces[id];
+	if (ces->type != CONFIG_TYPE_INT) {
+		errno = EINVAL;
+		return INT_MAX;
+	}
+
+	return ces->u.value;
+}
+
+const char *ulogd_config_id_str(const struct config_keyset *configs,
+				uint8_t id)
+{
+	const struct config_entry *ces;
+
+	if (id >= configs->num_ces) {
+		errno = ENOENT;
+		return NULL;
+	}
+
+	ces = &configs->ces[id];
+	if (ces->type != CONFIG_TYPE_STRING) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	return ces->u.string;
+}

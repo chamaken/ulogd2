@@ -1,6 +1,10 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
+#include <assert.h>
+
 #include <ulogd/conffile.h>
 
 enum {
@@ -15,6 +19,12 @@ int bla(const char *args)
 	return 0;
 }
 
+/*
+ * [global]
+ * zeile zeile1
+ * spalte 0815
+ * asdfasf
+ */
 static struct config_keyset test_kset = {
 	.num_ces = CFTEST_CONFIG_MAX,
 	.ces = {
@@ -42,6 +52,18 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "failed to config_parse_file\n");
 		exit(EXIT_FAILURE);
 	}
+
+	assert(ulogd_config_int(&test_kset, "not-exists") == INT_MAX);
+	assert(errno == ENOENT);
+
+	assert(ulogd_config_str(&test_kset, "not-exists") == NULL);
+	assert(errno == ENOENT);
+
+	assert(ulogd_config_int(&test_kset, "spalte") == INT_MAX);
+	assert(errno == EINVAL);
+
+	assert(ulogd_config_str(&test_kset, "spalte") != NULL);
+	assert(ulogd_config_id_str(&test_kset, CFTEST_CONFIG_SPALTE) != NULL);
 
 	return EXIT_SUCCESS;
 }
