@@ -5,6 +5,7 @@
 #include <jansson.h>
 
 #include <ulogd/ulogd.h>
+#include <ulogd/conffile.h>
 #include <ulogd/ipfix_protocol.h>
 
 #define ccmp(s, t) do { if (strncmp(s, (#t), strlen(#t)) == 0) return (t); } while (0)
@@ -308,7 +309,8 @@ static int parse_config_entry(struct config_entry *const ce, json_t *const json,
 	return 0;
 }
 
-int parse_alloc_config(struct config_keyset **ck, const json_t *const json)
+static int
+parse_alloc_config(struct config_keyset **ck, const json_t *const json)
 {
 	size_t i, array_size, size;
 	int ret = 0;
@@ -334,7 +336,8 @@ failure:
 	return ret;
 }
 
-int parse_ipfix(struct ulogd_key *key, struct json_t *const json, int seq)
+static int
+parse_ipfix(struct ulogd_key *key, struct json_t *const json, int seq)
 {
 	json_error_t error;
 	char *vendor_str, *id_str;
@@ -364,7 +367,8 @@ int parse_ipfix(struct ulogd_key *key, struct json_t *const json, int seq)
 	return 0;
 }
 
-int parse_key(struct ulogd_key *key, struct json_t *const json, int seq)
+static int
+parse_key(struct ulogd_key *key, struct json_t *const json, int seq)
 {
 	json_error_t error;
 	int keylen = 0, namelen, cimlen, type, flag;
@@ -432,7 +436,8 @@ int parse_key(struct ulogd_key *key, struct json_t *const json, int seq)
 	return parse_ipfix(key, ipfix, seq);
 }
 
-int parse_alloc_keyset(struct ulogd_keyset *kset, struct json_t *const json)
+static int
+parse_alloc_keyset(struct ulogd_keyset *kset, struct json_t *const json)
 {
 
 	json_t *array = NULL;
@@ -545,7 +550,8 @@ free_kset:
  *   "version", "name", "config_kset", "output",
  *   "configure", "start", "stop, "signal"
  */
-struct ulogd_plugin *ulogd_plugin_json(const char *const fname)
+struct ulogd_plugin *
+ulogd_plugin_json_config(const char *const fname)
 {
 	json_t *root;
 	json_t *input, *output, *config_kset = NULL;
@@ -640,7 +646,8 @@ fail_free:
 	return NULL;
 }
 	     
-struct ulogd_source_plugin *ulogd_source_plugin_json(const char *const fname)
+struct ulogd_source_plugin *
+ulogd_source_plugin_json_config(const char *const fname)
 {
 	json_t *root;
 	json_t *output, *config_kset = NULL;

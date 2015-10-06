@@ -76,4 +76,9 @@ int config_parse_file(const char *section, struct config_keyset *kset);
 /* release ressource allocated by config file handling */
 void config_stop(void);
 
+struct ulogd_plugin *
+ulogd_plugin_json_config(const char *const fname);
+struct ulogd_source_plugin *
+ulogd_source_plugin_json_config(const char *const fname);
+
 #endif /* ifndef _CONFFILE_H */
