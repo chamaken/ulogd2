@@ -1037,54 +1037,6 @@ static int logfile_open(const char *name)
 	return 0;
 }
 
-/* wrapper to handle conffile error codes */
-static int parse_conffile(const char *section, struct config_keyset *ce)
-{
-	int err;
-
-	err = config_parse_file(section, ce);
-
-	switch(err) {
-	case 0:
-		return 0;
-		break;
-	case -ERROPEN:
-		ulogd_log(ULOGD_ERROR,
-			  "unable to open configfile: %s\n",
-			  ulogd_configfile);
-		break;
-	case -ERRMAND:
-		ulogd_log(ULOGD_ERROR,
-			  "mandatory option \"%s\" not found\n",
-			  config_errce->key);
-		break;
-	case -ERRMULT:
-		ulogd_log(ULOGD_ERROR,
-			  "option \"%s\" occurred more than once\n",
-			  config_errce->key);
-		break;
-	case -ERRUNKN:
-		ulogd_log(ULOGD_ERROR,
-			  "unknown config key \"%s\"\n",
-			  config_errce->key);
-		break;
-	case -ERRSECTION:
-		ulogd_log(ULOGD_ERROR,
-			  "section \"%s\" not found\n", section);
-		break;
-	case -ERRTOOLONG:
-		if (config_errce->key)
-			ulogd_log(ULOGD_ERROR,
-				  "string value too long for key \"%s\"\n",
-				  config_errce->key);
-		else
-			ulogd_log(ULOGD_ERROR,
-				  "string value is too long\n");
-		break;
-	}
-	return 1;
-}
-
 /*
  * Apply F_WRLCK to fd using fcntl().
  *
@@ -1486,6 +1438,7 @@ static struct option opts[] = {
 	{NULL, 0, NULL, 0}
 };
 
+#ifndef ULOGD_TEST_LIB
 int main(int argc, char* argv[])
 {
 	int argch;
@@ -1625,7 +1578,7 @@ int main(int argc, char* argv[])
 	}
 
 	/* parse config file */
-	if (parse_conffile("global", &ulogd_kset)) {
+	if (config_parse_file("global", &ulogd_kset)) {
 		ulogd_log(ULOGD_FATAL, "unable to parse config file\n");
 		warn_and_exit(daemonize);
 	}
@@ -1710,3 +1663,4 @@ int main(int argc, char* argv[])
 	sigterm_handler(SIGTERM);
 	return(0);
 }
+#endif

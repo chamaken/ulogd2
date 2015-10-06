@@ -1,30 +1,47 @@
 #include <unistd.h>
 #include <stdio.h>
-#include "conffile.h"
+#include <stdlib.h>
+#include <ulogd/conffile.h>
 
-int bla(char *args)
+enum {
+	CFTEST_CONFIG_ZEILE,
+	CFTEST_CONFIG_SPALTE,
+	CFTEST_CONFIG_MAX,
+};
+
+int bla(const char *args)
 {
 	printf("bla called: %s\n", args);
 	return 0;
 }
-int main()
+
+static struct config_keyset test_kset = {
+	.num_ces = CFTEST_CONFIG_MAX,
+	.ces = {
+		[CFTEST_CONFIG_ZEILE] = {
+			.key	= "zeile",
+			.type	= CONFIG_TYPE_CALLBACK,
+			.u.parser = bla,
+		},
+		[CFTEST_CONFIG_SPALTE] = {
+			.key	= "spalte",
+			.type	= CONFIG_TYPE_STRING,
+			.options = CONFIG_OPT_MANDATORY,
+		},
+	},
+};
+
+int main(int argc, char *argv[])
 {
-	config_entry_t e,f;
-	memset(&e, 0, sizeof(config_entry_t));
-	strcpy(e.key, "zeile");
-	e.u.parser = bla;
-	e.type = CONFIG_TYPE_CALLBACK;
-	config_register_key(&e);
+	if (config_register_file(argv[1])) {
+		fprintf(stderr, "failed to config_register_file\n");
+		exit(EXIT_FAILURE);
+	}
 
-	strcpy(f.key, "spalte");
-	f.type = CONFIG_TYPE_STRING;
-	f.options |= CONFIG_OPT_MANDATORY;
-	f.u.str.string = (char *) malloc(100);
-	f.u.str.maxlen = 99;
-	config_register_key(&f);
+	if (config_parse_file("global", &test_kset)) {
+		fprintf(stderr, "failed to config_parse_file\n");
+		exit(EXIT_FAILURE);
+	}
 
-	config_parse_file("test.txt");
-	printf("SPALTE: %s\n", f.u.str.string);
-
-	exit(0);
+	return EXIT_SUCCESS;
 }

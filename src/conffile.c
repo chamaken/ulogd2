@@ -27,7 +27,7 @@
 struct config_entry *config_errce = NULL;
 
 /* Filename of the config file */
-static char *fname = NULL;
+static char *ulogd_config_fname = NULL;
 
 /* get_word() - Function to parse a line into words.
  * Arguments:	line	line to parse
@@ -36,7 +36,7 @@ static char *fname = NULL;
  * Return value:	pointer to first char after word
  * This function can deal with "" quotes 
  */
-static char *get_word(char *line, char *not, char *buf)
+static char *get_word(char *line, char *delim, char *buf)
 {
 	char *p, *start = NULL, *stop = NULL;
 	int inquote = 0;
@@ -47,7 +47,7 @@ static char *get_word(char *line, char *not, char *buf)
 			inquote = 1;
 			break;
 		}
-		if (!strchr(not, *p)) {
+		if (!strchr(delim, *p)) {
 			start = p;
 			break;
 		}
@@ -63,7 +63,7 @@ static char *get_word(char *line, char *not, char *buf)
 				break;
 			}
 		} else {
-			if (strchr(not, *p)) {
+			if (strchr(delim, *p)) {
 				stop = p;
 				break;
 			}
@@ -91,24 +91,26 @@ static char *get_word(char *line, char *not, char *buf)
 /* register config file with us */
 int config_register_file(const char *file)
 {
-	if (fname)
-		return 1;
+	if (ulogd_config_fname) {
+		ulogd_log(ULOGD_ERROR, "already registerd file: %s\n",
+			  ulogd_config_fname);
+		return EALREADY; /* not negative, it's not critical */
+	}
 
 	if (access(file, R_OK) != 0) {
 		ulogd_log(ULOGD_ERROR,
 			 "unable to read configfile \"%s\": %s\n",
 			 file,
 			 strerror(errno));
-		return 1;
+		return -errno;
 	}
 
-	pr_debug("%s: registered config file '%s'\n", __func__, file);
-
-	fname = (char *)malloc(strlen(file) + 1);
-	if (!fname)
+	ulogd_log(ULOGD_DEBUG, "registering config file: %s\n", file);
+	ulogd_config_fname = (char *)malloc(strlen(file) + 1);
+	if (!ulogd_config_fname)
 		return -ERROOM;
 
-	strcpy(fname, file);
+	strcpy(ulogd_config_fname, file);
 
 	return 0;
 }
@@ -117,40 +119,45 @@ int config_register_file(const char *file)
 int config_parse_file(const char *section, struct config_keyset *kset)
 {
 	FILE *cfile;
-	char *args;
-	int err = 0;
-	int found = 0;
+	char line[LINE_LEN + 1];
+	int linenum = 0;
+	char wordbuf[LINE_LEN];
+	char *wordend;
+	struct config_entry *ce;
+	int err = 0, found = 0;
 	long val;
 	unsigned int i;
-	char linebuf[LINE_LEN + 1];
-	char *line = linebuf;
-	int linenum = 0;
 
-	pr_debug("%s: section='%s' file='%s'\n", __func__, section, fname);
-
-	cfile = fopen(fname, "r");
-	if (!cfile)
+	ulogd_log(ULOGD_DEBUG, "section: %s, file: %s\n",
+		  section, ulogd_config_fname);
+	cfile = fopen(ulogd_config_fname, "r");
+	if (!cfile) {
+		ulogd_log(ULOGD_ERROR, "could not open file - %s: %s\n",
+			  ulogd_config_fname, strerror(errno));
 		return -ERROPEN;
+	}
 
 	/* Search for correct section */
 	while (fgets(line, LINE_LEN, cfile)) {
-		char wordbuf[LINE_LEN];
-		char *wordend;
-
 		linenum++;
-		if (*line == '#')
+		if (line[0] == '#')
 			continue;
 
 		/* if line was fetch completely, string ends with '\n' */
-		if (! strchr(line, '\n')) {
+		if (!strchr(line, '\n')) {
 			ulogd_log(ULOGD_ERROR, "line %d too long.\n", linenum);
-			return -ERRTOOLONG;
+			err = -ERRTOOLONG;
+			goto cpf_error;
 		}
 
-		wordend = get_word(line, " \t\n\r[]", (char *)wordbuf);
-		if (wordend == NULL)
+		wordend = get_word(line, " \t\n\r[]", wordbuf);
+		if (!wordend) {
+			ulogd_log(ULOGD_ERROR,
+				  "ignore invalid line: %s\n", line);
 			continue;
-		pr_debug("word: \"%s\"\n", wordbuf);
+		}
+
+		ulogd_log(ULOGD_DEBUG, "section: %s\n", wordbuf);
 		if (!strcmp(wordbuf, section)) {
 			found = 1;
 			break;
@@ -158,49 +165,47 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 	}
 
 	if (!found) {
-		fclose(cfile);
-		return -ERRSECTION;
+		ulogd_log(ULOGD_ERROR, "no section found: %s\n", section);
+		err = -ERRSECTION;
+		goto cpf_error;
 	}
 
 	/* Parse this section until next section */
 	while (fgets(line, LINE_LEN, cfile)) {
-		char wordbuf[LINE_LEN];
-		char *wordend;
-		
 		linenum++;
-		pr_debug("line read: %s\n", line);
-		if (*line == '#')
+		if (line[0] == '#')
 			continue;
 
 		/* if line was fetch completely, string ends with '\n' */
-		if (! strchr(line, '\n')) {
+		if (!strchr(line, '\n')) {
 			ulogd_log(ULOGD_ERROR, "line %d too long.\n", linenum);
-			return -ERRTOOLONG;
+			err = -ERRTOOLONG;
+			goto cpf_error;
 		}
 
-		wordend = get_word(line, " =\t\n\r", (char *)&wordbuf);
-		if (wordend == NULL)
+		wordend = get_word(line, " =\t\n\r", wordbuf);
+		if (!wordend) {
+			ulogd_log(ULOGD_ERROR,
+				  "ignore invalid line: %s\n", line);
 			continue;
+		}
 
 		if (wordbuf[0] == '[' ) {
 			pr_debug("Next section '%s' encountered\n", wordbuf);
 			break;
 		}
 
-		pr_debug("parse_file: entering main loop\n");
 		for (i = 0; i < kset->num_ces; i++) {
-			struct config_entry *ce = &kset->ces[i];
-			pr_debug("parse main loop, key: %s\n", ce->key);
-			if ((strcmp(ce->key, (char *) &wordbuf)) ||
-			     ce->flag & CONFIG_FLAG_VAL_PROTECTED) {
+			ce = &kset->ces[i];
+			if (strcmp(ce->key, wordbuf) ||
+			    ce->flag & CONFIG_FLAG_VAL_PROTECTED)
 				continue;
-			}
 
-			wordend = get_word(wordend, " =\t\n\r", (char *)&wordbuf);
-			args = (char *)&wordbuf;
-
+			wordend = get_word(wordend, " =\t\n\r", wordbuf);
 			if (ce->hit && !(ce->options & CONFIG_OPT_MULTI)) {
-				pr_debug("->ce-hit and option not multi!\n");
+				ulogd_log(ULOGD_ERROR,
+					  "multi entry is not allowed: %s\n",
+					  ce->key);
 				config_errce = ce;
 				err = -ERRMULT;
 				goto cpf_error;
@@ -209,42 +214,53 @@ int config_parse_file(const char *section, struct config_keyset *kset)
 
 			switch (ce->type) {
 			case CONFIG_TYPE_STRING:
-				if (strlen(args) < CONFIG_VAL_STRING_LEN ) {
-					strcpy(ce->u.string, args);
-				} else {
+				if (strlen(wordbuf) > CONFIG_VAL_STRING_LEN ) {
+					ulogd_log(ULOGD_ERROR,
+						  "too long value: %s\n",
+						  wordbuf);
 					config_errce = ce;
 					err = -ERRTOOLONG;
 					goto cpf_error;
 				}
+				strcpy(ce->u.string, wordbuf);
 				break;
 			case CONFIG_TYPE_INT:
-				val = strtol(args, NULL, 0);
+				val = strtol(wordbuf, NULL, 0);
 				if (val >= INT_MAX || val <= INT_MIN) {
+					ulogd_log(ULOGD_ERROR,
+						  "over int range: %s\n",
+						  wordbuf);
 					err = -ERANGE;
 					goto cpf_error;
 				}
-				if (errno != 0 && val == 0) {
+				if (errno != 0 && val) {
+					ulogd_log(ULOGD_ERROR,
+						  "invalid integer: %s\n",
+						  wordbuf);
  					err = -errno;
  					goto cpf_error;
  				}
 				ce->u.value = (int)val;
  				break;
 			case CONFIG_TYPE_CALLBACK:
-				(ce->u.parser)(args);
+				err = (ce->u.parser)(wordbuf);
+				if (err) {
+					ulogd_log(ULOGD_ERROR,
+						  "parser %s, returns: %d\n",
+						  ce->key, err);
+					goto cpf_error;
+				}
 				break;
 			}
-			break;
 		}
-		pr_debug("parse_file: exiting main loop\n");
 	}
 
 	/* check mandatory */
 	for (i = 0; i < kset->num_ces; i++) {
-		struct config_entry *ce = &kset->ces[i];
-		pr_debug("ce post loop, ce=%s\n", ce->key);
-		if ((ce->options & CONFIG_OPT_MANDATORY) && (ce->hit == 0)) {
-			pr_debug("Mandatory config directive \"%s\" not found\n",
-				ce->key);
+		ce = &kset->ces[i];
+		if (ce->options & CONFIG_OPT_MANDATORY && !ce->hit) {
+			ulogd_log(ULOGD_ERROR,
+				  "no mandatory entry: %s\n", ce->key);
 			config_errce = ce;
 			err = -ERRMAND;
 			goto cpf_error;
@@ -259,5 +275,6 @@ cpf_error:
 
 void config_stop(void)
 {
-	free(fname);
+	free(ulogd_config_fname);
+	ulogd_config_fname = NULL;
 }
