@@ -639,7 +639,7 @@ static int stop(struct ulogd_source_pluginstance *pi)
 	return 0;
 }
 
-struct ulogd_source_plugin libulog_plugin = {
+static struct ulogd_source_plugin libulog_plugin = {
 	.name = "NFLOG",
 	.output = {
 		.type = ULOGD_DTYPE_RAW,

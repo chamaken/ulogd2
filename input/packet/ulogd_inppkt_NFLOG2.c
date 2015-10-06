@@ -921,7 +921,7 @@ static int stop(struct ulogd_source_pluginstance *upi)
 	return 0;
 }
 
-struct ulogd_source_plugin nflog_plugin = {
+static struct ulogd_source_plugin nflog_plugin = {
 	.name = "NFLOG2",
 	.output = {
 		.type = ULOGD_DTYPE_RAW,

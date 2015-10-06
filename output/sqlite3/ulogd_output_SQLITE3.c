@@ -269,7 +269,7 @@ sqlite3_createstmt(struct ulogd_pluginstance *pi)
 
 	DEBUGP("about to prepare statement.\n");
 
-	sqlite3_prepare(priv->dbh, priv->stmt, -1, &priv->p_stmt, 0);
+	sqlite3_prepare(priv->dbh, priv->stmt, -1, &priv->p_stmt, NULL);
 	if (priv->p_stmt == NULL) {
 		ulogd_log(ULOGD_ERROR, "SQLITE3: prepare: %s\n",
 				  sqlite3_errmsg(priv->dbh));
@@ -307,7 +307,7 @@ db_count_cols(struct ulogd_pluginstance *pi, sqlite3_stmt **stmt)
 
 	strncat(query, table_ce(pi), sizeof(query) - strlen(query) - 1);
 
-	if (sqlite3_prepare(priv->dbh, query, -1, stmt, 0) != SQLITE_OK)
+	if (sqlite3_prepare(priv->dbh, query, -1, stmt, NULL) != SQLITE_OK)
 		return -1;
 
 	return sqlite3_column_count(*stmt);

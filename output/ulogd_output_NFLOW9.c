@@ -100,7 +100,7 @@ enum {
 	CII_MAX,
 };
 
-char *count_keys[] = {
+static char *count_keys[] = {
 	[CII_ORIG_RAW_PKTLEN_DELTA]	= "orig.raw.pktlen.delta",
 	[CII_ORIG_RAW_PKTCOUNT_DELTA]	= "orig.raw.pktcount.delta",
 	[CII_REPLY_RAW_PKTLEN_DELTA]	= "reply.raw.pktlen.delta",
@@ -131,7 +131,7 @@ enum {
 	FOI_MAX,
 };
 
-char *dir_keys[] = {
+static char *dir_keys[] = {
 	[FOI_ORIG_IP_SADDR]		= "orig.ip.saddr",
 	[FOI_ORIG_IP_DADDR]		= "orig.ip.daddr",
 	[FOI_ORIG_IP6_SADDR]		= "orig.ip6.saddr",
