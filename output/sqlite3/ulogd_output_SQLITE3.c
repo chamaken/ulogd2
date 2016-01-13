@@ -63,8 +63,6 @@ struct sqlite3_priv {
 	struct field_lh fields;
 	char *stmt;
 	sqlite3_stmt *p_stmt;
-	int buffer_size;
-	int buffer_curr;
 	struct {
 		unsigned err_tbl_busy;	/* "Table busy" */
 	} stats;
@@ -83,18 +81,11 @@ static struct config_keyset sqlite3_kset = {
 			.type = CONFIG_TYPE_STRING,
 			.options = CONFIG_OPT_MANDATORY,
 		},
-		{
-			.key = "buffer",
-			.type = CONFIG_TYPE_INT,
-			.options = CONFIG_OPT_NONE,
-			.u.value = CFG_BUFFER_DEFAULT,
-		},
 	},
 };
 
 #define db_ce(pi)		(pi)->config_kset->ces[0].u.string
 #define table_ce(pi)	(pi)->config_kset->ces[1].u.string
-#define buffer_ce(pi)	(pi)->config_kset->ces[2].u.value
 
 /* forward declarations */
 static int sqlite3_createstmt(struct ulogd_pluginstance *);
@@ -107,9 +98,7 @@ add_row(struct ulogd_pluginstance *pi)
 	int ret;
 
 	ret = sqlite3_step(priv->p_stmt);
-	if (ret == SQLITE_DONE)
-		priv->buffer_curr++;
-	else if (ret == SQLITE_BUSY)
+	if (ret == SQLITE_BUSY)
 		priv->stats.err_tbl_busy++;
 	else if (ret == SQLITE_ERROR) {
 		ret = sqlite3_finalize(priv->p_stmt);
@@ -403,10 +392,6 @@ sqlite3_start(struct ulogd_pluginstance *pi)
 		ulogd_log(ULOGD_ERROR, "SQLITE3: Could not read database fieldnames.\n");
 		return -1;
 	}
-
-	/* initialize our buffer size and counter */
-	priv->buffer_size = buffer_ce(pi);
-	priv->buffer_curr = 0;
 
 	/* create and prepare the actual insert statement */
 	sqlite3_createstmt(pi);

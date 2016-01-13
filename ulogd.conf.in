@@ -301,12 +301,10 @@ procedure="INSERT_PACKET_FULL"
 [sqlite3_ct]
 table="ulog_ct"
 db="/var/log/ulogd.sqlite3db"
-buffer=200
 
 [sqlite3_pkt]
 table="ulog_pkt"
 db="/var/log/ulogd.sqlite3db"
-buffer=200
 
 [sys2]
 facility=LOG_LOCAL2
