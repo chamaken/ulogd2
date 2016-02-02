@@ -90,6 +90,29 @@ static int info_mode = 0;
 static int verbose = 0;
 static int created_pidfile = 0;
 
+/*
+ * Using self-pipe trick to handle signals safely.
+ * (To avoid calling Async-Signal-Unsafe functions in signal handler.)
+ *
+ * cf. https://lwn.net/Articles/177897/
+ *
+ * Capacity of pipe(2) buffer is >= 4096.
+ */
+static int signal_channel[2] = { -1, -1 };	/* initialize with invalid fd */
+#define	SIGNAL_RX_FD	(signal_channel[0])	/* main thread select() this fd */
+#define	SIGNAL_TX_FD	(signal_channel[1])	/* signal handler writes to this fd */
+
+static void signal_handler(int signal);
+static void sigterm_handler_task(int signal);
+static void signal_handler_task(int signal);
+
+static int  signal_channel_callback(int fd, unsigned int what, void *data);
+static struct ulogd_fd	signal_channel_ulogfd = {
+	.when = ULOGD_FD_READ,
+	.cb = &signal_channel_callback,
+	.data = &signal_channel_ulogfd,
+};
+
 /* linked list for all registered plugins */
 static LLIST_HEAD(ulogd_plugins);
 /* linked list for all plugins handle */
@@ -385,6 +408,80 @@ void ulogd_register_plugin(struct ulogd_plugin *me)
 		get_plugin_infos(me);
 	}
 }
+
+/***********************************************************************
+ * UTILITY FUNCTIONS FOR SIGNAL HANDLING
+ ***********************************************************************/
+static void call_signal_handler_tasks(int sig)
+{
+	/* Deliver signals */
+	switch (sig) {
+	case SIGTERM:
+	case SIGINT:
+		sigterm_handler_task(sig);
+		break;
+	case SIGHUP:
+	case SIGALRM:
+	case SIGUSR1:
+	case SIGUSR2:
+		signal_handler_task(sig);
+		break;
+	default:
+		break;
+	}
+}
+
+static int signal_channel_callback(int fd, unsigned int what, void *data)
+{
+	int	ret;
+	unsigned char c;
+
+	while ((ret = read(fd, &c, 1)) > 0) {
+		call_signal_handler_tasks((int)c);
+	}
+	return 0;
+}
+
+static int create_signal_channel(void)
+{
+	int	ret;
+	long	flags;
+
+	if ((ret = pipe(signal_channel)) < 0)
+		return ret;
+
+	/* SIGNAL_RX_FD, channel[0] */
+	if ((flags = fcntl(SIGNAL_RX_FD, F_GETFL)) < 0)
+		goto err_exit;
+	flags |= O_NONBLOCK;
+	if ( fcntl(SIGNAL_RX_FD, F_SETFL, flags) < 0 )
+		goto err_exit;
+
+	/* SIGNAL_TX_FD, channel[1] */
+	if ((flags = fcntl(SIGNAL_TX_FD, F_GETFL)) < 0)
+		goto err_exit;
+	flags |= O_NONBLOCK;
+	if ( fcntl(SIGNAL_TX_FD, F_SETFL, flags) < 0 )
+		goto err_exit;
+
+	/* register SIGNAL_RX_FD to ulogd */
+	signal_channel_ulogfd.fd = SIGNAL_RX_FD;
+	ulogd_register_fd(&signal_channel_ulogfd);
+
+	return 0;
+
+err_exit:
+	if (SIGNAL_RX_FD >= 0) {
+		(void)close(SIGNAL_RX_FD);
+		SIGNAL_RX_FD = -1;
+	}
+	if (SIGNAL_TX_FD >= 0) {
+		(void)close(SIGNAL_TX_FD);
+		SIGNAL_TX_FD = -1;
+	}
+	return -1;
+}
+
 
 /***********************************************************************
  * MAIN PROGRAM
@@ -925,7 +1022,6 @@ static void ulogd_main_loop(void)
 	struct timeval *next = NULL;
 
 	while (1) {
-		/* XXX: signal blocking? */
 		if (next != NULL && !timerisset(next))
 			next = ulogd_do_timer_run(&next_alarm);
 		else
@@ -1225,7 +1321,19 @@ static void stop_stack()
 }
 
 
-static void sigterm_handler(int signal)
+/* This is a real SIGTERM, SIGINT, SIGHUP, SIGALRM, SIGUSR1, SIGUSR2 handler */
+static void signal_handler(int signal)
+{
+	unsigned char	c = (unsigned char)signal;
+
+	(void)write(SIGNAL_TX_FD, &c, 1);
+}
+
+/* This is NOT a real signal handler.
+ * It is called in ulogd_main_loop() to avoid
+ * calling Async-Signal-UnSafe functions in signal handler.
+ */
+static void sigterm_handler_task(int signal)
 {
 
 	ulogd_log(ULOGD_NOTICE, "Terminal signal received, exiting\n");
@@ -1255,7 +1363,12 @@ static void sigterm_handler(int signal)
 	exit(0);
 }
 
-static void signal_handler(int signal)
+
+/* This is NOT a real signal handler.
+ * It is called in ulogd_main_loop() to avoid
+ * calling Async-Signal-UnSafe functions in signal handler.
+ */
+static void signal_handler_task(int signal)
 {
 	ulogd_log(ULOGD_NOTICE, "signal received, calling pluginstances\n");
 	
@@ -1269,7 +1382,7 @@ static void signal_handler(int signal)
 				fprintf(stderr, 
 					"ERROR: can't open logfile %s: %s\n", 
 					ulogd_logfile, strerror(errno));
-				sigterm_handler(signal);
+				sigterm_handler_task(signal);
 			}
 	
 		}
@@ -1464,8 +1577,13 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	signal(SIGTERM, &sigterm_handler);
-	signal(SIGINT, &sigterm_handler);
+	if (create_signal_channel() < 0) {
+		ulogd_log(ULOGD_FATAL, "can't create signal channel\n");
+		warn_and_exit(daemonize);
+	}
+
+	signal(SIGTERM, &signal_handler);
+	signal(SIGINT, &signal_handler);
 	signal(SIGHUP, &signal_handler);
 	signal(SIGALRM, &signal_handler);
 	signal(SIGUSR1, &signal_handler);
@@ -1477,6 +1595,6 @@ int main(int argc, char* argv[])
 	ulogd_main_loop();
 
 	/* hackish, but result is the same */
-	sigterm_handler(SIGTERM);	
+	sigterm_handler_task(SIGTERM);
 	return(0);
 }
