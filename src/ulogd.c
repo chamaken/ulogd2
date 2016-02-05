@@ -1515,7 +1515,7 @@ int main(int argc, char* argv[])
 
 	if (daemonize){
 		if (daemon(0, 0) < 0) {
-			ulogd_log(ULOGD_FATAL, "can't daemonize: %s (%d)",
+			ulogd_log(ULOGD_FATAL, "can't daemonize: %s (%d)\n",
 				  errno, strerror(errno));
 			warn_and_exit(daemonize);
 		}
