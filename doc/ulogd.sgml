@@ -603,8 +603,6 @@ The module defines the following configuration directives:
 Name of the table to which ulogd should log.
 <tag>db</tag>
 Name of the database.
-<tag>buffer</tag>
-Size of the sqlite buffer.
 </descrip>
 </sect2>
 

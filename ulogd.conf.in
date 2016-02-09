@@ -209,6 +209,9 @@ sync=1
 # by the input plugin is coding the action on packet: if 0, then
 # packet has been blocked and if non null it has been accepted.
 #boolean_label=1
+# Uncomment the following line to use JSON v1 event format that
+# can provide better compatility with some JSON file reader.
+#eventv1=1
 
 [pcap1]
 #default file is /var/log/ulogd.pcap
@@ -298,12 +301,10 @@ procedure="INSERT_PACKET_FULL"
 [sqlite3_ct]
 table="ulog_ct"
 db="/var/log/ulogd.sqlite3db"
-buffer=200
 
 [sqlite3_pkt]
 table="ulog_pkt"
 db="/var/log/ulogd.sqlite3db"
-buffer=200
 
 [sys2]
 facility=LOG_LOCAL2
