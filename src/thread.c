@@ -171,17 +171,15 @@ static void *interp_bundle(void *arg)
 			goto failure_unlock_th;
 		}
 		/* break if not runnable */
-		if (!th->runnable) {
-			if (th->bundle != NULL) {
-				ulogd_log(ULOGD_ERROR, "discard keysets: %p"
-					  " because of stop\n", th->bundle);
-				ulogd_clean_results(th->bundle);
-				ulogd_put_keysets_bundle(th->bundle);
-				th->retval = ULOGD_IRET_ERR;
-				put_worker(th);
-			}
+		if (!th->runnable && th->bundle != NULL) {
+			ulogd_log(ULOGD_ERROR, "discard keysets: %p"
+				  " because of stop\n", th->bundle);
+			ulogd_clean_results(th->bundle);
+			ulogd_put_keysets_bundle(th->bundle);
+			put_worker(th);
+			ret = ULOGD_IRET_ERR;
 			/* is above enough? */
-			break;
+			goto failure;
 		}
 
 		ksb = th->bundle;
